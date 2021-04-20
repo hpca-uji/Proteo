@@ -37,7 +37,7 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
 
 int create_hostfile(char *jobId, char **file_name);
 int write_hostfile_node(int ptr, int qty, char *node_name);
-void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes, MPI_Info *info_array);
+void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes);
 
 void print_Info(MPI_Info info);
 
@@ -139,7 +139,7 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     free(hostfile_name);
 
     // SET NEW DISTRIBUTION 
-    fill_hostfile(last_record, ptr, procs_array, used_nodes, &(slurm_data->info));
+    fill_hostfile(last_record, ptr, procs_array, used_nodes);
     close(ptr);
 
     // Free JOB INFO
@@ -223,7 +223,7 @@ int create_hostfile(char *jobId, char **file_name) {
   return ptr; // Devolver puntero a fichero
 }
 
-void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes, MPI_Info *info_array) {
+void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes) {
   int i=0;
   char *host;
   hostlist_t hostlist;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mpi.h>
 
 typedef struct
 {
@@ -21,3 +22,8 @@ void malloc_config_arrays(configuration *user_config, int resizes);
 void free_config(configuration *user_config);
 
 void print_config(configuration *user_config);
+
+
+
+void send_config_file(configuration *config_file, int root, MPI_Comm intercomm);
+configuration *recv_config_file(int root, MPI_Comm intercomm);
