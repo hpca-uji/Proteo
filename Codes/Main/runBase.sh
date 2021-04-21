@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -N 1
+#SBATCH -N 2
 
 #module load gcc/6.4.0
 #module load openmpi/1.10.7

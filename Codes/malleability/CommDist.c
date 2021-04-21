@@ -32,6 +32,12 @@ void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS);
 void mallocCounts(struct Counts *counts, int numP);
 void freeCounts(struct Counts *counts);
 
+/*
+ * Realiza un envio síncrono del vector array desde este grupo de procesos al grupo
+ * enlazado por el intercomunicador intercomm.
+ *
+ * El vector array no se modifica en esta funcion.
+ */
 int send_sync(char *array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_child) {
     int rootBcast = MPI_PROC_NULL;
     int *idS = NULL;
@@ -48,9 +54,6 @@ int send_sync(char *array, int qty, int myId, int numP, int root, MPI_Comm inter
 
     getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
 
-	printf("-1!! -- Vector de padres realizan COUNTS\n");
-	fflush(stdout);
-	MPI_Barrier(MPI_COMM_WORLD);
     send_sync_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts.counts, counts.zero_arr, counts.displs, counts.zero_arr);
 
     freeCounts(&counts);
@@ -60,19 +63,21 @@ int send_sync(char *array, int qty, int myId, int numP, int root, MPI_Comm inter
 }
 
 
+/*
+ * Realiza una recepcion síncrona del vector array a este grupo de procesos desde el grupo
+ * enlazado por el intercomunicador intercomm.
+ *
+ * El vector array se reserva dentro de la funcion y se devuelve en el mismo argumento.
+ * Tiene que ser liberado posteriormente por el usuario.
+ */
 void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_parents) {
     int *idS = NULL;
     struct Counts counts;
     struct Dist_data dist_data;
 
-	printf("Vector de hijos mandan datos\n");
-	fflush(stdout);
-	MPI_Barrier(MPI_COMM_WORLD);
-
     // Obtener distribución para este hijo
     get_dist(qty, myId, numP, &dist_data);
-    //*array = malloc(dist_data.tamBl * sizeof(char));
-    *array = malloc(qty * sizeof(char));
+    *array = malloc(dist_data.tamBl * sizeof(char));
     dist_data.intercomm = intercomm;
 
     /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
@@ -86,18 +91,23 @@ void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm int
     free(idS);
 }
 
-
+/*
+ * Reserva memoria para un vector de hasta "qty" elementos.
+ * Los "qty" elementos se disitribuyen entre los "numP" procesos
+ * que llaman a esta funcion.
+ */
 void malloc_comm_array(char **array, int qty, int myId, int numP) {
     struct Dist_data dist_data;
 
     get_dist(qty, myId, numP, &dist_data);
-    //*array = malloc(dist_data.tamBl * sizeof(char));
-    *array = malloc(qty * sizeof(char));
+    *array = malloc(dist_data.tamBl * sizeof(char));
 }
 
 
 /*
- * Send to children Compute_data arrays which change in each iteration
+ * Envia a los hijos un vector que es redistribuido a los procesos
+ * hijos. Antes de realizar la comunicacion, cada proceso padre calcula sobre que procesos
+ * del otro grupo se transmiten elementos.
  */
 void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE,
                  int *sendcounts, int *recvcounts, int *sdispls, int *rdispls) {
@@ -117,29 +127,25 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
 //    MPI_Alltoallv(array, sendcounts, sdispls, MPI_CHAR, NULL, recvcounts, rdispls, MPI_CHAR, dist_data.intercomm);
 }
 
+/*
+ * Recibe de los padres un vector que es redistribuido a los procesos
+ * de este grupo. Antes de realizar la comunicacion cada hijo calcula sobre que procesos
+ * del otro grupo se transmiten elementos.
+ */
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE,
                  int *sendcounts, int *recvcounts,int *sdispls, int *rdispls) {
     int i;
     char *aux;
 
-	printf("A -- Vector de hijos realizan COUNTS\n");
-	fflush(stdout);
-	MPI_Barrier(MPI_COMM_WORLD);
     // Ajustar los valores de recepcion
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, recvcounts);
       idI++;
     }
-	printf("B -- Vector de hijos realizan COUNTS\n");
-	fflush(stdout);
-	MPI_Barrier(MPI_COMM_WORLD);
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_parents, dist_data, recvcounts);
       rdispls[i] = rdispls[i-1] + recvcounts[i-1];
     }
-	printf("C -- Vector de hijos realizan COUNTS\n");
-	fflush(stdout);
-	MPI_Barrier(MPI_COMM_WORLD);
  //   print_counts(*dist_data, recvcounts, rdispls, numP_parents, "Recv");
 
     /* COMUNICACION DE DATOS */
@@ -186,8 +192,8 @@ void get_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
 
 
 /*
- * Obtains for a given process Id, how many elements will
- * send or recieve from the process indicated in Dist_data
+ * Obtiene para el Id de un proceso dado, cuantos elementos
+ * enviara o recibira desde el proceso indicado en Dist_data.
  */
 void set_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts) {
   struct Dist_data other;
@@ -228,29 +234,48 @@ void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS) {
     int idI, idE;
     int tamOther = dist_data.qty / numP_other;
     int remOther = dist_data.qty % numP_other;
+    // Indica el punto de corte del grupo de procesos externo que 
+    // divide entre los procesos que tienen 
+    // un tamaño tamOther + 1 y un tamaño tamOther
     int middle = (tamOther + 1) * remOther;
 
-    if(middle > dist_data.ini) { // First subgroup
+    // Calcular idI teniendo en cuenta si se comunica con un
+    // proceso con tamano tamOther o tamOther+1
+    if(middle > dist_data.ini) { // First subgroup (tamOther+1)
       idI = dist_data.ini / (tamOther + 1);
-    } else { // Second subgroup
+    } else { // Second subgroup (tamOther)
       idI = ((dist_data.ini - middle) / tamOther) + remOther;
     }
 
-    if(middle >= dist_data.fin) { // First subgroup
+    // Calcular idR teniendo en cuenta si se comunica con un
+    // proceso con tamano tamOther o tamOther+1
+    if(middle >= dist_data.fin) { // First subgroup (tamOther +1)
       idE = dist_data.fin / (tamOther + 1);
       idE = (dist_data.fin % (tamOther + 1) > 0 && idE+1 <= numP_other) ? idE+1 : idE;
-    } else { // Second subgroup
+    } else { // Second subgroup (tamOther)
       idE = ((dist_data.fin - middle) / tamOther) + remOther;
       idE = ((dist_data.fin - middle) % tamOther > 0 && idE+1 <= numP_other) ? idE+1 : idE;
     }
 
-    //free(*idS);
     idS = malloc(2 * sizeof(int));
     (*idS)[0] = idI;
     (*idS)[1] = idE;
 }
 
-
+/*
+ * Reserva memoria para los vectores de counts/displs de la funcion
+ * MPI_Alltoallv. Todos los vectores tienen un tamaño de numP, que es la
+ * cantidad de procesos en el otro grupo de procesos.
+ *
+ * El vector counts indica cuantos elementos se comunican desde este proceso
+ * al proceso "i" del otro grupo.
+ *
+ * El vector displs indica los desplazamientos necesarios para cada comunicacion
+ * con el proceso "i" del otro grupo.
+ *
+ * El vector zero_arr se utiliza cuando se quiere indicar un vector incializado
+ * a 0 en todos sus elementos. Sirve para indicar que no hay comunicacion.
+ */
 void mallocCounts(struct Counts *counts, int numP) {
     counts->counts = calloc(numP, sizeof(int)); 
     if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
@@ -262,6 +287,12 @@ void mallocCounts(struct Counts *counts, int numP) {
     if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 }
 
+/*
+ * Libera la memoria interna de una estructura Counts.
+ *
+ * No libera la memoria de la estructura counts si se ha alojado
+ * de forma dinamica.
+ */
 void freeCounts(struct Counts *counts) {
     free(counts->counts);
     free(counts->displs);

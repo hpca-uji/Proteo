@@ -7,9 +7,17 @@
 #include "ini.h"
 
 
+void malloc_config_arrays(configuration *user_config, int resizes);
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
 void def_struct_config_file_array(configuration *config_file, MPI_Datatype *config_type);
 
+/*
+ * Funcion utilizada para leer el fichero de configuracion
+ * y guardarlo en una estructura para utilizarlo en el futuro.
+ *
+ * Primero lee la seccion "general" y a continuacion cada una
+ * de las secciones "resize%d".
+ */
 static int handler(void* user, const char* section, const char* name,
                    const char* value) {
     configuration* pconfig = (configuration*)user;
@@ -58,6 +66,13 @@ static int handler(void* user, const char* section, const char* name,
     return 1;
 }
 
+/*
+ * Crea y devuelve una estructura de configuracion a traves
+ * de un nombre de fichero dado.
+ *
+ * La memoria de la estructura se reserva en la funcion y es conveniente
+ * liberarla con la funcion "free_config()"
+ */
 configuration *read_ini_file(char *file_name) {
     configuration *config = NULL;
 
@@ -78,7 +93,13 @@ configuration *read_ini_file(char *file_name) {
 /*
  * Reserva de memoria para los vectores de la estructura de configuracion
  *
- * Si se llama desde fuera de este codigo, tiene que reservarse la estructura
+ * Si se llama desde fuera de este fichero, la memoria de la estructura
+ * tiene que reservarse con la siguiente linea:
+ * "configuration *config = malloc(sizeof(configuration));"
+ *
+ * Sin embargo se puede obtener a traves de las funciones
+ *  - read_ini_file
+ *  - recv_config_file
  */
 void malloc_config_arrays(configuration *user_config, int resizes) {
     if(user_config != NULL) {
@@ -89,6 +110,9 @@ void malloc_config_arrays(configuration *user_config, int resizes) {
     }
 }
 
+/*
+ * Libera toda la memoria de una estructura de configuracion
+ */
 void free_config(configuration *user_config) {
     if(user_config != NULL) {
       free(user_config->iters);
@@ -100,6 +124,10 @@ void free_config(configuration *user_config) {
     }
 }
 
+/*
+ * Imprime por salida estandar toda la informacion que contiene
+ * la configuracion pasada como argumento
+ */
 void print_config(configuration *user_config) {
   if(user_config != NULL) {
     int i;
@@ -114,48 +142,84 @@ void print_config(configuration *user_config) {
 
 
 
-//
-//
-//
-//
-//
+//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| \\
+//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| ||
+//| FUNCIONES DE INTERCOMUNICACION DE ESTRUCTURA DE CONFIGURACION ||
+//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| ||
+//||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| //
 
+/*
+ * Envia una estructura de configuracion al grupo de procesos al que se 
+ * enlaza este grupo a traves del intercomunicador pasado como argumento.
+ *
+ * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
+ * e indicar cual es el proceso raiz que se encargara de enviar la
+ * configuracion al otro grupo.
+ */
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) {
 
   MPI_Datatype config_type, config_type_array;
 
+  // Obtener un tipo derivado para enviar todos los
+  // datos escalares con una sola comunicacion
   def_struct_config_file(config_file, &config_type);
-  MPI_Bcast(config_file, 1, config_type, root, intercomm);
 
+
+  // Obtener un tipo derivado para enviar los tres vectores
+  // de enteros con una sola comunicacion
   def_struct_config_file_array(config_file, &config_type_array);
+
+  MPI_Bcast(config_file, 1, config_type, root, intercomm);
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
   MPI_Bcast(config_file->factors, config_file->resizes, MPI_FLOAT, root, intercomm);
 
+  //Liberar tipos derivados
   MPI_Type_free(&config_type);
   MPI_Type_free(&config_type_array);
 }
 
+/*
+ * Recibe una estructura de configuracion desde otro grupo de procesos
+ * y la devuelve. La memoria de la estructura se reserva en esta funcion.
+ *
+ * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
+ * e indicar cual es el proceso raiz del otro grupo que se encarga de enviar
+ * la configuracion a este grupo.
+ *
+ * La memoria de la configuracion devuelta tiene que ser liberada con
+ * la funcion "free_config".
+ */
 configuration *recv_config_file(int root, MPI_Comm intercomm) {
 
   MPI_Datatype config_type, config_type_array;
 
-  configuration *config_file = malloc(sizeof(configuration) * 1);
-  def_struct_config_file(config_file, &config_type);
 
+  configuration *config_file = malloc(sizeof(configuration) * 1);
+
+  // Obtener un tipo derivado para recibir todos los
+  // datos escalares con una sola comunicacion
+  def_struct_config_file(config_file, &config_type);
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
 
-  malloc_config_arrays(config_file, config_file->resizes);
+  // Obtener un tipo derivado para enviar los tres vectores
+  // de enteros con una sola comunicacion
+  malloc_config_arrays(config_file, config_file->resizes); // Reserva de memoria de los vectores
   def_struct_config_file_array(config_file, &config_type_array);
 
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
   MPI_Bcast(config_file->factors, config_file->resizes, MPI_FLOAT, root, intercomm);
 
+  //Liberar tipos derivados
   MPI_Type_free(&config_type);
   MPI_Type_free(&config_type_array);
 
   return config_file;
 }
 
+/*
+ * Tipo derivado para enviar 6 elementos especificos
+ * de la estructura de configuracion con una sola comunicacion.
+ */
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
   int i, counts = 6;
   int blocklengths[6] = {1, 1, 1, 1, 1, 1};
@@ -166,7 +230,7 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   types[0] = types[1] = types[2] = types[3] = types[4] = MPI_INT;
   types[5] = MPI_FLOAT;
 
-  //Rellenar vector displs
+  // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
 
   MPI_Get_address(&(config_file->resizes), &displs[0]);
@@ -182,6 +246,10 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Type_commit(config_type);
 }
 
+/*
+ * Tipo derivado para enviar tres vectores de enteros
+ * de la estructura de configuracion con una sola comunicacion.
+ */
 void def_struct_config_file_array(configuration *config_file, MPI_Datatype *config_type) {
   int i, counts = 3;
   int blocklengths[3] = {1, 1, 1};
@@ -203,7 +271,9 @@ void def_struct_config_file_array(configuration *config_file, MPI_Datatype *conf
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
+  // Tipo derivado para enviar un solo elemento de tres vectores
   MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
-  MPI_Type_create_resized(aux, 0, 1*sizeof(int), config_type);
+  // Tipo derivado para enviar N elementos de tres vectores(3N en total)
+  MPI_Type_create_resized(aux, 0, 1*sizeof(int), config_type); 
   MPI_Type_commit(config_type);
 }

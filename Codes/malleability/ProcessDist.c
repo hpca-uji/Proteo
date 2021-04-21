@@ -43,6 +43,19 @@ void print_Info(MPI_Info info);
 
 //--------------PUBLIC FUNCTIONS---------------//
 
+/*
+ * Se solicita la creacion de un nuevo grupo de "numP" procesos con una distribucion
+ * fisica "type_dist".
+ *
+ * Se puede solicitar en primer plano, encargandose por tanto el proceso que llama a esta funcion,
+ * o en segundo plano, donde un hilo se encarga de configurar esta creacion.
+ *
+ * Si se pide en primer plano, al terminarla es posible llamar a "check_slurm_comm()" para crear
+ * los procesos.
+ *
+ * Si se pide en segundo plano, llamar a "check_slurm_comm()" comprobara si la configuracion para
+ * crearlos esta lista, y si es asi, los crea.
+ */
 int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, int type_creation) {
 
   slurm_data = malloc(sizeof(struct Slurm_data));
@@ -74,6 +87,10 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
   return 0;
 }
 
+/*
+ * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
+ * y en caso de que lo este, se crea un nuevo grupo de procesos con esa configuracion.
+ */
 int check_slurm_comm(int myId, int root, MPI_Comm comm, MPI_Comm *child) {
   int spawn_err = COMM_IN_PROGRESS;
 
@@ -96,6 +113,14 @@ int check_slurm_comm(int myId, int root, MPI_Comm comm, MPI_Comm *child) {
 }
 
 //--------------PRIVATE SPAWN TYPE FUNCTIONS---------------//
+
+/*
+ * Funcion llamada por un hilo para que este se encarge
+ * de configurar la creacion de un nuevo grupo de procesos.
+ *
+ * Una vez esta lista la configuracion y es posible crear los procesos
+ * se avisa al hilo maestro.
+ */
 void* thread_work(void* creation_data_arg) {
   struct Creation_data *creation_data = (struct Creation_data*) creation_data_arg;
  
@@ -108,6 +133,11 @@ void* thread_work(void* creation_data_arg) {
 
 //--------------PRIVATE SPAWN CREATION FUNCTIONS---------------//
 
+/*
+ * Configura la creacion de un nuevo grupo de procesos, reservando la memoria
+ * para una llamada a MPI_Comm_spawn, obteniendo una distribucion fisica
+ * para los procesos y creando un fichero hostfile.
+ */
 void processes_dist(char *argv[], int numP_childs, int type) {
     int jobId, ptr;
     char *tmp;
@@ -146,7 +176,10 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     slurm_free_job_info_msg(j_info); 
 }
 
-
+/*
+ * Crea un grupo de procesos segun la configuracion indicada por la funcion
+ * "processes_dist()".
+ */
 int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm) {
   int spawn_err = MPI_Comm_spawn(slurm_data->cmd, MPI_ARGV_NULL, slurm_data->qty_procs, slurm_data->info, root, comm, child, MPI_ERRCODES_IGNORE); 
 
@@ -162,6 +195,18 @@ int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm) {
   return spawn_err;
 }
 
+/*
+ * Obtiene la distribucion fisica del grupo de procesos a crear, devolviendo
+ * cuantos nodos se van a utilizar y la cantidad de procesos que alojara cada
+ * nodo.
+ *
+ * Se permiten dos tipos de distribuciones fisicas segun el valor de "type":
+ *
+ *  COMM_PHY_NODES (1): Orientada a equilibrar el numero de procesos entre
+ *                      todos los nodos disponibles.
+ *  COMM_PHY_CPU   (2): Orientada a completar la capacidad de un nodo antes de
+ *                      ocupar otro nodo.
+ */
 void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty, int *used_nodes) {
   int i, asigCores;
   int tamBl, remainder;
@@ -206,6 +251,16 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
   free(procs);
 }
 
+/*
+ * Crea un fichero que se utilizara como hostfile
+ * para un nuevo grupo de procesos. 
+ *
+ * El nombre es devuelto en el argumento "file_name",
+ * que tiene que ser un puntero vacio.
+ *
+ * Ademas se devuelve un descriptor de fichero para 
+ * modificar el fichero.
+ */
 int create_hostfile(char *jobId, char **file_name) {
   int ptr, err, len;
 
@@ -223,6 +278,11 @@ int create_hostfile(char *jobId, char **file_name) {
   return ptr; // Devolver puntero a fichero
 }
 
+/*
+ * Rellena un fichero hostfile indicado por ptr con los nombres
+ * de los nodos a utilizar indicados por "job_record" y la cantidad 
+ * de procesos que alojara cada nodo indicado por "qty".
+ */
 void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes) {
   int i=0;
   char *host;
@@ -235,9 +295,14 @@ void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_node
     free(host);
   }
   slurm_hostlist_destroy(hostlist);
-
 }
 
+/*
+ * Escribe en el fichero hostfile indicado por ptr una nueva linea.
+ *
+ * Esta linea indica el nombre de un nodo y la cantidad de procesos a
+ * alojar en ese nodo.
+ */
 int write_hostfile_node(int ptr, int qty, char *node_name) {
   int err, len_node, len_int, len;
   char *line;

@@ -15,15 +15,10 @@ typedef struct
 
 } configuration;
 
-
 configuration *read_ini_file(char *file_name);
-
-void malloc_config_arrays(configuration *user_config, int resizes);
 void free_config(configuration *user_config);
-
 void print_config(configuration *user_config);
 
-
-
+// MPI Intercomm functions
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm);
 configuration *recv_config_file(int root, MPI_Comm intercomm);

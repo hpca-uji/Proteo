@@ -44,16 +44,13 @@ int main(int argc, char *argv[]) {
     group->grp  = 0;
     group->argv = argv;
 
-
     MPI_Comm_get_parent(&(group->parents));
-    if(group->parents != MPI_COMM_NULL ) { // Si son procesos hijos deben recoger la distribucion
+    if(group->parents != MPI_COMM_NULL ) { // Si son procesos hijos deben comunicarse con las padres
       Sons_init();
-    } else {
+    } else { // Si son el primer grupo de procesos, recogen la configuracion inicial
       config_file = read_ini_file(argv[1]);
       if(config_file->sdr > 0) {
         malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
-	printf("Vector reservado por padres\n");
-	fflush(stdout);
       }
     }
 
@@ -75,7 +72,15 @@ int main(int argc, char *argv[]) {
 }
 
 /*
- * Bucle de computo principal
+ * Función de trabajo principal.
+ *
+ * Incializa los datos para realizar el computo y a continuacion
+ * pasa a realizar "maxiter" iteraciones de computo.
+ *
+ * Terminadas las iteraciones realiza el redimensionado de procesos.
+ * Si el redimensionado se realiza de forma asincrona se 
+ * siguen realizando iteraciones de computo hasta que termine la 
+ * comunicacion asincrona y realizar entonces la sincrona.
  */
 int work() {
   int iter, maxiter;
@@ -90,9 +95,33 @@ int work() {
 
   checkpoint(iter);
 
+  /*
+  iter = 0
+  while(maxiter) { //FIXME AÑADIR VALOR
+    iterate(matrix, config_file->matrix_tam);
+    iter++;
+    //check_async(iter);
+  }
+  */
+
   return 0;
 }
 
+/*
+ * Se realiza el redimensionado de procesos por parte de los padres.
+ *
+ * Se crean los nuevos procesos con la distribucion fisica elegida y
+ * a continuacion se transmite la informacion a los mismos.
+ *
+ * Si hay datos asincronos a transmitir, primero se comienza a
+ * transmitir estos y se termina la funcion. Se tiene que comprobar con
+ * la funcion "??" que se han terminado de enviar //TODO
+ *
+ * Si hay ademas datos sincronos a enviar, no se envian aun.
+ *
+ * Si solo hay datos sincronos se envian tras la creacion de los procesos
+ * y finalmente se desconectan los dos grupos de procesos.
+ */
 int checkpoint(int iter) {
 
   // Comprobar si se tiene que realizar un redimensionado
@@ -121,6 +150,9 @@ int checkpoint(int iter) {
   return 1;
 }
 
+/*
+ * Se encarga de realizar la creacion de los procesos hijos.
+ */
 void TC(int numS){
   // Inicialización de la comunicación con SLURM
   int dist = config_file->phy_dist[group->grp +1];
@@ -134,7 +166,12 @@ void TC(int numS){
   }
 }
 
-
+/*
+ * Inicializacion de los datos de los hijos.
+ * En la misma se reciben datos de los padres: La configuracion
+ * de la ejecucion a realizar; y los datos a recibir de los padres
+ * ya sea de forma sincrona, asincrona o ambas.
+ */
 void Sons_init() {
 
   // Enviar a los hijos que grupo de procesos son
@@ -145,9 +182,8 @@ void Sons_init() {
   config_file = recv_config_file(ROOT, group->parents);
   int numP_parents = config_file->procs[group->grp -1];
 
-  if(config_file->sdr > 0) {
+  if(config_file->sdr > 0) { // Recibir datos sincronos
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
-    group->sync_array = malloc(5);
   }
 
   // Desconectar intercomunicador con los hijos
@@ -164,6 +200,7 @@ void Sons_init() {
 
 /*
  * Simula la ejecucción de una iteración de computo en la aplicación
+ * que dura al menos un tiempo de "time" segundos.
  */
 void iterate(double *matrix, int n) {
   double start_time, actual_time;
