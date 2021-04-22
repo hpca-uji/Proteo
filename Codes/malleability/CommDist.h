@@ -8,4 +8,8 @@ int send_sync(char *array, int qty, int myId, int numP, int root, MPI_Comm inter
 void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_parents);
 
 
+int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_child, MPI_Request *comm_req);
+void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_parents);
+
+
 void malloc_comm_array(char **array, int qty, int myId, int numP);

@@ -61,9 +61,9 @@ int main(int argc, char *argv[]) {
 	    //RESULTADOS
     }
 
-    free_config(config_file);
-    free(group->sync_array);
-    free(group);
+  //  free_config(config_file); //FIXME DESCOMENTAR
+  //  free(group->sync_array);
+  //  free(group);
 
 
 
@@ -125,7 +125,7 @@ int work() {
 int checkpoint(int iter) {
 
   // Comprobar si se tiene que realizar un redimensionado
-  if(config_file->iters[group->grp] < iter || group->grp!= 0) {return 0;}
+  if(config_file->iters[group->grp] < iter) {return 0;}
 
   int numS = config_file->procs[group->grp +1];
 
@@ -138,6 +138,10 @@ int checkpoint(int iter) {
   MPI_Bcast(&(group->grp), 1, MPI_INT, rootBcast, group->children);
 
   send_config_file(config_file, rootBcast, group->children);
+
+  if(config_file->adr > 0) {
+    send_async(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, numS);
+  } else if
 
   if(config_file->sdr > 0) {
     send_sync(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, numS);
@@ -188,6 +192,8 @@ void Sons_init() {
 
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->parents));
+
+//  MPI_Abort(MPI_COMM_WORLD, 0);
 }
 
 

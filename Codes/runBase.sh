@@ -14,11 +14,12 @@ echo "OPENMPI"
 #mpirun -mca btl_openib_allow_ib 1 -npernode 10 -np 20 ./batch5.out
 
 echo "MPICH"
-module load /home/martini/MODULES/modulefiles/mpich3.4
+module load mpich-3.4.1-noucx
+#module load /home/martini/MODULES/modulefiles/mpich3.4
 #export HYDRA_DEBUG=1
 #-disable-hostname-propagation -disable-auto-cleanup -pmi-port -hosts n00,n01
 
-mpirun -np 2 ./a.out test.ini
+mpirun -ppn 1 -np 2 ./a.out test.ini
 
 
 echo "Intel"
