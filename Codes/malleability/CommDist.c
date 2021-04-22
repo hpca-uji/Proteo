@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <string.h>
-
+#include "CommDist.h"
 
 struct Dist_data {
   int ini; //Primer elemento a enviar
@@ -22,11 +22,8 @@ struct Counts {
   int *zero_arr;
 };
 
-
-
 void send_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_child, int idI,  int idE, struct Counts counts);
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts);
-
 
 void send_async_arrays(struct Dist_data dist_data, char *array, int root, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request *comm_req);
 void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts, MPI_Request *comm_req);
@@ -40,6 +37,23 @@ void freeCounts(struct Counts *counts);
 
 void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, const char* name);
 
+/*
+ * Reserva memoria para un vector de hasta "qty" elementos.
+ * Los "qty" elementos se disitribuyen entre los "numP" procesos
+ * que llaman a esta funcion.
+ */
+void malloc_comm_array(char **array, int qty, int myId, int numP) {
+    struct Dist_data dist_data;
+
+    get_dist(qty, myId, numP, &dist_data);
+    *array = malloc(dist_data.tamBl * sizeof(char));
+
+        int i;
+	for(i=0; i<dist_data.tamBl; i++) {
+	  (*array)[i] = '!' + i + dist_data.ini;
+	}
+ //       printf("P%d Tam %d String: %s\n", myId, dist_data.tamBl, *array);
+}
 
 //================================================================================
 //================================================================================
@@ -102,30 +116,11 @@ void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm int
     getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
     recv_sync_arrays(dist_data, *array, root, numP_parents, idS[0], idS[1], counts);
-    printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
+    //printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
 
     freeCounts(&counts);
     free(idS);
 }
-
-/*
- * Reserva memoria para un vector de hasta "qty" elementos.
- * Los "qty" elementos se disitribuyen entre los "numP" procesos
- * que llaman a esta funcion.
- */
-void malloc_comm_array(char **array, int qty, int myId, int numP) {
-    struct Dist_data dist_data;
-
-    get_dist(qty, myId, numP, &dist_data);
-    *array = malloc(dist_data.tamBl * sizeof(char));
-
-        int i;
-	for(i=0; i<dist_data.tamBl; i++) {
-	  (*array)[i] = '!' + i + dist_data.ini;
-	}
-        printf("P%d Tam %d String: %s\n", myId, dist_data.tamBl, *array);
-}
-
 
 /*
  * Envia a los hijos un vector que es redistribuido a los procesos
@@ -194,7 +189,7 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
  *
  * El vector array no se modifica en esta funcion.
  */
-int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_child, MPI_Request *comm_req) {
+int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_child, MPI_Request **comm_req, int parents_wait) {
     int rootBcast = MPI_PROC_NULL;
     int *idS = NULL;
     struct Counts counts;
@@ -210,7 +205,18 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
 
     getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
 
-    send_async_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, comm_req);
+    if(parents_wait == MAL_USE_NORMAL) {
+      *comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
+      *comm_req[0] = MPI_REQUEST_NULL;
+      send_async_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, &(*comm_req[0])); 
+
+    } else {
+      *comm_req = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
+      (*comm_req)[0] = MPI_REQUEST_NULL;
+      (*comm_req)[1] = MPI_REQUEST_NULL;
+      send_async_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, &((*comm_req)[1])); 
+      MPI_Ibarrier(intercomm, &((*comm_req)[0]) );
+    }
 
     freeCounts(&counts);
     free(idS);
@@ -224,13 +230,16 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
  *
  * El vector array se reserva dentro de la funcion y se devuelve en el mismo argumento.
  * Tiene que ser liberado posteriormente por el usuario.
+ *
+ * El argumento "parents_wait" sirve para indicar si se usará la versión en la los padres 
+ * espera a que terminen de enviar, o en la que esperan a que los hijos acaben de recibir.
  */
-void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_parents) {
+void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm intercomm, int numP_parents, int parents_wait) {
     int *idS = NULL;
     int wait_err;
     struct Counts counts;
     struct Dist_data dist_data;
-    MPI_Request comm_req;
+    MPI_Request comm_req, aux;
 
     // Obtener distribución para este hijo
     get_dist(qty, myId, numP, &dist_data);
@@ -244,16 +253,18 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
     getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
     recv_async_arrays(dist_data, *array, root, numP_parents, idS[0], idS[1], counts, &comm_req);
-    printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
-
 
     wait_err = MPI_Wait(&comm_req, MPI_STATUS_IGNORE);
     if(wait_err != MPI_SUCCESS) {
       MPI_Abort(MPI_COMM_WORLD, wait_err);
     }
 
-    // TODO Indicar a los padres que los hijos han terminado??
+    if(parents_wait == MAL_USE_IBARRIER) {
+      MPI_Ibarrier(intercomm, &aux);
+      MPI_Wait(&aux, MPI_STATUS_IGNORE); //Es necesario comprobar que la comunicación ha terminado para desconectar los grupos de procesos
+    }
 
+    //printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
     freeCounts(&counts);
     free(idS);
 }

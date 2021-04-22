@@ -37,6 +37,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) {
         pconfig->adr = atoi(value);
+    } else if (MATCH("general", "AIB")) {
+        pconfig->aib = atoi(value);
     } else if (MATCH("general", "time")) {
         pconfig->general_time = atof(value);
 
@@ -128,11 +130,11 @@ void free_config(configuration *user_config) {
  * Imprime por salida estandar toda la informacion que contiene
  * la configuracion pasada como argumento
  */
-void print_config(configuration *user_config) {
+void print_config(configuration *user_config, int numP) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, time=%f\n",
-        user_config->resizes, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->general_time);
+    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, time=%f || NUMP=%d\n",
+        user_config->resizes, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->general_time, numP);
     for(i=0; i<user_config->resizes; i++) {
       printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
         i, user_config->iters[i], user_config->procs[i], user_config->factors[i], user_config->phy_dist[i]);
@@ -221,14 +223,14 @@ configuration *recv_config_file(int root, MPI_Comm intercomm) {
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
-  int i, counts = 6;
-  int blocklengths[6] = {1, 1, 1, 1, 1, 1};
+  int i, counts = 7;
+  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = MPI_INT;
-  types[5] = MPI_FLOAT;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
+  types[6] = MPI_FLOAT;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -238,7 +240,8 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Get_address(&(config_file->matrix_tam), &displs[2]);
   MPI_Get_address(&(config_file->sdr), &displs[3]);
   MPI_Get_address(&(config_file->adr), &displs[4]);
-  MPI_Get_address(&(config_file->general_time), &displs[5]);
+  MPI_Get_address(&(config_file->aib), &displs[5]);
+  MPI_Get_address(&(config_file->general_time), &displs[6]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
