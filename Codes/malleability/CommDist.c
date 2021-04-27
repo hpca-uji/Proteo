@@ -250,7 +250,7 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
     // Obtener distribución para este hijo
     get_dist(qty, myId, numP, &dist_data);
     *array = malloc(dist_data.tamBl * sizeof(char));
-    (*array)[dist_data.tamBl] = '\0';
+    //(*array)[dist_data.tamBl] = '\0';
     dist_data.intercomm = intercomm;
 
     /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/

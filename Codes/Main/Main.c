@@ -35,14 +35,13 @@ configuration *config_file;
 group_data *group;
 
 // Variables sobre resultados
-//int *iters_time, *iters_type, iter_index;
+int *iters_time, *iters_type, iter_index;
 
 
 int main(int argc, char *argv[]) {
     int numP, myId, i;
-    int thread_level;
 
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &thread_level);
+    MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
 
@@ -56,6 +55,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_get_parent(&(group->parents));
     if(group->parents != MPI_COMM_NULL ) { // Si son procesos hijos deben comunicarse con las padres
       Sons_init();
+
     } else { // Si son el primer grupo de procesos, recogen la configuracion inicial
       config_file = read_ini_file(argv[1]);
       if(config_file->sdr > 0) {
@@ -66,12 +66,12 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    //iters_time = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
-    //iters_type = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
-    //iter_index = 0;
+    iters_time = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
+    iters_type = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
+    iter_index = 0;
 
     //if(myId== ROOT) print_config(config_file, group->grp);
-    int res = work();
+    work();
 
     /*
     if(myId == ROOT) {
@@ -88,8 +88,7 @@ int main(int argc, char *argv[]) {
       printf("\n");
       free(iters_time);
       free(iters_type);
-    }
-    */
+    }*/
     
 /*
   int len;
@@ -100,12 +99,17 @@ int main(int argc, char *argv[]) {
   printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, group->grp, numP, name, version);
 */
 
-    free_config(config_file);
-    free(group->sync_array);
-    free(group->async_array);
+    if(config_file->sdr > 0) {
+      free(group->sync_array);
+    }
+    if(config_file->adr > 0) {
+      free(group->async_array);
+    }
     free(group);
+    free_config(config_file);
+    free(iters_time);
+    free(iters_type);
     
-
     MPI_Finalize();
     return 0;
 }
@@ -135,15 +139,14 @@ int work() {
   }
 
   state = checkpoint(iter, state, &async_comm);
-
+  
   iter = 0;
   while(state == MAL_ASYNC_PENDING) {
     iterate(matrix, config_file->matrix_tam, state);
     iter++;
-
     state = checkpoint(iter, state, &async_comm);
   }
-
+  
   return 0;
 }
 
@@ -225,10 +228,11 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
 
   if(config_file->aib == MAL_USE_NORMAL) {
     req_completed = &(*comm_req)[0];
-  } else {
+  } else { // MAL_USE_IBARRIER
     req_completed = &(*comm_req)[1];
   }
  
+  
   test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
     printf("P%d aborting -- Test Async\n", group->myId);
@@ -237,22 +241,21 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
 
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
+
+  //MPI_Wait(req_completed, MPI_STATUS_IGNORE);
+  if(config_file->aib == MAL_USE_IBARRIER) {
+    MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
+  }
   
   iter_send = iter;
-  //MPI_Barrier(MPI_COMM_WORLD); if(group->myId == ROOT){ printf("TEST 2.A0.5\n"); fflush(stdout);} //FIXME BORRAR
   MPI_Bcast(&iter_send, 1, MPI_INT, rootBcast, group->children);
-  //MPI_Barrier(MPI_COMM_WORLD); if(group->myId == ROOT){ printf("TEST 2.A0.5a\n"); fflush(stdout);} //FIXME BORRAR
   if(config_file->sdr > 0) { // Realizar envio sincrono
     send_sync(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, numS);
   }
 
-  if(config_file->aib == MAL_USE_IBARRIER) {
-    MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
-  }
-    free(*comm_req);
-
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->children));
+  free(*comm_req);
   return MAL_COMM_COMPLETED;
 }
 
@@ -301,27 +304,34 @@ void iterate(double *matrix, int n, int async_comm) {
   int i, operations = 0;
 
   start_time = actual_time = MPI_Wtime();
-  /*
-  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+  
+  if(async_comm == MAL_ASYNC_PENDING && iter_index > 0) { // Se esta realizando una redistribucion de datos asincrona
+MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 0\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     operations = iters_type[iter_index - 1];
+MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     for (i=0; i<operations; i++) {
+//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       computeMatrix(matrix, n);
+//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 3\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       actual_time = MPI_Wtime(); // Guardar tiempos
+//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 4\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     }
+MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 5\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     operations = 0;
+MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 6\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
-  } else { // No hay redistribucion de datos actualmente
-	  */
+  } else { // No hay redistribucion de datos actualmente	  
+	  
     while (actual_time - start_time < time) {
       computeMatrix(matrix, n);
       operations++;
       actual_time = MPI_Wtime(); // Guardar tiempos
     }
-  //}
+  }
 
-  //iters_time[iter_index] = actual_time - start_time;
-  //iters_type[iter_index] = operations;
-  //iters_type++;
+  iters_time[iter_index] = actual_time - start_time;
+  iters_type[iter_index] = operations;
+  iter_index = iter_index + 1;
 }
 
 /*

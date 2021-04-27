@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define MAL_COMM_COMPLETED 0
-#define MAL_COMM_UNINITIALIZED 2
+#define MAL_COMM_UNINITIALIZED 0
 #define MAL_ASYNC_PENDING 1
 
 #define MAL_USE_NORMAL 0
