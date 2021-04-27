@@ -57,6 +57,7 @@ static int handler(void* user, const char* section, const char* name,
 	} else {
           pconfig->phy_dist[act_resize] = COMM_PHY_CPU;
 	}
+
 	free(aux);
         pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
 
@@ -130,15 +131,34 @@ void free_config(configuration *user_config) {
  * Imprime por salida estandar toda la informacion que contiene
  * la configuracion pasada como argumento
  */
-void print_config(configuration *user_config, int numP) {
+void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, time=%f || NUMP=%d\n",
-        user_config->resizes, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->general_time, numP);
+    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, aib=%d time=%f || grp=%d\n",
+        user_config->resizes, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->general_time, grp);
     for(i=0; i<user_config->resizes; i++) {
       printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
         i, user_config->iters[i], user_config->procs[i], user_config->factors[i], user_config->phy_dist[i]);
     }
+  }
+}
+
+
+void print_config_group(configuration *user_config, int grp) {
+  if(user_config != NULL) {
+    int parents, sons;
+    parents = sons = 0;
+    if(grp > 0) {
+      parents = user_config->procs[grp-1];
+    }
+    if(grp < user_config->resizes - 1) {
+      sons = user_config->procs[grp+1];
+    }
+
+    printf("Config: matrix=%d, sdr=%d, adr=%d, aib=%d time=%f\n",
+        user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->general_time);
+    printf("Config Group: iters=%d, factor=%f, phy=%d, procs=%d, parents=%d, sons=%d\n",
+        user_config->iters[grp], user_config->factors[grp], user_config->phy_dist[grp], user_config->procs[grp], parents, sons);
   }
 }
 

@@ -46,13 +46,19 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
     struct Dist_data dist_data;
 
     get_dist(qty, myId, numP, &dist_data);
-    *array = malloc(dist_data.tamBl * sizeof(char));
+    if( (*array = malloc(dist_data.tamBl * sizeof(char))) == NULL) {
+      printf("Memory Error (Malloc Arrays(%d))\n", dist_data.tamBl); 
+      exit(1); 
+    }
 
+/*
         int i;
 	for(i=0; i<dist_data.tamBl; i++) {
 	  (*array)[i] = '!' + i + dist_data.ini;
 	}
- //       printf("P%d Tam %d String: %s\n", myId, dist_data.tamBl, *array);
+	
+        printf("P%d Tam %d String: %s\n", myId, dist_data.tamBl, *array);
+*/
 }
 
 //================================================================================
@@ -287,7 +293,7 @@ void send_async_arrays(struct Dist_data dist_data, char *array, int rootBcast, i
       set_counts(i, numP_child, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
-    //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
+    print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
 
     /* COMUNICACION DE DATOS */
     MPI_Ialltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm, comm_req);
@@ -312,7 +318,7 @@ void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int nu
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
-    //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
+    print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
     MPI_Ialltoallv(aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm, comm_req);
