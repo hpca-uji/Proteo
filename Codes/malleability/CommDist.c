@@ -293,7 +293,7 @@ void send_async_arrays(struct Dist_data dist_data, char *array, int rootBcast, i
       set_counts(i, numP_child, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
-    print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
+    //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
 
     /* COMUNICACION DE DATOS */
     MPI_Ialltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm, comm_req);
@@ -318,7 +318,7 @@ void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int nu
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
-    print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
+    //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
     MPI_Ialltoallv(aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm, comm_req);

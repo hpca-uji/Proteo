@@ -1,0 +1,124 @@
+MPICH
+Config loaded: resizes=3, matrix=2000, sdr=20, adr=20, time=0.500000 || NUMP=1
+Resize 0: Iters=5, Procs=1, Factors=1.000000, Phy=1
+Resize 1: Iters=5, Procs=2, Factors=1.500000, Phy=2
+Resize 2: Iters=5, Procs=8, Factors=0.250000, Phy=1
+Config loaded: resizes=3, matrix=2000, sdr=20, adr=20, time=0.500000 || NUMP=2
+Resize 0: Iters=5, Procs=1, Factors=1.000000, Phy=1
+Resize 1: Iters=5, Procs=2, Factors=1.500000, Phy=2
+Resize 2: Iters=5, Procs=8, Factors=0.250000, Phy=1
+P0 Nuevo GRUPO 0 de 1 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P0 Nuevo GRUPO 1 de 2 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P1 Nuevo GRUPO 1 de 2 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+Config loaded: resizes=3, matrix=2000, sdr=20, adr=20, time=0.500000 || NUMP=8
+Resize 0: Iters=5, Procs=1, Factors=1.000000, Phy=1
+Resize 1: Iters=5, Procs=2, Factors=1.500000, Phy=2
+Resize 2: Iters=5, Procs=8, Factors=0.250000, Phy=1
+P2 Nuevo GRUPO 2 de 8 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P4 Nuevo GRUPO 2 de 8 procs en nodo n01 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P6 Nuevo GRUPO 2 de 8 procs en nodo n01 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P7 Nuevo GRUPO 2 de 8 procs en nodo n01 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P5 Nuevo GRUPO 2 de 8 procs en nodo n01 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P1 Nuevo GRUPO 2 de 8 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P3 Nuevo GRUPO 2 de 8 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+P0 Nuevo GRUPO 2 de 8 procs en nodo n00 con MPICH Version:	3.4.1
+MPICH Release date:	Fri Jan 22 14:17:48 CST 2021
+MPICH ABI:	13:10:1
+MPICH Device:	ch3:nemesis
+MPICH configure:	--prefix=/soft/gnu/mpich-3.4.1-noucx --with-device=ch3:nemesis
+MPICH CC:	gcc    -O2
+MPICH CXX:	g++   -O2
+MPICH F77:	gfortran   -O2
+MPICH FC:	gfortran   -O2
+
+END RUN

@@ -1,0 +1,30 @@
+MPICH
+P1 of 2 | Padrescounts[2]=25 disp=0
+P1 of 2 | Padrescounts[3]=25 disp=25
+P0 of 2 | Padrescounts[0]=25 disp=0
+P0 of 2 | Padrescounts[1]=25 disp=25
+P0 of 4 | Hijoscounts[0]=25 disp=0
+P1 of 4 | Hijoscounts[0]=25 disp=0
+P2 of 4 | Hijoscounts[1]=25 disp=0
+P3 of 4 | Hijoscounts[1]=25 disp=0
+Fatal error in PMPI_Wait: Unknown error class, error stack:
+PMPI_Wait(204).................: MPI_Wait(request=0x7ffcfa166230, status=0x1) failed
+MPIR_Wait(104).................: 
+MPIDU_Sched_progress_state(955): Invalid communicator
+Fatal error in PMPI_Wait: Unknown error class, error stack:
+PMPI_Wait(204).................: MPI_Wait(request=0x7ffdd2541a10, status=0x1) failed
+MPIR_Wait(104).................: 
+MPIDU_Sched_progress_state(955): Invalid communicator
+Fatal error in PMPI_Wait: Unknown error class, error stack:
+PMPI_Wait(204).................: MPI_Wait(request=0x7ffe39910c20, status=0x1) failed
+MPIR_Wait(104).................: 
+MPIDU_Sched_progress_state(955): Invalid communicator
+
+===================================================================================
+=   BAD TERMINATION OF ONE OF YOUR APPLICATION PROCESSES
+=   PID 35108 RUNNING AT n01
+=   EXIT CODE: 139
+=   CLEANING UP REMAINING PROCESSES
+=   YOU CAN IGNORE THE BELOW CLEANUP MESSAGES
+===================================================================================
+END RUN

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
+#include "../IOcodes/results.h"
 #include "../malleability/ProcessDist.h"
 #include "../malleability/CommDist.h"
 
@@ -19,12 +20,13 @@ void iterate(double *matrix, int n, int async_comm);
 void computeMatrix(double *matrix, int n);
 void initMatrix(double **matrix, int n);
 
+void print_general_info(int myId, int grp, int numP);
+
 typedef struct {
   int myId;
   int numP;
   int grp;
   int iter_start;
-
 
   MPI_Comm children, parents;
   char **argv;
@@ -33,13 +35,10 @@ typedef struct {
 
 configuration *config_file;
 group_data *group;
-
-// Variables sobre resultados
-int *iters_time, *iters_type, iter_index;
-
+results_data *results;
 
 int main(int argc, char *argv[]) {
-    int numP, myId, i;
+    int numP, myId;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
@@ -58,6 +57,7 @@ int main(int argc, char *argv[]) {
 
     } else { // Si son el primer grupo de procesos, recogen la configuracion inicial
       config_file = read_ini_file(argv[1]);
+      init_results_data(&results, config_file->resizes - 1, config_file->iters[group->grp]);
       if(config_file->sdr > 0) {
         malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
       }
@@ -66,38 +66,15 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    iters_time = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
-    iters_type = malloc(config_file->iters[group->grp] * 3 * sizeof(int));
-    iter_index = 0;
 
     //if(myId== ROOT) print_config(config_file, group->grp);
     work();
 
-    /*
-    if(myId == ROOT) {
+    if(group->myId == ROOT) { // Print results
       print_config_group(config_file, group->grp);
-      printf("Titer: ");
-      for(i=0; i<iter_index; i++) {
-        printf("%d ", iters_time[i]);
-      }
+      print_iter_results(results, config_file->iters[group->grp] -1);
+    }
 
-      printf("\nTop: ");
-      for(i=0; i<iter_index; i++) {
-        printf("%d ", iters_type[i]);
-      }
-      printf("\n");
-      free(iters_time);
-      free(iters_type);
-    }*/
-    
-/*
-  int len;
-  char *name = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
-  char *version = malloc(MPI_MAX_LIBRARY_VERSION_STRING * sizeof(char));
-  MPI_Get_processor_name(name, &len);
-  MPI_Get_library_version(version, &len);
-  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, group->grp, numP, name, version);
-*/
 
     if(config_file->sdr > 0) {
       free(group->sync_array);
@@ -107,8 +84,7 @@ int main(int argc, char *argv[]) {
     }
     free(group);
     free_config(config_file);
-    free(iters_time);
-    free(iters_type);
+    free_results_data(&results); //FIXME Provoca un error - Entro mal a algun vector??
     
     MPI_Finalize();
     return 0;
@@ -137,7 +113,6 @@ int work() {
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(matrix, config_file->matrix_tam, state);
   }
-
   state = checkpoint(iter, state, &async_comm);
   
   iter = 0;
@@ -172,7 +147,11 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     if(config_file->iters[group->grp] > iter || config_file->resizes == group->grp + 1) {return MAL_COMM_UNINITIALIZED;}
 
     int numS = config_file->procs[group->grp +1];
+
+      results->spawn_start = MPI_Wtime();
     TC(numS);
+      results->spawn_time[group->grp + 1] = MPI_Wtime() - results->spawn_start;
+
     state = start_redistribution(numS, comm_req);
 
   } else if(MAL_ASYNC_PENDING) {
@@ -207,12 +186,17 @@ int start_redistribution(int numS, MPI_Request **comm_req) {
   send_config_file(config_file, rootBcast, group->children);
 
   if(config_file->adr > 0) {
+    results->async_start = MPI_Wtime();
     send_async(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, numS, comm_req, config_file->aib);
     return MAL_ASYNC_PENDING;
   } 
   if(config_file->sdr > 0) {
+      results->sync_start = MPI_Wtime();
     send_sync(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, numS);
   }
+
+  
+  send_results(results, rootBcast, group->children);
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->children));
 
@@ -250,8 +234,10 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
   iter_send = iter;
   MPI_Bcast(&iter_send, 1, MPI_INT, rootBcast, group->children);
   if(config_file->sdr > 0) { // Realizar envio sincrono
+      results->sync_start = MPI_Wtime();
     send_sync(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, numS);
   }
+  send_results(results, rootBcast, group->children);
 
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->children));
@@ -273,14 +259,20 @@ void Sons_init() {
 
   config_file = recv_config_file(ROOT, group->parents);
   int numP_parents = config_file->procs[group->grp -1];
+  init_results_data(&results, config_file->resizes - 1, config_file->iters[group->grp]);
 
   if(config_file->adr > 0) { // Recibir datos asincronos
     recv_async(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents, config_file->aib);
     MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
+    results->async_time[group->grp] = MPI_Wtime();
   }
   if(config_file->sdr > 0) { // Recibir datos sincronos
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
+    results->sync_time[group->grp] = MPI_Wtime();
   }
+  recv_results(results, ROOT, group->parents);
+  results->sync_time[group->grp]  = MPI_Wtime() - results->sync_start;
+  results->async_time[group->grp] = MPI_Wtime() - results->async_start;
 
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->parents));
@@ -304,24 +296,15 @@ void iterate(double *matrix, int n, int async_comm) {
   int i, operations = 0;
 
   start_time = actual_time = MPI_Wtime();
-  
-  if(async_comm == MAL_ASYNC_PENDING && iter_index > 0) { // Se esta realizando una redistribucion de datos asincrona
-MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 0\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-    operations = iters_type[iter_index - 1];
-MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+    operations = results->iters_type[config_file->iters[group->grp] - 1];
     for (i=0; i<operations; i++) {
-//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       computeMatrix(matrix, n);
-//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 3\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       actual_time = MPI_Wtime(); // Guardar tiempos
-//MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 4\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     }
-MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 5\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     operations = 0;
-MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 6\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   } else { // No hay redistribucion de datos actualmente	  
-	  
     while (actual_time - start_time < time) {
       computeMatrix(matrix, n);
       operations++;
@@ -329,9 +312,9 @@ MPI_Barrier(MPI_COMM_WORLD); if(group->myId) printf("TEST 6\n"); fflush(stdout);
     }
   }
 
-  iters_time[iter_index] = actual_time - start_time;
-  iters_type[iter_index] = operations;
-  iter_index = iter_index + 1;
+  results->iters_time[results->iter_index] = actual_time - start_time;
+  results->iters_type[results->iter_index] = operations;
+  results->iter_index = results->iter_index + 1;
 }
 
 /*
@@ -368,3 +351,23 @@ void initMatrix(double **matrix, int n) {
     }
   }
 }
+
+//======================================================||
+//======================================================||
+//=============???????¿¿¿¿¿¿¿¿ FUNCTIONS================||
+//======================================================||
+//======================================================||
+
+void print_general_info(int myId, int grp, int numP) {
+  int len;
+  char *name = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
+  char *version = malloc(MPI_MAX_LIBRARY_VERSION_STRING * sizeof(char));
+  MPI_Get_processor_name(name, &len);
+  MPI_Get_library_version(version, &len);
+  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
+
+  free(name);
+  free(version);
+}
+
+
