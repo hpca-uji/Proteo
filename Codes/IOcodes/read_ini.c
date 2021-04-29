@@ -134,7 +134,7 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, aib=%d time=%f || grp=%d\n",
+    printf("Config loaded: resizes=%d, matrix=%d, sdr=%d, adr=%d, aib=%d, time=%f || grp=%d\n",
         user_config->resizes, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->general_time, grp);
     for(i=0; i<user_config->resizes; i++) {
       printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
@@ -144,6 +144,10 @@ void print_config(configuration *user_config, int grp) {
 }
 
 
+/*
+ * Imprime por salida estandar la informacion relacionada con un
+ * solo grupo de procesos en su configuracion.
+ */
 void print_config_group(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int parents, sons;
@@ -161,8 +165,6 @@ void print_config_group(configuration *user_config, int grp) {
         user_config->iters[grp], user_config->factors[grp], user_config->phy_dist[grp], user_config->procs[grp], parents, sons);
   }
 }
-
-
 
 //||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| ||
 //||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||| ||

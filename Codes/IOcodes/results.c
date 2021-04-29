@@ -3,52 +3,79 @@
 #include <mpi.h>
 #include "results.h"
 
-void def_results_type(results_data *results, MPI_Datatype *results_type);
+void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type);
 
 //======================================================||
 //======================================================||
 //================MPI RESULTS FUNCTIONS=================||
 //======================================================||
 //======================================================||
-void send_results(results_data *results, int root, MPI_Comm intercomm) {
+
+
+/*
+ * Envia una estructura de resultados al grupo de procesos al que se 
+ * enlaza este grupo a traves del intercomunicador pasado como argumento.
+ *
+ * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
+ * e indicar cual es el proceso raiz que se encargara de enviar los
+ * resultados al otro grupo.
+ */
+void send_results(results_data *results, int root, int resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los
   // datos escalares con una sola comunicacion
-  def_results_type(results, &results_type);
+  def_results_type(results, resizes, &results_type);
   MPI_Bcast(results, 1, results_type, root, intercomm);
 
   //Liberar tipos derivados
   MPI_Type_free(&results_type);
 }
 
-void recv_results(results_data *results, int root, MPI_Comm intercomm) {
+/*
+ * Recibe una estructura de resultados desde otro grupo de procesos
+ * y la devuelve. La memoria de la estructura se tiene que reservar con antelacion
+ * con la función "init_results_data".
+ *
+ * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
+ * e indicar cual es el proceso raiz del otro grupo que se encarga de enviar
+ * los resultados a este grupo.
+ */
+void recv_results(results_data *results, int root, int resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los
   // datos escalares con una sola comunicacion
-  def_results_type(results, &results_type);
+  def_results_type(results, resizes, &results_type);
   MPI_Bcast(results, 1, results_type, root, intercomm);
 
   //Liberar tipos derivados
   MPI_Type_free(&results_type);
 }
 
-void def_results_type(results_data *results, MPI_Datatype *results_type) {
-  int i, counts = 3;
-  int blocklengths[3] = {1, 1, 1};
+/*
+ * Define un tipo derivado de MPI para mandar los tiempos
+ * con una sola comunicacion.
+ *
+ * En concreto son tres escales y un vector de tamaño "resizes"
+ */
+void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
+  int i, counts = 4;
+  int blocklengths[4] = {1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = MPI_DOUBLE;
+  blocklengths[3] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
 
   MPI_Get_address(&(results->sync_start), &displs[0]);
   MPI_Get_address(&(results->async_start), &displs[1]);
-  MPI_Get_address(&(results->spawn_time), &displs[2]);
+  MPI_Get_address(&(results->exec_start), &displs[2]);
+  MPI_Get_address(&(results->spawn_time[0]), &displs[3]); //TODO Revisar si se puede simplificar
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -61,6 +88,13 @@ void def_results_type(results_data *results, MPI_Datatype *results_type) {
 //===============PRINT RESULTS FUNCTIONS================||
 //======================================================||
 //======================================================||
+
+/*
+ * Imprime por pantalla los resultados locales.
+ * Estos son los relacionados con las iteraciones, que son el tiempo
+ * por iteracion, el tipo (Normal o durante communicacion asincrona)
+ * y cuantas operaciones internas se han realizado en cada iteracion.
+ */
 void print_iter_results(results_data *results, int last_normal_iter_index) {
   int i, aux;
 
@@ -82,12 +116,44 @@ void print_iter_results(results_data *results, int last_normal_iter_index) {
   printf("\n");
 }
 
+/*
+ * Imprime por pantalla los resultados globales.
+ * Estos son el tiempo de creacion de procesos, los de comunicacion
+ * asincrona y sincrona y el tiempo total de ejecucion.
+ */
+void print_global_results(results_data *results, int resizes) {
+  int i;
+
+  printf("Tspawn: ");
+  for(i=0; i< resizes - 1; i++) {
+    printf("%lf ", results->spawn_time[i]);
+  }
+
+  printf("\nTsync: ");
+  for(i=1; i < resizes; i++) {
+    printf("%lf ", results->sync_time[i]);
+  }
+
+  printf("\nTasync: ");
+  for(i=1; i < resizes; i++) {
+    printf("%lf ", results->async_time[i]);
+  }
+
+  printf("\nTex: %lf\n", results->exec_time);
+}
+
 //======================================================||
 //======================================================||
 //=============INIT/FREE RESULTS FUNCTIONS==============||
 //======================================================||
 //======================================================||
 
+/*
+ * Inicializa los datos relacionados con una estructura de resultados.
+ *
+ * Los argumentos "resizes" y "iters_size" se necesitan para obtener el tamaño
+ * de los vectores de resultados.
+ */
 void init_results_data(results_data **results, int resizes, int iters_size) {
   *results = malloc(1 * sizeof(results_data));
 
@@ -95,15 +161,18 @@ void init_results_data(results_data **results, int resizes, int iters_size) {
   (*results)->sync_time = calloc(resizes, sizeof(double));
   (*results)->async_time = calloc(resizes, sizeof(double));
 
-  (*results)->iters_time = calloc(iters_size * 20, sizeof(double));
+  (*results)->iters_time = calloc(iters_size * 20, sizeof(double)); //FIXME Numero magico - Añadir funcion que amplie tamaño
   (*results)->iters_type = calloc(iters_size * 20, sizeof(int));
   (*results)->iter_index = 0;
 }
 
+/*
+ * Libera toda la memoria asociada con una estructura de resultados.
+ */
 void free_results_data(results_data **results) {
-    //free((*results)->spawn_time);
-    //free((*results)->sync_time);
-    //free((*results)->async_time);
+    free((*results)->spawn_time);
+    free((*results)->sync_time);
+    free((*results)->async_time);
 
     free((*results)->iters_time);
     free((*results)->iters_type);

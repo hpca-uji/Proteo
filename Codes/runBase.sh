@@ -9,8 +9,8 @@ module load mpich-3.4.1-noucx
 
 numP=$(bash recordMachinefile.sh test.ini)
 
-#mpirun -f hostfile.o$SLURM_JOB_ID -np $numP ./a.out test.ini
-mpirun -np 2 ./a.out test.ini
+mpirun -f hostfile.o$SLURM_JOB_ID -np $numP ./a.out test.ini
+#mpirun -np 2 ./a.out test.ini
 rm hostfile.o$SLURM_JOB_ID
 
 

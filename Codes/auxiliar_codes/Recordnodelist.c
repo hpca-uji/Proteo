@@ -114,14 +114,6 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
   *qty = procs;
 }
 
-  /*
-  *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
-  for(i=0; i< *used_nodes; i++) {
-    (*qty)[i] = procs[i];
-  }
-  free(procs);
-  */
-
 /*
  * Crea un fichero que se utilizara como hostfile
  * para un nuevo grupo de procesos. 
