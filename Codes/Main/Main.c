@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include "../IOcodes/read_ini.h"
 #include "../IOcodes/results.h"
 #include "../malleability/ProcessDist.h"
@@ -26,6 +28,7 @@ void free_application_data();
 
 void print_general_info(int myId, int grp, int numP);
 void print_final_results();
+int create_out_file(char *nombre, int *ptr, int newstdout);
 
 typedef struct {
   int myId;
@@ -44,8 +47,9 @@ results_data *results;
 
 int main(int argc, char *argv[]) {
     int numP, myId, res;
+    int req;
 
-    MPI_Init(&argc, &argv);
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
 
@@ -283,7 +287,7 @@ void Sons_init() {
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
     results->sync_time[group->grp] = MPI_Wtime();
   }
-  recv_results(results, ROOT, config_file->resizes, group->parents);
+  recv_results(results, ROOT, config_file->resizes, group->parents); //FIXME ERROR CUANDO SDR o ADR = 0
   results->sync_time[group->grp]  = MPI_Wtime() - results->sync_start;
   results->async_time[group->grp] = MPI_Wtime() - results->async_start;
 
@@ -394,13 +398,33 @@ void print_general_info(int myId, int grp, int numP) {
  * y las comunicaciones.
  */
 void print_final_results() {
+  int ptr_local, ptr_global, err;
+  char *file_name;
+
   if(group->myId == ROOT) {
+    file_name = NULL;
+    file_name = malloc(40 * sizeof(char));
+    //if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+    err = snprintf(file_name, 40, "G%dNP%dID%d.out", group->grp, group->numP, group->myId);
+    //if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+    create_out_file(file_name, &ptr_local, 1);
+  
     print_config_group(config_file, group->grp);
     print_iter_results(results, config_file->iters[group->grp] -1);
+    free(file_name);
 
     if(group->grp == config_file->resizes -1) {
+      file_name = NULL;
+      file_name = malloc(20 * sizeof(char));
+      //if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+      err = snprintf(file_name, 20, "Global.out");
+      //if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+
+      create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
       print_global_results(results, config_file->resizes);
+      free(file_name);
+      
     }
   }
 }
@@ -455,4 +479,29 @@ void free_application_data() {
   free(group);
   free_config(config_file);
   free_results_data(&results);
+}
+
+
+/* 
+ * Función para crear un fichero con el nombre pasado como argumento.
+ * Si el nombre ya existe, se escribe la informacion a continuacion.
+ *
+ * El proceso que llama a la función pasa a tener como salida estandar
+ * dicho fichero si el valor "newstdout" es verdadero.
+ *
+ */
+int create_out_file(char *nombre, int *ptr, int newstdout) {
+  int err;
+
+  *ptr = open(nombre, O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if(*ptr < 0) return -1; // No ha sido posible crear el fichero
+
+  if(newstdout) {
+    err = close(1);
+    if(err < 0) return -2; // No es posible modificar la salida estandar
+    err = dup(*ptr);
+    if(err < 0) return -3; // No es posible modificar la salida estandar
+  }
+
+  return 0;
 }

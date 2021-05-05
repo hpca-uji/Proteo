@@ -1,5 +1,6 @@
 #!/bin/bash
 
+dir="/home/martini/malleability_benchmark/Codes/auxiliar_codes"
 
 aux=$(grep "\[resize0\]" -n $1 | cut -d ":" -f1)
 read -r ini fin <<<$(echo $aux)
@@ -13,6 +14,6 @@ elif [ $dist == "cpu" ]; then
     dist=2
 fi
 
-./auxiliar_codes/Recordnodelist.o $numP $dist
+$dir/Recordnodelist.o $numP $dist
 
 echo $numP

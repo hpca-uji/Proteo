@@ -9,6 +9,11 @@
 #include <slurm/slurm.h>
 #include "ProcessDist.h"
 
+/*
+ * ESTE CODIGO ES PARA COMPROBAR EL FUNCIONAMIENTO DEL FICHERO ProcessDist.h
+ * NO TIENE QUE VER CON EL BENCHMARK DE MALEABILIDAD
+ */
+
 #define ROOT 0
 #define MAXGRP 3
 
