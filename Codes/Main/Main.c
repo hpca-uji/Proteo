@@ -27,7 +27,7 @@ void init_application();
 void free_application_data();
 
 void print_general_info(int myId, int grp, int numP);
-void print_final_results();
+int print_final_results();
 int create_out_file(char *nombre, int *ptr, int newstdout);
 
 typedef struct {
@@ -44,6 +44,7 @@ typedef struct {
 configuration *config_file;
 group_data *group;
 results_data *results;
+int run_id; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
     int numP, myId, res;
@@ -187,6 +188,7 @@ int start_redistribution(int numS, MPI_Request **comm_req) {
 
   // Enviar a los hijos que grupo de procesos son
   MPI_Bcast(&(group->grp), 1, MPI_INT, rootBcast, group->children);
+  MPI_Bcast(&run_id, 1, MPI_INT, rootBcast, group->children);
   send_config_file(config_file, rootBcast, group->children);
 
   if(config_file->adr > 0) {
@@ -272,6 +274,7 @@ void Sons_init() {
 
   // Enviar a los hijos que grupo de procesos son
   MPI_Bcast(&(group->grp), 1, MPI_INT, ROOT, group->parents);
+  MPI_Bcast(&run_id, 1, MPI_INT, ROOT, group->parents);
   group->grp++;
 
   config_file = recv_config_file(ROOT, group->parents);
@@ -287,9 +290,19 @@ void Sons_init() {
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
     results->sync_time[group->grp] = MPI_Wtime();
   }
-  recv_results(results, ROOT, config_file->resizes, group->parents); //FIXME ERROR CUANDO SDR o ADR = 0
-  results->sync_time[group->grp]  = MPI_Wtime() - results->sync_start;
-  results->async_time[group->grp] = MPI_Wtime() - results->async_start;
+
+  // Guardar los resultados de esta transmision
+  recv_results(results, ROOT, config_file->resizes, group->parents);
+  if(config_file->sdr > 0) { // Si no hay datos sincronos, el tiempo es 0
+    results->sync_time[group->grp]  = MPI_Wtime() - results->sync_start;
+  } else {
+    results->sync_time[group->grp]  = 0;
+  }
+  if(config_file->adr > 0) { // Si no hay datos asincronos, el tiempo es 0
+    results->async_time[group->grp]  = MPI_Wtime() - results->async_start;
+  } else {
+    results->async_time[group->grp]  = 0;
+  }
 
   // Desconectar intercomunicador con los hijos
   MPI_Comm_disconnect(&(group->parents));
@@ -317,8 +330,8 @@ void iterate(double *matrix, int n, int async_comm) {
     operations = results->iters_type[config_file->iters[group->grp] - 1];
     for (i=0; i<operations; i++) {
       computeMatrix(matrix, n);
-      actual_time = MPI_Wtime(); // Guardar tiempos
     }
+    actual_time = MPI_Wtime(); // Guardar tiempos
     operations = 0;
 
   } else { // No hay redistribucion de datos actualmente	  
@@ -397,16 +410,16 @@ void print_general_info(int myId, int grp, int numP) {
  * Si es el ultimo grupo de procesos, muestra los datos obtenidos de tiempo de ejecucion, creacion de procesos
  * y las comunicaciones.
  */
-void print_final_results() {
+int print_final_results() {
   int ptr_local, ptr_global, err;
   char *file_name;
 
   if(group->myId == ROOT) {
     file_name = NULL;
     file_name = malloc(40 * sizeof(char));
-    //if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+    if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
     err = snprintf(file_name, 40, "G%dNP%dID%d.out", group->grp, group->numP, group->myId);
-    //if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+    if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
     create_out_file(file_name, &ptr_local, 1);
   
     print_config_group(config_file, group->grp);
@@ -416,9 +429,9 @@ void print_final_results() {
     if(group->grp == config_file->resizes -1) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
-      //if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+      if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
       err = snprintf(file_name, 20, "Global.out");
-      //if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+      if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
 
       create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
@@ -427,6 +440,7 @@ void print_final_results() {
       
     }
   }
+  return 0;
 }
 
 /*
