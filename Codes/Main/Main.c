@@ -44,7 +44,7 @@ typedef struct {
 configuration *config_file;
 group_data *group;
 results_data *results;
-int run_id; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
+int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
     int numP, myId, res;
@@ -53,6 +53,13 @@ int main(int argc, char *argv[]) {
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
+
+    if(argc < 2) {
+      printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
+    }
+    if(argc > 2) {
+      run_id = atoi(argv[2]);
+    }
 
     init_group_struct(argv, myId, numP);
     init_application();
@@ -418,7 +425,7 @@ int print_final_results() {
     file_name = NULL;
     file_name = malloc(40 * sizeof(char));
     if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
-    err = snprintf(file_name, 40, "G%dNP%dID%d.out", group->grp, group->numP, group->myId);
+    err = snprintf(file_name, 40, "R%d_G%dNP%dID%d.out", run_id, group->grp, group->numP, group->myId);
     if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
     create_out_file(file_name, &ptr_local, 1);
   
@@ -430,7 +437,7 @@ int print_final_results() {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
       if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
-      err = snprintf(file_name, 20, "Global.out");
+      err = snprintf(file_name, 20, "R%d_Global.out", run_id);
       if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
 
       create_out_file(file_name, &ptr_global, 1);
