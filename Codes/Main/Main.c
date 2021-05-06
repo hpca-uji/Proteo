@@ -22,7 +22,7 @@ void iterate(double *matrix, int n, int async_comm);
 void computeMatrix(double *matrix, int n);
 void initMatrix(double **matrix, int n);
 
-void init_group_struct(char *argv[], int myId, int numP);
+void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
 void free_application_data();
 
@@ -35,6 +35,7 @@ typedef struct {
   int numP;
   int grp;
   int iter_start;
+  int argc;
 
   MPI_Comm children, parents;
   char **argv;
@@ -54,14 +55,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
 
-    if(argc < 2) {
-      printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
-    }
-    if(argc > 2) {
-      run_id = atoi(argv[2]);
-    }
-
-    init_group_struct(argv, myId, numP);
+    init_group_struct(argv, argc, myId, numP);
     init_application();
 
     if(group->grp == 0) {
@@ -453,12 +447,13 @@ int print_final_results() {
 /*
  * Inicializa la estructura group
  */
-void init_group_struct(char *argv[], int myId, int numP) {
+void init_group_struct(char *argv[], int argc, int myId, int numP) {
   group = malloc(1 * sizeof(group_data));
   group->myId        = myId;
   group->numP        = numP;
   group->grp         = 0;
   group->iter_start  = 0;
+  group->argc        = argc;
   group->argv        = argv;
 }
 
@@ -472,10 +467,20 @@ void init_group_struct(char *argv[], int myId, int numP) {
  * se comunican con los padres para inicializar sus datos.
  */
 void init_application() {
+
   MPI_Comm_get_parent(&(group->parents));
   if(group->parents != MPI_COMM_NULL ) { // Si son procesos hijos deben comunicarse con las padres
     Sons_init();
   } else { // Si son el primer grupo de procesos, recogen la configuracion inicial
+
+    if(group->argc < 2) {
+      printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
+      exit(0);
+    }
+    if(group->argc > 2) {
+      run_id = atoi(group->argv[2]);
+    }
+
     config_file = read_ini_file(group->argv[1]);
     init_results_data(&results, config_file->resizes, config_file->iters[group->grp]);
     if(config_file->sdr > 0) {
