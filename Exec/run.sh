@@ -40,6 +40,7 @@ mkdir $name_res
 
 # Ejecutar pruebas
 i=0
+j=0
 for procs_parents in "${procs_array[@]}"
 do
   for procs_sons in "${procs_array[@]}"
@@ -59,25 +60,25 @@ do
 
 	    # Crear directorio para esta ejecucion
             cd $dir$ResultsDir$name_res
-	    name_run="Run$i"
 	    mkdir Run$i
 	    cd Run$i
 
             # Crear archivo de configuracion
-	    echo "$procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- RUN $i"
+	    echo "Config $procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- RUN $i"
             array0=($iters $procs_parents $phy_dist)
             array=("${array0[@]}")
             array0=($iters $procs_sons $phy_dist)
             array+=("${array0[@]}")
             python3 $dir$execDir/./create_ini.py config$i.ini 1 $matrix_tam $N_qty $adr_perc $ibarrier_use $time $proc_init "${array[@]}"
 
-	    # LANZAR SCRIPT
-            sbatch -N $node_qty $dir$execDir./runResults.sh config$i.ini $i
           done
-        
         done
-        
       done
+      aux=$(($j * 10)) #TODO Poner a 20 cuando se use ibarrier
+      bash $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
+      # LANZAR SCRIPT
+      #sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
+      j=$(($j + 1))
 
     fi
   done

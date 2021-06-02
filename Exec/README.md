@@ -1,8 +1,9 @@
 Los archivos de esta carpeta son para ejecutar pruebas con todas las posibles configuraciones.
 Se tienen tres ficheros en esta carpeta:
 -- run.sh: Para ejecutar una serie de pruebas.
--- runResults.sh: Para ejecutar tres pruebas con un fichero de configuración.
+-- arrayRun.sh: Script para ejecutar por slurm para las pruebas. Es llamado por run.sh.
 -- singleRun.sh: Para ejecutar una sola prueba con un fichero de configuración.
+-- tripleRun.sh: Para ejecutar tres pruebas con un fichero de configuración. Mismos argumentos que singleRun.sh
 -- create_ini.py: Crea un fichero de configuración de tipo "config.ini" a partir de los argumentos pasados
 
 Para ejecutar las pruebas se utiliza el comando:
