@@ -10,7 +10,7 @@ echo "START TEST"
 
 groups=$1 #TODO Modificar para que admita más de dos grupos de procesos
 matrix_tam=$2
-N_qty=$3
+N_qty=$3 # Datos a redistribuir
 time=$4
 proc_init=$5 #El tiempo por iteracion es para esta cantidad de procesos
 iters=$6
@@ -75,9 +75,10 @@ do
         done
       done
       aux=$(($j * 10)) #TODO Poner a 20 cuando se use ibarrier
-      bash $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
+      #bash $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
       # LANZAR SCRIPT
-      #sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
+      echo $aux
+      sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
       j=$(($j + 1))
 
     fi
