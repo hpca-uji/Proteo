@@ -10,6 +10,7 @@ typedef struct
     int matrix_tam, sdr, adr;
     int aib;
     float general_time;
+    double Top;
 
     int *iters, *procs, *phy_dist;
     float *factors;

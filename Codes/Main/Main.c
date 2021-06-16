@@ -20,6 +20,7 @@ int check_redistribution(int iter, MPI_Request **comm_req);
 
 void iterate(double *matrix, int n, int async_comm);
 void computeMatrix(double *matrix, int n);
+double computePiSerial(int n);
 void initMatrix(double **matrix, int n);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
@@ -97,7 +98,7 @@ int work() {
   MPI_Request *async_comm;
 
   maxiter = config_file->iters[group->grp];
-  initMatrix(&matrix, config_file->matrix_tam);
+  //initMatrix(&matrix, config_file->matrix_tam);
   state = MAL_COMM_UNINITIALIZED;
 
   res = 0;
@@ -146,7 +147,7 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
 
     state = start_redistribution(numS, comm_req);
 
-  } else if(MAL_ASYNC_PENDING) {
+  } else if(state == MAL_ASYNC_PENDING) {
     state = check_redistribution(iter, comm_req);
   }
 
@@ -236,7 +237,6 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
     req_completed = &(*comm_req)[1];
   }
  
-  
   test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
     printf("P%d aborting -- Test Async\n", group->myId);
@@ -244,11 +244,15 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
   }
 
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+  
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
+  
 
   //MPI_Wait(req_completed, MPI_STATUS_IGNORE);
   if(config_file->aib == MAL_USE_IBARRIER) {
     MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
+    //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta 
+    //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }
   
   iter_send = iter;
@@ -324,39 +328,54 @@ void Sons_init() {
 void iterate(double *matrix, int n, int async_comm) {
   double start_time, actual_time;
   double time = config_file->general_time * config_file->factors[group->grp];
+  double Top = config_file->Top;
   int i, operations = 0;
+  double aux = 0;
 
   start_time = actual_time = MPI_Wtime();
-  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
-    operations = results->iters_type[config_file->iters[group->grp] - 1];
-    for (i=0; i<operations; i++) {
-      computeMatrix(matrix, n);
-    }
-    actual_time = MPI_Wtime(); // Guardar tiempos
-    operations = 0;
 
-  } else { // No hay redistribucion de datos actualmente	  
-    while (actual_time - start_time < time) {
-      computeMatrix(matrix, n);
-      operations++;
-      actual_time = MPI_Wtime(); // Guardar tiempos
-    }
+  operations = time / Top;
+  for(i=0; i < operations; i++) {
+    aux += computePiSerial(n);
+  }
+  actual_time = MPI_Wtime(); // Guardar tiempos
+  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+    operations=0;
   }
 
   results->iters_time[results->iter_index] = actual_time - start_time;
   results->iters_type[results->iter_index] = operations;
   results->iter_index = results->iter_index + 1;
 }
+  /*
+  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+    operations = results->iters_type[config_file->iters[group->grp] - 1];
+    for (i=0; i<operations; i++) {
+      //computeMatrix(matrix, n);
+      computePi(n);
+    }
+    actual_time = MPI_Wtime(); // Guardar tiempos
+    operations = 0;
+
+  } else { // No hay redistribucion de datos actualmente	  
+    while (actual_time - start_time < time) {
+      //computeMatrix(matrix, n);
+      computePi(n);
+      operations++;
+      actual_time = MPI_Wtime(); // Guardar tiempos
+    }
+  }
+  */
 
 /*
  * Realiza una multiplicación de matrices de tamaño n
  */
 void computeMatrix(double *matrix, int n) {
-  int row, col, i, aux;
+  int row, col, i;
+  double aux;
 
-  for(row=0; i<n; row++) {
-    /* COMPUTE */
-    for(col=0; col<n; col++) {
+  for(col=0; i<n; col++) {
+    for(row=0; row<n; row++) {
       aux=0;
       for(i=0; i<n; i++) {
         aux += matrix[row*n + i] * matrix[i*n + col];
@@ -364,6 +383,23 @@ void computeMatrix(double *matrix, int n) {
     }
   }
 }
+
+double computePiSerial(int n) {
+    int i;
+    double h, sum, x, pi;
+
+    h   = 1.0 / (double) n;  //wide of the rectangle
+    sum = 0.0;
+    for (i = 0; i < n; i++) {
+        x = h * ((double)i + 0.5);   //height of the rectangle
+        sum += 4.0 / (1.0 + x*x);
+    }
+
+    return pi = h * sum;
+    //MPI_Reduce(&sum, &res, 1, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
+}
+
+
 
 /*
  * Init matrix
@@ -489,6 +525,19 @@ void init_application() {
     if(config_file->adr > 0) {
       malloc_comm_array(&(group->async_array), config_file->adr , group->myId, group->numP);
     }
+
+    
+    double result, start_time = MPI_Wtime();
+    int i;
+    result = 0;
+    for(i=0; i<10000; i++) {
+      result += computePiSerial(config_file->matrix_tam);
+    }
+    printf("Creado Top con valor %lf\n", result);
+    fflush(stdout);
+
+    config_file->Top = (MPI_Wtime() - start_time) / 10000; //Tiempo de una iteracion
+    MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
   }
 }
 
