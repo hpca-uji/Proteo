@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --exclude=n[06-07]
+#SBATCH --exclude=n[06-07],c01
 
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
@@ -13,7 +13,8 @@ procs_parents=$3
 procs_sons=$4
 percs_array=(0 25 50 75 100)
 
-echo "START TEST init=$i"
+aux=$(($i + 1))
+echo "START TEST init=$aux"
 for adr_perc in "${percs_array[@]}"
 do
 
@@ -28,13 +29,11 @@ do
 
       echo "EXEC $procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- RUN $i"
 
-      touch test$i
       for index in 1 2 3
       do
-	echo "a"
-        #numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
-        #mpirun -f hostfile.o$SLURM_JOB_ID -np $numP $dir$codeDir/a.out $config_file $i
-        #rm hostfile.o$SLURM_JOB_ID
+        numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
+        mpirun -f hostfile.o$SLURM_JOB_ID -np $numP $dir$codeDir/a.out $config_file $i
+        rm hostfile.o$SLURM_JOB_ID
       done
     done  
   done
