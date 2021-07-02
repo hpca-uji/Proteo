@@ -220,10 +220,7 @@ int start_redistribution(int numS, MPI_Request **comm_req) {
 
   if(config_file->adr > 0) {
     results->async_start = MPI_Wtime();
-    //send_async(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, numS, comm_req, config_file->aib);
     return thread_creation();
-    //return MAL_ASYNC_PENDING;
-
   } 
   return end_redistribution(0);
 }
@@ -274,6 +271,7 @@ void* thread_async_work(void* void_arg) {
 }
 
 /*
+ * @deprecated
  * Comprueba si la redistribucion asincrona ha terminado. 
  * Si no ha terminado la funcion termina indicandolo, en caso contrario,
  * se continua con la comunicacion sincrona, el envio de resultados y
@@ -294,7 +292,7 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
     req_completed = &(*comm_req)[0];
   } else { // MAL_USE_IBARRIER
     req_completed = &(*comm_req)[1];
-  }
+  } 
  
   test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
@@ -303,11 +301,10 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
   }
 
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
   
 
-  //MPI_Wait(req_completed, MPI_STATUS_IGNORE);
+  MPI_Wait(req_completed, MPI_STATUS_IGNORE);
   if(config_file->aib == MAL_USE_IBARRIER) {
     MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta 
@@ -422,25 +419,6 @@ void iterate(double *matrix, int n, int async_comm) {
   results->iters_type[results->iter_index] = operations;
   results->iter_index = results->iter_index + 1;
 }
-  /*
-  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
-    operations = results->iters_type[config_file->iters[group->grp] - 1];
-    for (i=0; i<operations; i++) {
-      //computeMatrix(matrix, n);
-      computePi(n);
-    }
-    actual_time = MPI_Wtime(); // Guardar tiempos
-    operations = 0;
-
-  } else { // No hay redistribucion de datos actualmente	  
-    while (actual_time - start_time < time) {
-      //computeMatrix(matrix, n);
-      computePi(n);
-      operations++;
-      actual_time = MPI_Wtime(); // Guardar tiempos
-    }
-  }
-  */
 
 /*
  * Realiza una multiplicación de matrices de tamaño n
