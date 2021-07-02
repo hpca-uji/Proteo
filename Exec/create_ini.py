@@ -42,6 +42,7 @@ sdr = sdr - adr
 adr = str(adr)
 sdr = str(sdr)
 
+factor = 0
 f = open(name, "w")
 general(f, str(resizes), matrix_tam, sdr, adr, aib, time)
 
@@ -50,7 +51,11 @@ for resize in range(resizes):
     iters = sys.argv[9 + 3 * resize]
     procs = sys.argv[9 + 3 * resize + 1]
     physical_dist = sys.argv[9 + 3 * resize + 2]
-    factor = proc_time / float(procs)
+
+    if proc_time != 0: # Si el argumento proc_time es 0, todos los grupos tienen un factor de 1
+        factor = proc_time / float(procs)
+    else:
+        factor = 1
 
     resize_section(f, str(resize), iters, procs, str(factor), physical_dist)
 

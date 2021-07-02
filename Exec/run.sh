@@ -75,7 +75,6 @@ do
         done
       done
       aux=$(($j * 10)) #TODO Poner a 20 cuando se use ibarrier
-      #bash $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
       # LANZAR SCRIPT
       echo $aux
       sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons

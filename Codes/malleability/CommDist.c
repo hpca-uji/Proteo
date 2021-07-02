@@ -28,11 +28,6 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
 void send_async_arrays(struct Dist_data dist_data, char *array, int root, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request *comm_req);
 void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts, MPI_Request *comm_req);
 
-//TESTS
-void send_async_arrays2(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request **comm_req);
-void recv_async_arrays2(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts, MPI_Request **comm_req);
-//
-
 // DIST FUNCTIONS
 void get_dist(int qty, int id, int numP, struct Dist_data *dist_data);
 void set_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts);
