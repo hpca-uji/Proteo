@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include "computing_func.h"
 #include "../IOcodes/read_ini.h"
 #include "../IOcodes/results.h"
 #include "../malleability/ProcessDist.h"
@@ -25,9 +26,6 @@ int thread_check();
 void* thread_async_work(void* void_arg);
 
 void iterate(double *matrix, int n, int async_comm);
-void computeMatrix(double *matrix, int n);
-double computePiSerial(int n);
-void initMatrix(double **matrix, int n);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
@@ -420,58 +418,6 @@ void iterate(double *matrix, int n, int async_comm) {
   results->iter_index = results->iter_index + 1;
 }
 
-/*
- * Realiza una multiplicación de matrices de tamaño n
- */
-void computeMatrix(double *matrix, int n) {
-  int row, col, i;
-  double aux;
-
-  for(col=0; i<n; col++) {
-    for(row=0; row<n; row++) {
-      aux=0;
-      for(i=0; i<n; i++) {
-        aux += matrix[row*n + i] * matrix[i*n + col];
-      }
-    }
-  }
-}
-
-double computePiSerial(int n) {
-    int i;
-    double h, sum, x, pi;
-
-    h   = 1.0 / (double) n;  //wide of the rectangle
-    sum = 0.0;
-    for (i = 0; i < n; i++) {
-        x = h * ((double)i + 0.5);   //height of the rectangle
-        sum += 4.0 / (1.0 + x*x);
-    }
-
-    return pi = h * sum;
-    //MPI_Reduce(&sum, &res, 1, MPI_DOUBLE, MPI_SUM, root, MPI_COMM_WORLD);
-}
-
-
-
-/*
- * Init matrix
- */
-void initMatrix(double **matrix, int n) {
-  int i, j;
-
-  // Init matrix
-  if(matrix != NULL) {
-    *matrix = malloc(n * n * sizeof(double));
-    if(*matrix == NULL) { MPI_Abort(MPI_COMM_WORLD, -1);}
-    for(i=0; i < n; i++) {
-      for(j=0; j < n; j++) {
-        (*matrix)[i*n + j] = i+j;
-      }
-    }
-  }
-}
-
 //======================================================||
 //======================================================||
 //=============INIT/FREE/PRINT FUNCTIONS================||
@@ -584,7 +530,7 @@ void init_application() {
   printf("Creado Top con valor %lf\n", result);
   fflush(stdout);
 
-  config_file->Top = (MPI_Wtime() - start_time) / 20000; //Tiempo de una iteracion
+  config_file->Top = (MPI_Wtime() - start_time) / 20000; //Tiempo de una iteracion en numero de iteraciones
   MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
 }
 

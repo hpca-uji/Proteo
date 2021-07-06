@@ -3,8 +3,10 @@ Se tienen tres ficheros en esta carpeta:
 -- run.sh: Para ejecutar una serie de pruebas.
 -- arrayRun.sh: Script para ejecutar por slurm para las pruebas. Es llamado por run.sh.
 -- singleRun.sh: Para ejecutar pruebas con un fichero de configuración.
+-- CheckRun.sh: Para comprobar que las ejecuciones realizadas por run.sh son correctas, y en caso de que algunas fallen, relanzarlas.
 -- create_ini.py: Crea un fichero de configuración de tipo "config.ini" a partir de los argumentos pasados
 
+--------------------------------
 Para ejecutar las pruebas se utiliza el comando:
     bash run.sh grupos-hijos tamaño-matriz cantidad-datos-sincronos tiempo-iteracion proceso-tiempo iteraciones-por-grupo cantidad-nodos
 Este script crea subcarpetas en "Results" donde almacena los resultados y los ficheros de configuración que crea. 
@@ -41,3 +43,15 @@ Para ejecutar una sola prueba con un fichero de configuración se utiliza el sig
 Este comando solicita dos argumentos. El primero (valor) es para indicar la cantidad de nodos a usar.
 El segundo es el nombre del archivo de configuración a utilizar.
 En la carpeta Codes/ se tiene un archivo de configuración de ejemplo llamado "test.ini".
+
+--------------------------------
+Para comprobar que las ejecuciones realizadas por run.sh son correctas y en caso de errores, arreglarlos si es posible
+o indicarlo en caso de que no lo sea.
+Su ejecucion se basa en el siguiente comando:
+     bash CheckRun.sh directorio cantidadTipos cantidadGrupos
+
+     - directorio: Nombre de la carpeta que se quiere revisar
+     - cantidadTipos: Numero de configuraciones diferentes. Dentro del directorio a revisar, es el numero de subdirectorios
+     - cantidadGrupos: Numero de grupos de procesos en cada ejecucion.
+
+Actualmente, este comando no funciona si entre las ejecuciones del directorio, algunas tienen cantidades diferentes de grupos de procesos

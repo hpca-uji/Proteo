@@ -103,12 +103,12 @@ void print_iter_results(results_data *results, int last_normal_iter_index) {
     printf("%lf ", results->iters_time[i]);
   }
 
-  printf("\nTtype: ");
+  printf("\nTtype: "); //FIXME modificar a imprimir solo la cantidad de asincronas
   for(i=0; i< results->iter_index; i++) {
     printf("%d ", results->iters_type[i] == 0);
   }
 
-  printf("\nTop: ");
+  printf("\nTop: "); //FIXME modificar a imprimir solo cuantas operaciones cuestan una iteracion
   for(i=0; i< results->iter_index; i++) {
     aux = results->iters_type[i] == 0 ? results->iters_type[last_normal_iter_index] : results->iters_type[i];
     printf("%d ", aux);
