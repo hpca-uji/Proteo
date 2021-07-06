@@ -10,11 +10,12 @@ echo "START TEST"
 
 groups=$1 #TODO Modificar para que admita más de dos grupos de procesos
 matrix_tam=$2
-N_qty=$3 # Datos a redistribuir
-time=$4
-proc_init=$5 #El tiempo por iteracion es para esta cantidad de procesos
-iters=$6
-node_qty=$7
+comm_tam=$3
+N_qty=$4 # Datos a redistribuir
+time=$5
+proc_init=$6 #El tiempo por iteracion es para esta cantidad de procesos
+iters=$7
+node_qty=$8
 
 max_procs=$(($node_qty * 20))
 procs_array=()
@@ -69,7 +70,7 @@ do
             array=("${array0[@]}")
             array0=($iters $procs_sons $phy_dist)
             array+=("${array0[@]}")
-            python3 $dir$execDir/./create_ini.py config$i.ini 1 $matrix_tam $N_qty $adr_perc $ibarrier_use $time $proc_init "${array[@]}"
+            python3 $dir$execDir/./create_ini.py config$i.ini 1 $matrix_tam $comm_tam $N_qty $adr_perc $ibarrier_use $time $proc_init "${array[@]}"
 
           done
         done

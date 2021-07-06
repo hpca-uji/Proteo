@@ -29,6 +29,7 @@ void iterate(double *matrix, int n, int async_comm);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
+void obtain_op_times();
 void free_application_data();
 
 void print_general_info(int myId, int grp, int numP);
@@ -45,6 +46,8 @@ typedef struct {
   int numS; // Cantidad de procesos hijos
   int commAsync;
   MPI_Comm children, parents;
+
+  char *compute_comm_array;
   char **argv;
   char *sync_array, *async_array;
 } group_data;
@@ -356,24 +359,27 @@ void Sons_init() {
   int numP_parents = config_file->procs[group->grp -1];
   init_results_data(&results, config_file->resizes - 1, config_file->iters[group->grp]);
 
-  if(config_file->adr > 0) { // Recibir datos asincronos
+  if(config_file->comm_tam) {
+    group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
+  }
+  if(config_file->adr) { // Recibir datos asincronos
     recv_sync(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents);
       results->async_time[group->grp] = MPI_Wtime();
     MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
   }
-  if(config_file->sdr > 0) { // Recibir datos sincronos
+  if(config_file->sdr) { // Recibir datos sincronos
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
     results->sync_time[group->grp] = MPI_Wtime();
   }
 
   // Guardar los resultados de esta transmision
   recv_results(results, ROOT, config_file->resizes, group->parents);
-  if(config_file->sdr > 0) { // Si no hay datos sincronos, el tiempo es 0
+  if(config_file->sdr) { // Si no hay datos sincronos, el tiempo es 0
     results->sync_time[group->grp]  = MPI_Wtime() - results->sync_start;
   } else {
     results->sync_time[group->grp]  = 0;
   }
-  if(config_file->adr > 0) { // Si no hay datos asincronos, el tiempo es 0
+  if(config_file->adr) { // Si no hay datos asincronos, el tiempo es 0
     results->async_time[group->grp]  = MPI_Wtime() - results->async_start;
   } else {
     results->async_time[group->grp]  = 0;
@@ -408,6 +414,11 @@ void iterate(double *matrix, int n, int async_comm) {
   for(i=0; i < operations; i++) {
     aux += computePiSerial(n);
   }
+
+  if(config_file->comm_tam) {
+    MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+  }
+
   actual_time = MPI_Wtime(); // Guardar tiempos
   if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
     operations=0;
@@ -513,14 +524,23 @@ void init_application() {
 
   config_file = read_ini_file(group->argv[1]);
   init_results_data(&results, config_file->resizes, config_file->iters[group->grp]);
-  if(config_file->sdr > 0) {
+  if(config_file->comm_tam) {
+    group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
+  }
+  if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
-  if(config_file->adr > 0) {
+  if(config_file->adr) {
     malloc_comm_array(&(group->async_array), config_file->adr , group->myId, group->numP);
   }
+   
+  obtain_op_times();
+}
 
-    
+/*
+ * Obtiene cuanto tiempo es necesario para realizar una operacion de PI
+ */
+void obtain_op_times() {
   double result, start_time = MPI_Wtime();
   int i;
   result = 0;
@@ -530,20 +550,24 @@ void init_application() {
   printf("Creado Top con valor %lf\n", result);
   fflush(stdout);
 
-  config_file->Top = (MPI_Wtime() - start_time) / 20000; //Tiempo de una iteracion en numero de iteraciones
-  MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+  config_file->Top = (MPI_Wtime() - start_time) / 20000; //Tiempo de una operacion
+  MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD); 
 }
 
 /*
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
-  if(config_file->sdr > 0) {
+  if(config_file->comm_tam) {
+    free(group->compute_comm_array);
+  }
+  if(config_file->sdr) {
     free(group->sync_array);
   }
-  if(config_file->adr > 0) {
+  if(config_file->adr) {
     free(group->async_array);
   }
+  
   free(group);
   free_config(config_file);
   free_results_data(&results);

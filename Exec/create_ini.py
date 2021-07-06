@@ -1,10 +1,11 @@
 import sys
 import glob
 
-def general(f, resizes, matrix_tam, sdr, adr, aib, time):
+def general(f, resizes, matrix_tam, comm_tam, sdr, adr, aib, time):
     f.write("[general]\n")
     f.write("resizes=" + resizes +"\n")
     f.write("matrix_tam=" + matrix_tam +"\n")
+    f.write("comm_tam=" + comm_tam +"\n")
     f.write("SDR=" + sdr +"\n")
     f.write("ADR=" + adr +"\n")
     f.write("AIB=" + aib +"\n")
@@ -30,11 +31,12 @@ if len(sys.argv) < 12:
 name = sys.argv[1]
 resizes = int(sys.argv[2])
 matrix_tam = sys.argv[3]
-sdr = int(sys.argv[4])
-adr_perc = float(sys.argv[5])
-aib = sys.argv[6]
-time = sys.argv[7]
-proc_time = float(sys.argv[8]) # Usado para calcular el factor de cada proceso
+comm_tam = sys.argv[4]
+sdr = int(sys.argv[5])
+adr_perc = float(sys.argv[6])
+aib = sys.argv[7]
+time = sys.argv[8]
+proc_time = float(sys.argv[9]) # Usado para calcular el factor de cada proceso
 
 adr = (sdr * adr_perc) / 100
 sdr = sdr - adr
@@ -44,13 +46,13 @@ sdr = str(sdr)
 
 factor = 0
 f = open(name, "w")
-general(f, str(resizes), matrix_tam, sdr, adr, aib, time)
+general(f, str(resizes), matrix_tam, comm_tam, sdr, adr, aib, time)
 
 resizes = resizes + 1 # Internamente, los primeros procesos se muestran como un grupo
 for resize in range(resizes):
-    iters = sys.argv[9 + 3 * resize]
-    procs = sys.argv[9 + 3 * resize + 1]
-    physical_dist = sys.argv[9 + 3 * resize + 2]
+    iters = sys.argv[10 + 3 * resize]
+    procs = sys.argv[10 + 3 * resize + 1]
+    physical_dist = sys.argv[10 + 3 * resize + 2]
 
     if proc_time != 0: # Si el argumento proc_time es 0, todos los grupos tienen un factor de 1
         factor = proc_time / float(procs)
