@@ -76,4 +76,15 @@ then
     cd $dir$ResultsDir$ResultsDirName
 
   done < errores.txt
+  exit 0
+fi
+
+qtyG=$(ls R*/R*_Global.out | wc -l)
+qtyG=$(($qtyG * 2))
+qtyL=$(ls R*/R*_G?N*.out | wc -l)
+if [ $qtyG == $qtyL ]
+then
+  echo "Ejecucciones correctas"
+else # TODO Expandir indicando cuales
+  echo "Faltan ejecuciones Locales o globales"
 fi

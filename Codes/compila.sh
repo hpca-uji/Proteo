@@ -6,6 +6,6 @@ if [ $# -gt 0 ]
 then
   if [ $1 = "-e" ]
   then
-    cp a.out benchm.out
+    cp a.out bench.out
   fi
 fi
