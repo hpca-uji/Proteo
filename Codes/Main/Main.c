@@ -22,7 +22,7 @@ int check_redistribution(int iter, MPI_Request **comm_req);
 int end_redistribution(int iter);
 
 int thread_creation();
-int thread_check();
+int thread_check(int iter);
 void* thread_async_work(void* void_arg);
 
 void iterate(double *matrix, int n, int async_comm);
