@@ -176,9 +176,11 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     state = start_redistribution(group->numS, comm_req);
 
   } else if(state == MAL_ASYNC_PENDING) {
-    state = thread_check();
-    if(state == MAL_COMM_COMPLETED) end_redistribution(iter);
-    //state = check_redistribution(iter, comm_req);
+    if(config_file->aib == MAL_USE_THREAD) {
+      state = thread_check(iter);
+    } else {
+      state = check_redistribution(iter, comm_req);
+    }
   }
 
   return state;
@@ -225,7 +227,12 @@ int start_redistribution(int numS, MPI_Request **comm_req) {
 
   if(config_file->adr > 0) {
     results->async_start = MPI_Wtime();
-    return thread_creation();
+    if(config_file->aib == MAL_USE_THREAD) {
+      return thread_creation();
+    } else {
+      send_async(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, group->numS, comm_req, config_file->aib);
+      return MAL_ASYNC_PENDING;
+    }
   } 
   return end_redistribution(0);
 }
@@ -248,14 +255,14 @@ int thread_creation() {
  *
  * El estado de la comunicación es devuelto al finalizar la función. 
  */
-int thread_check() {
+int thread_check(int iter) {
   if(group->commAsync == MAL_COMM_COMPLETED) {
     if(pthread_join(async_thread, NULL)) {
       printf("Error al esperar al hilo\n");
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -2;
     } 
-    return MAL_COMM_COMPLETED;
+    return end_redistribution(iter);
   }
 
   return MAL_ASYNC_PENDING;
@@ -284,8 +291,8 @@ void* thread_async_work(void* void_arg) {
  *
  * Esta funcion permite dos modos de funcionamiento al comprobar si la
  * comunicacion asincrona ha terminado.
- * Si se utiliza el modo "MAL_USE_NORMAL", se considera terminada cuando
- * los padres terminan de enviar.
+ * Si se utiliza el modo "MAL_USE_NORMAL" o "MAL_USE_POINT", se considera 
+ * terminada cuando los padres terminan de enviar.
  * Si se utiliza el modo "MAL_USE_IBARRIER", se considera terminada cuando
  * los hijos han terminado de recibir.
  */
@@ -293,13 +300,17 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
   int completed, all_completed, test_err;
   MPI_Request *req_completed;
 
-  if(config_file->aib == MAL_USE_NORMAL) {
-    req_completed = &(*comm_req)[0];
-  } else { // MAL_USE_IBARRIER
-    req_completed = &(*comm_req)[1];
-  } 
+  if (config_file->aib == MAL_USE_POINT) {
+    test_err = MPI_Testall(group->numS, *comm_req, &completed, MPI_STATUSES_IGNORE);
+  } else {
+    if(config_file->aib == MAL_USE_NORMAL) {
+      req_completed = &(*comm_req)[0];
+    } else if (config_file->aib == MAL_USE_IBARRIER) {
+      req_completed = &(*comm_req)[1];
+    }
+    test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
+  }
  
-  test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
     printf("P%d aborting -- Test Async\n", group->myId);
     MPI_Abort(MPI_COMM_WORLD, test_err);
@@ -309,7 +320,7 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
   
 
-  MPI_Wait(req_completed, MPI_STATUS_IGNORE);
+  //MPI_Wait(req_completed, MPI_STATUS_IGNORE); TODO BORRAR??
   if(config_file->aib == MAL_USE_IBARRIER) {
     MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta 

@@ -71,7 +71,7 @@ do
       for phy_dist in cpu node
       do
 
-        for ibarrier_use in 0 #TODO Poner a 0 1
+        for ibarrier_use in 3 #TODO Poner a 0 1 2 3?
         do
           i=$(($i + 1))
 
