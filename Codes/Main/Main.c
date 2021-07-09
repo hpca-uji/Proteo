@@ -97,7 +97,6 @@ int main(int argc, char *argv[]) {
       MPI_Barrier(MPI_COMM_WORLD);
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
-
     print_final_results();
 
     free_application_data();

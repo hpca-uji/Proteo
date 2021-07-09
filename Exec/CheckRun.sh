@@ -9,6 +9,13 @@ ResultsDirName=$1
 maxIndex=$2
 cantidadGrupos=$3 #Contando a los padres
 
+if [ $# -lt 3 ]
+then
+  echo "Faltan argumentos"
+  echo "Uso -> bash CheckRun NombreDirectorio IndiceMaximo Grupos"
+  exit -1
+fi
+
 cd $dir$ResultsDir
 if [ ! -d $ResultsDirName ]
 then
@@ -25,9 +32,21 @@ qty=$(wc -l errores2.txt | cut -d ' ' -f1)
 if [ $qty -gt 0 ]
 then
   echo "Se han encontrado errores de ejecución graves. Abortando"
+  echo "Revisar archivo errores2.txt en el directorio $ResultsDirName"
   exit -2
 fi
 rm errores2.txt
+
+qtyG=$(ls R*/R*_Global.out | wc -l)
+qtyG=$(($qtyG * 2))
+qtyL=$(ls R*/R*_G?N*.out | wc -l)
+if [ $qtyG == $qtyL ]
+then
+  echo "El numero de ficheros G($qtyG) y L($qtyL) coincide"
+else # TODO Expandir indicando cuales
+  echo "Faltan ejecuciones Locales o globales"
+  exit -1
+fi
 
 #Comprobar si hay runs con tiempo negativos
 #Si los hay, reejecutar e informar de cuales son
@@ -40,7 +59,7 @@ then
   while IFS="" read -r lineRun || [ -n "$lineRun" ]
   do
     #Obtener datos de una ejecución erronea
-    run=$(echo $lineRun | cut -d '/R' -f2 | cut -d '_' -f1)
+    run=$(echo $lineRun | cut -d 'R' -f3 | cut -d '_' -f1)
     if [ $run -gt $maxIndex ]
     then #Indice de ejecuciones posteriores
       realRun=$(($run - $maxIndex))
@@ -65,7 +84,7 @@ then
 
       aux=$(($fin / 7)) #Utilizado para saber de entre las ejecuciones del fichero, cual es la erronea
       fin=$(($aux * 5))
-      ini=$(($fin - 4))
+      init=$(($fin - 4))
       for ((j=0; j<cantidadGrupos; j++)); do
         sed -i ''$init','$fin'd' R${realRun}_G${j}*
       done
@@ -77,14 +96,4 @@ then
 
   done < errores.txt
   exit 0
-fi
-
-qtyG=$(ls R*/R*_Global.out | wc -l)
-qtyG=$(($qtyG * 2))
-qtyL=$(ls R*/R*_G?N*.out | wc -l)
-if [ $qtyG == $qtyL ]
-then
-  echo "Ejecucciones correctas"
-else # TODO Expandir indicando cuales
-  echo "Faltan ejecuciones Locales o globales"
 fi
