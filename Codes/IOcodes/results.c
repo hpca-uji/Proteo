@@ -162,7 +162,7 @@ void init_results_data(results_data **results, int resizes, int iters_size) {
   (*results)->async_time = calloc(resizes, sizeof(double));
 
   (*results)->iters_size = iters_size + 100;
-  (*results)->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico - Añadir funcion que amplie tamaño
+  (*results)->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
   (*results)->iters_type = calloc(iters_size + 100, sizeof(int));
   (*results)->iter_index = 0;
 }

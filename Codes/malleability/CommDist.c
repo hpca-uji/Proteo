@@ -139,7 +139,6 @@ void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm int
 void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts) {
 
     int i;
-
     // PREPARAR ENVIO DEL VECTOR
     if(idI == 0) {
       set_counts(0, numP_child, dist_data, counts.counts);
@@ -150,7 +149,6 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
-
     /* COMUNICACION DE DATOS */
     MPI_Alltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm);
     
@@ -164,7 +162,7 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts) {
 	
     int i;
-    char *aux = malloc(1);
+    char aux;
 
     // Ajustar los valores de recepcion
     if(idI == 0) {
@@ -178,8 +176,7 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
-    MPI_Alltoallv(aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm);
-    free(aux);
+    MPI_Alltoallv(&aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm);
 }
 
 
