@@ -5,7 +5,7 @@
 typedef struct {
   // Iters data
   double *iters_time;
-  int *iters_type, iter_index;
+  int *iters_type, iter_index, iters_size;
 
   // Spawn, Sync and Async time
   double spawn_start, *spawn_time;
@@ -21,4 +21,5 @@ void recv_results(results_data *results, int root, int resizes, MPI_Comm interco
 void print_iter_results(results_data *results, int last_normal_iter_index);
 void print_global_results(results_data *results, int resizes);
 void init_results_data(results_data **results, int resizes, int iters_size);
+void realloc_results_iters(results_data *results, int needed);
 void free_results_data(results_data **results);

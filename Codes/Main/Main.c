@@ -438,9 +438,14 @@ void iterate(double *matrix, int n, int async_comm) {
     operations=0;
   }
 
+
+  if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
+    realloc_results_iters(results, results->iters_size + 100);
+  }
   results->iters_time[results->iter_index] = actual_time - start_time;
   results->iters_type[results->iter_index] = operations;
   results->iter_index = results->iter_index + 1;
+
 }
 
 //======================================================||
@@ -556,15 +561,15 @@ void init_application() {
  */
 void obtain_op_times() {
   double result, start_time = MPI_Wtime();
-  int i;
+  int i, qty = 20000;
   result = 0;
-  for(i=0; i<20000; i++) {
+  for(i=0; i<qty; i++) {
     result += computePiSerial(config_file->matrix_tam);
   }
   printf("Creado Top con valor %lf\n", result);
   fflush(stdout);
 
-  config_file->Top = (MPI_Wtime() - start_time) / 20000; //Tiempo de una operacion
+  config_file->Top = (MPI_Wtime() - start_time) / qty; //Tiempo de una operacion
   MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD); 
 }
 

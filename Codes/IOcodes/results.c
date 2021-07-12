@@ -108,7 +108,7 @@ void print_iter_results(results_data *results, int last_normal_iter_index) {
     printf("%d ", results->iters_type[i] == 0);
   }
 
-  printf("\nTop: "); //FIXME modificar a imprimir solo cuantas operaciones cuestan una iteracion
+  printf("\nTop: "); //TODO modificar a imprimir solo cuantas operaciones cuestan una iteracion?
   for(i=0; i< results->iter_index; i++) {
     aux = results->iters_type[i] == 0 ? results->iters_type[last_normal_iter_index] : results->iters_type[i];
     printf("%d ", aux);
@@ -161,9 +161,26 @@ void init_results_data(results_data **results, int resizes, int iters_size) {
   (*results)->sync_time = calloc(resizes, sizeof(double));
   (*results)->async_time = calloc(resizes, sizeof(double));
 
-  (*results)->iters_time = calloc(iters_size * 20 + 100, sizeof(double)); //FIXME Numero magico - Añadir funcion que amplie tamaño
-  (*results)->iters_type = calloc(iters_size * 20 + 100, sizeof(int));
+  (*results)->iters_size = iters_size + 100;
+  (*results)->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico - Añadir funcion que amplie tamaño
+  (*results)->iters_type = calloc(iters_size + 100, sizeof(int));
   (*results)->iter_index = 0;
+}
+
+void realloc_results_iters(results_data *results, int needed) {
+  double *time_aux;
+  int *type_aux;
+
+  time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
+  type_aux = (int *) realloc(results->iters_type, needed * sizeof(int));
+
+  if(time_aux == NULL || type_aux == NULL) {
+    fprintf(stderr, "No se ha podido realojar la memoria de resultados\n");
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  results->iters_time = time_aux;
+  results->iters_type = type_aux;
 }
 
 /*
