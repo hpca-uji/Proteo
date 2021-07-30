@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --exclude=n[06-07],c01
+#SBATCH --exclude=c01
 
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
@@ -21,7 +21,7 @@ do
   for phy_dist in cpu node
   do
 
-    for ibarrier_use in 0 #TODO Poner a 0 1
+    for ibarrier_use in 3 #TODO Poner a 0 1
     do
       i=$(($i + 1))
       cd $name_dir/Run$i

@@ -175,7 +175,7 @@ void realloc_results_iters(results_data *results, int needed) {
   type_aux = (int *) realloc(results->iters_type, needed * sizeof(int));
 
   if(time_aux == NULL || type_aux == NULL) {
-    fprintf(stderr, "No se ha podido realojar la memoria de resultados\n");
+    fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 

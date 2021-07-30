@@ -150,7 +150,13 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
     /* COMUNICACION DE DATOS */
+    //int myId;
+    //MPI_Comm_rank(MPI_COMM_WORLD, &myId);
+    //if(myId == 0) { printf("TEST PREALL SEND\n"); fflush(stdout); }
+    //MPI_Barrier(dist_data.intercomm);
     MPI_Alltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm);
+    //MPI_Barrier(dist_data.intercomm);
+    //if(myId == 0) { printf("TEST POSTALL SEND\n"); fflush(stdout); }
     
 }
 
@@ -176,7 +182,13 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
+    //int myId;
+    //MPI_Comm_rank(MPI_COMM_WORLD, &myId);
+    //if(myId == 0) { printf("TEST PREALL RECV\n"); fflush(stdout); }
+    //MPI_Barrier(dist_data.intercomm);
     MPI_Alltoallv(&aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm);
+    //MPI_Barrier(dist_data.intercomm);
+    //if(myId == 0) { printf("TEST POSTALL RECV\n"); fflush(stdout); }
 }
 
 
