@@ -6,6 +6,7 @@ if [ $# -gt 0 ]
 then
   if [ $1 = "-e" ]
   then
+    echo "Creado ejecutable para ejecuciones"
     cp a.out bench.out
   fi
 fi
