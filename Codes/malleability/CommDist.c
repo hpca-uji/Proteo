@@ -150,14 +150,7 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
     /* COMUNICACION DE DATOS */
-    //int myId;
-    //MPI_Comm_rank(MPI_COMM_WORLD, &myId);
-    //if(myId == 0) { printf("TEST PREALL SEND\n"); fflush(stdout); }
-    //MPI_Barrier(dist_data.intercomm);
     MPI_Alltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm);
-    //MPI_Barrier(dist_data.intercomm);
-    //if(myId == 0) { printf("TEST POSTALL SEND\n"); fflush(stdout); }
-    
 }
 
 /*
@@ -182,13 +175,7 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
-    //int myId;
-    //MPI_Comm_rank(MPI_COMM_WORLD, &myId);
-    //if(myId == 0) { printf("TEST PREALL RECV\n"); fflush(stdout); }
-    //MPI_Barrier(dist_data.intercomm);
     MPI_Alltoallv(&aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm);
-    //MPI_Barrier(dist_data.intercomm);
-    //if(myId == 0) { printf("TEST POSTALL RECV\n"); fflush(stdout); }
 }
 
 
@@ -223,6 +210,7 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
 
     getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
 
+    // MAL_USE_THREAD sigue el camino sincrono
     if(parents_wait == MAL_USE_NORMAL) {
       *comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
       *comm_req[0] = MPI_REQUEST_NULL;
@@ -275,6 +263,7 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
 
     getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
+    // MAL_USE_THREAD sigue el camino sincrono
     if(parents_wait == MAL_USE_POINT) {
       comm_req = (MPI_Request *) malloc(numP_parents * sizeof(MPI_Request));
       for(i=0; i<numP_parents; i++){
@@ -394,12 +383,12 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, counts.counts);
       idI++;
-      MPI_Isend(array, counts.counts[0], MPI_CHAR, 0, 99, dist_data.intercomm, &(comm_req[0]));
+      MPI_Irecv(array, counts.counts[0], MPI_CHAR, 0, 99, dist_data.intercomm, &(comm_req[0]));
     }
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-      MPI_Isend(array+counts.displs[i], counts.counts[0], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[0]));
+      MPI_Irecv(array+counts.displs[i], counts.counts[0], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[0]));
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 }

@@ -169,6 +169,7 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     group->numS = config_file->procs[group->grp +1];
 
       results->spawn_start = MPI_Wtime();
+      if(group->myId == ROOT) { printf("Malleability\n");}
     TC(group->numS);
       results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
 
@@ -180,6 +181,8 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     } else {
       state = check_redistribution(iter, comm_req);
     }
+
+      printf("P%d/%d Malleability END state=%d\n", group->myId, group->numP, state);
   }
 
   return state;
@@ -255,16 +258,18 @@ int thread_creation() {
  * El estado de la comunicación es devuelto al finalizar la función. 
  */
 int thread_check(int iter) {
-  if(group->commAsync == MAL_COMM_COMPLETED) {
-    if(pthread_join(async_thread, NULL)) {
-      printf("Error al esperar al hilo\n");
-      MPI_Abort(MPI_COMM_WORLD, -1);
-      return -2;
-    } 
-    return end_redistribution(iter);
-  }
+  int all_completed = 0;
 
-  return MAL_ASYNC_PENDING;
+  // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
+  MPI_Allreduce(&group->commAsync, &all_completed, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  if(all_completed != MAL_COMM_COMPLETED) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
+
+  if(pthread_join(async_thread, NULL)) {
+    printf("Error al esperar al hilo\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    return -2;
+  } 
+  return end_redistribution(iter);
 }
 
 /*
@@ -430,6 +435,7 @@ void iterate(double *matrix, int n, int async_comm) {
   }
 
   if(config_file->comm_tam) {
+    printf("P%d/%d Bcast\n", group->myId, group->numP);
     MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, MPI_COMM_WORLD);
   }
 
@@ -566,8 +572,8 @@ void obtain_op_times() {
   for(i=0; i<qty; i++) {
     result += computePiSerial(config_file->matrix_tam);
   }
-  printf("Creado Top con valor %lf\n", result);
-  fflush(stdout);
+  //printf("Creado Top con valor %lf\n", result);
+  //fflush(stdout);
 
   config_file->Top = (MPI_Wtime() - start_time) / qty; //Tiempo de una operacion
   MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD); 
