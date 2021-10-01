@@ -38,6 +38,7 @@ fi
 max_procs=$(($node_qty * 20))
 procs_array=(2 10)
 percs_array=(0 25 50 75 100)
+at_array=(0)
 
 #Obtener cantidades de procesos posibles a ejecutar
 i=0
@@ -59,6 +60,7 @@ echo "Localizacion de los resultados: $dir$ResultsDir$name_res"
 mkdir $name_res
 
 # Ejecutar pruebas
+
 i=0
 j=0
 for procs_parents in "${procs_array[@]}"
@@ -71,7 +73,7 @@ do
       for phy_dist in cpu node
       do
 
-        for ibarrier_use in 3 #TODO Poner a 0 1 2 3?
+        for ibarrier_use in "${at_array[@]}"
         do
           i=$(($i + 1))
 
@@ -91,12 +93,13 @@ do
         done
       done
     done
-    aux=$(($j * 10)) #TODO Poner a 20 cuando se use ibarrier
+    start_i=$(($j * 10 * ${#array[@]})) #TODO modficar utlimo valor cuando se use ibarrier
     # LANZAR SCRIPT
     echo $aux
-    sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $aux $procs_parents $procs_sons
+    sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $start_i $procs_parents $procs_sons
     j=$(($j + 1))
   done
 done
 
+echo "Localizacion de los resultados: $dir$ResultsDir$name_res"
 echo "END TEST"
