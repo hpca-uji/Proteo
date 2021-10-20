@@ -66,7 +66,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
 
 //================================================================================
 //================================================================================
-//========================SINCHRONOUS FUNCTIONS===================================
+//========================SYNCHRONOUS FUNCTIONS===================================
 //================================================================================
 //================================================================================
 
@@ -228,6 +228,7 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
         (*comm_req)[i] = MPI_REQUEST_NULL;
       }
       send_async_point_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, *comm_req); 
+    } else if (parents_wait == MAL_USE_THREAD) { //TODO 
     }
 
     freeCounts(&counts);
@@ -272,18 +273,19 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
       recv_async_point_arrays(dist_data, *array, root, numP_parents, idS[0], idS[1], counts, comm_req);
       wait_err = MPI_Waitall(numP_parents, comm_req, MPI_STATUSES_IGNORE);
 
-    } else {
+    } else if (parents_wait == MAL_USE_NORMAL || parents_wait == MAL_USE_IBARRIER) {
       comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
       *comm_req = MPI_REQUEST_NULL;
       recv_async_arrays(dist_data, *array, root, numP_parents, idS[0], idS[1], counts, comm_req);
       wait_err = MPI_Wait(comm_req, MPI_STATUS_IGNORE);
+    } else if (parents_wait == MAL_USE_THREAD) { //TODO
     }
 
     if(wait_err != MPI_SUCCESS) {
       MPI_Abort(MPI_COMM_WORLD, wait_err);
     }
 
-    if(parents_wait == MAL_USE_IBARRIER) {
+    if(parents_wait == MAL_USE_IBARRIER) { //MAL USE IBARRIER END
       MPI_Ibarrier(intercomm, &aux);
       MPI_Wait(&aux, MPI_STATUS_IGNORE); //Es necesario comprobar que la comunicación ha terminado para desconectar los grupos de procesos
     }

@@ -182,7 +182,6 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
       state = check_redistribution(iter, comm_req);
     }
 
-      printf("P%d/%d Malleability END state=%d\n", group->myId, group->numP, state);
   }
 
   return state;
@@ -320,14 +319,19 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
 
+  //MPI_Wait(req_completed, MPI_STATUS_IGNORE); //TODO BORRAR??
+
+  //int delete_me;
+  //MPI_Allreduce(&completed, &delete_me, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //TODO BORRAR
+  //if(group->myId == ROOT) {printf("Suma=%d para %d procs\n", delete_me, group->numP); fflush(stdout);}
+
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
   
 
-  //MPI_Wait(req_completed, MPI_STATUS_IGNORE); TODO BORRAR??
   if(config_file->aib == MAL_USE_IBARRIER) {
     MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
-    //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta 
+    //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }
   free(*comm_req);
@@ -382,7 +386,12 @@ void Sons_init() {
     group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
   }
   if(config_file->adr) { // Recibir datos asincronos
-    recv_sync(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents);
+    if(config_file->aib == MAL_USE_NORMAL || config_file->aib == MAL_USE_IBARRIER || config_file->aib == MAL_USE_POINT) {
+      recv_async(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents, config_file->aib);
+    } else if (config_file->aib == MAL_USE_THREAD) {
+      recv_sync(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents);
+    }
+
       results->async_time[group->grp] = MPI_Wtime();
     MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
   }
@@ -435,7 +444,6 @@ void iterate(double *matrix, int n, int async_comm) {
   }
 
   if(config_file->comm_tam) {
-    printf("P%d/%d Bcast\n", group->myId, group->numP);
     MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, MPI_COMM_WORLD);
   }
 
