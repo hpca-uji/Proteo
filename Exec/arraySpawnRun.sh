@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-#SBATCH --exclude=n[06-07],c01
+#SBATCH --exclude=n[06-07],c01,c00
 
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"

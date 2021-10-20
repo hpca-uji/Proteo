@@ -93,7 +93,7 @@ do
         done
       done
     done
-    start_i=$(($j * 10 * ${#array[@]})) #TODO modficar utlimo valor cuando se use ibarrier
+    start_i=$(($j * 10 * ${#at_array[@]})) #TODO modficar utlimo valor cuando se use ibarrier
     # LANZAR SCRIPT
     echo $aux
     sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $start_i $procs_parents $procs_sons
