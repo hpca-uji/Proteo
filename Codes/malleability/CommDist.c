@@ -342,6 +342,7 @@ void send_async_point_arrays(struct Dist_data dist_data, char *array, int rootBc
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
       MPI_Isend(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
     }
+    //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
 }
 
 /*
@@ -385,12 +386,12 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, counts.counts);
       idI++;
-      MPI_Irecv(array, counts.counts[0], MPI_CHAR, 0, 99, dist_data.intercomm, &(comm_req[0]));
+      MPI_Irecv(array, counts.counts[0], MPI_CHAR, 0, 99, dist_data.intercomm, &(comm_req[0])); //FIXME BUffer recv
     }
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-      MPI_Irecv(array+counts.displs[i], counts.counts[0], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[0]));
+      MPI_Irecv(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 }
@@ -549,8 +550,8 @@ void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int si
   int i;
 
   for(i=0; i < size; i++) {
-    if(xcounts[i] != 0) {
+    //if(xcounts[i] != 0) {
       printf("P%d of %d | %scounts[%d]=%d disp=%d\n", data_dist.myId, data_dist.numP, name, i, xcounts[i], xdispls[i]);
-    }
+    //}
   }
 }

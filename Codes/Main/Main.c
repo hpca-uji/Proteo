@@ -319,12 +319,6 @@ int check_redistribution(int iter, MPI_Request **comm_req) {
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
 
-  //MPI_Wait(req_completed, MPI_STATUS_IGNORE); //TODO BORRAR??
-
-  //int delete_me;
-  //MPI_Allreduce(&completed, &delete_me, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //TODO BORRAR
-  //if(group->myId == ROOT) {printf("Suma=%d para %d procs\n", delete_me, group->numP); fflush(stdout);}
-
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
   if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
   
