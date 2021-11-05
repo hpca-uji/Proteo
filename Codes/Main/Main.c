@@ -16,7 +16,7 @@ int work();
 void Sons_init();
 
 int checkpoint(int iter, int state, MPI_Request **comm_req);
-void TC(int numS);
+int TC(int numS, int comm_type);
 int start_redistribution(int numS, MPI_Request **comm_req);
 int check_redistribution(int iter, MPI_Request **comm_req);
 int end_redistribution(int iter);
@@ -135,7 +135,7 @@ int work() {
   state = checkpoint(iter, state, &async_comm);
   
   iter = 0;
-  while(state == MAL_ASYNC_PENDING) {
+  while(state == MAL_ASYNC_PENDING || state == COMM_IN_PROGRESS) {
     iterate(matrix, config_file->matrix_tam, state);
     iter++;
     state = checkpoint(iter, state, &async_comm);
@@ -167,13 +167,22 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     if(config_file->iters[group->grp] > iter || config_file->resizes == group->grp + 1) {return MAL_COMM_UNINITIALIZED;}
 
     group->numS = config_file->procs[group->grp +1];
+    int comm_type = COMM_SPAWN_PTHREAD; // TODO Pasar a CONFIG
 
-      results->spawn_start = MPI_Wtime();
-      if(group->myId == ROOT) { printf("Malleability\n");}
-    TC(group->numS);
-      results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
+    if(group->myId == ROOT) { printf("Malleability\n");}
+    state = TC(group->numS, comm_type);
 
-    state = start_redistribution(group->numS, comm_req);
+    if (state == COMM_FINISHED){
+      state = start_redistribution(group->numS, comm_req);
+    }
+
+  } else if(state == COMM_IN_PROGRESS) { // Comprueba si el spawn ha terminado y comienza la redistribucion
+    state = check_slurm_comm(group->myId, ROOT, &(group->children));
+
+    if (state == COMM_FINISHED) {  
+        results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
+      state = start_redistribution(group->numS, comm_req);
+    }
 
   } else if(state == MAL_ASYNC_PENDING) {
     if(config_file->aib == MAL_USE_THREAD) {
@@ -181,7 +190,6 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     } else {
       state = check_redistribution(iter, comm_req);
     }
-
   }
 
   return state;
@@ -189,18 +197,18 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
 
 /*
  * Se encarga de realizar la creacion de los procesos hijos.
+ * Si se pide en segundo plano devuelve el estado actual.
  */
-void TC(int numS){
+int TC(int numS, int comm_type){
   // Inicialización de la comunicación con SLURM
   int dist = config_file->phy_dist[group->grp +1];
-  init_slurm_comm(group->argv, group->myId, numS, ROOT, dist, COMM_SPAWN_SERIAL);
+  int comm_state;
 
-  // Esperar a que la comunicación y creación de procesos
-  // haya finalizado
-  int test = -1;
-  while(test != MPI_SUCCESS) {
-    test = check_slurm_comm(group->myId, ROOT, MPI_COMM_WORLD, &(group->children));
-  }
+      results->spawn_start = MPI_Wtime();
+  comm_state = init_slurm_comm(group->argv, group->myId, numS, ROOT, dist, comm_type, MPI_COMM_WORLD, &(group->children));
+  if(comm_type == COMM_SPAWN_SERIAL)
+      results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
+  return comm_state;
 }
 
 /*

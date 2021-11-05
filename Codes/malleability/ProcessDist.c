@@ -13,6 +13,7 @@
 int commSlurm = COMM_UNRESERVED;
 struct Slurm_data *slurm_data;  
 pthread_t slurm_thread;
+MPI_Comm *returned_comm;
 
 struct Slurm_data {
   char *cmd; // Executable name
@@ -23,8 +24,10 @@ struct Slurm_data {
 
 struct Creation_data {
   char **argv;
-  int numP_childs, type_dist;
+  int numP_childs, myId, root, type_dist;
+  MPI_Comm comm;
 };
+
 
 //--------------PRIVATE SPAWN TYPE DECLARATIONS---------------//
 void* thread_work(void* creation_data_arg);
@@ -60,61 +63,72 @@ void print_Info(MPI_Info info);
  *
  * Si se pide en segundo plano, llamar a "check_slurm_comm()" comprobara si la configuracion para
  * crearlos esta lista, y si es asi, los crea.
+ *
+ * Devuelve el estado de el procedimiento. Si no devuelve "COMM_FINISHED", es necesario llamar a
+ * "check_slurm_comm()".
  */
-int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, int type_creation) {
+int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, int type_creation, MPI_Comm comm, MPI_Comm *child) {
 
   slurm_data = malloc(sizeof(struct Slurm_data));
 
-  if(myId == root) {
-    slurm_data->type_creation = type_creation;
-    if(type_creation == COMM_SPAWN_SERIAL) {
+  slurm_data->type_creation = type_creation;
+  if(type_creation == COMM_SPAWN_SERIAL) {
 
+    if(myId == root) {
       processes_dist(argv, numP, type_dist);
-      commSlurm = COMM_FINISHED;
+    }
+    create_processes(myId, root, child, comm);
+    free(slurm_data);
+    commSlurm = COMM_FINISHED;
 
-    } else if(type_creation == COMM_SPAWN_PTHREAD) {
-      commSlurm = COMM_IN_PROGRESS;
+  } else if(type_creation == COMM_SPAWN_PTHREAD) {
+    commSlurm = COMM_IN_PROGRESS;
 
-      struct Creation_data *creation_data = malloc(sizeof(struct Creation_Data*));
-      creation_data->argv = argv;
-      creation_data->numP_childs = numP;
-      creation_data->type_dist = type_dist;
+    struct Creation_data *creation_data = malloc(sizeof(struct Creation_Data*));
+    creation_data->argv = argv;
+    creation_data->numP_childs = numP;
+    creation_data->myId = myId;
+    creation_data->root = root;
+    creation_data->type_dist = type_dist;
+    creation_data->comm = comm;
 
-      if(pthread_create(&slurm_thread, NULL, thread_work, creation_data)) {
-        printf("Error al crear el hilo de contacto con SLURM\n");
-        MPI_Abort(MPI_COMM_WORLD, -1);
-        return -1;
-      }
-
+    if(pthread_create(&slurm_thread, NULL, thread_work, creation_data)) {
+      printf("Error al crear el hilo de contacto con SLURM\n");
+      MPI_Abort(MPI_COMM_WORLD, -1);
+      return -1;
     }
   }
     
-  return 0;
+  return commSlurm;
 }
 
 /*
  * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
- * y en caso de que lo este, se crea un nuevo grupo de procesos con esa configuracion.
+ * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
-int check_slurm_comm(int myId, int root, MPI_Comm comm, MPI_Comm *child) {
-  int spawn_err = COMM_IN_PROGRESS;
+int check_slurm_comm(int myId, int root, MPI_Comm *child) {
+  int state;
 
-  if(myId == root && commSlurm == COMM_FINISHED && slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
-    if(pthread_join(slurm_thread, NULL)) {
-      printf("Error al esperar al hilo\n");
-      MPI_Abort(MPI_COMM_WORLD, -1);
-      return -2;
-    }  
+  if(slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
+    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    if(state != COMM_FINISHED) return state; // Continue only if asynchronous process creation has ended 
+
+  } else { 
+    return commSlurm;
   }
 
-  MPI_Bcast(&commSlurm, 1, MPI_INT, root, comm);
+  if(pthread_join(slurm_thread, NULL)) {
+    printf("Error al esperar al hilo\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    return -10;
+  }  
 
-  if(commSlurm == COMM_FINISHED) {
-    spawn_err = create_processes(myId, root, child, comm);
-    free(slurm_data);
-  }
+  commSlurm = COMM_FINISHED;
+  *child = *returned_comm;
 
-  return spawn_err;
+  free(slurm_data);
+
+  return commSlurm;
 }
 
 //--------------PRIVATE SPAWN TYPE FUNCTIONS---------------//
@@ -128,11 +142,17 @@ int check_slurm_comm(int myId, int root, MPI_Comm comm, MPI_Comm *child) {
  */
 void* thread_work(void* creation_data_arg) {
   struct Creation_data *creation_data = (struct Creation_data*) creation_data_arg;
+  returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  
-  processes_dist(creation_data->argv, creation_data->numP_childs, creation_data->type_dist);
+  if(creation_data->myId == creation_data->root) {
+    //if(creation_data->myId == creation_data->root) { printf("WORKD SPAWN 1\n");} fflush(stdout);
+    processes_dist(creation_data->argv, creation_data->numP_childs, creation_data->type_dist);
+  }
+
+  create_processes(creation_data->myId, creation_data->root, returned_comm, creation_data->comm);
   commSlurm = COMM_FINISHED;
 
-  free(creation_data);
+  //free(creation_data); //FIXME No se libera bien
   pthread_exit(NULL);
 }
 
@@ -195,6 +215,7 @@ void processes_dist(char *argv[], int numP_childs, int type) {
  * "processes_dist()".
  */
 int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm) {
+    //if(myId == root) { printf("WORKD SPAWN 2.1 cmd=%s pr=%d\n", slurm_data->cmd, slurm_data->qty_procs);} fflush(stdout);
   int spawn_err = MPI_Comm_spawn(slurm_data->cmd, MPI_ARGV_NULL, slurm_data->qty_procs, slurm_data->info, root, comm, child, MPI_ERRCODES_IGNORE); 
 
   if(spawn_err != MPI_SUCCESS) {
