@@ -15,5 +15,3 @@ elif [ $dist == "cpu" ]; then
 fi
 
 $dir/Recordnodelist.o $numP $dist
-
-echo $numP
