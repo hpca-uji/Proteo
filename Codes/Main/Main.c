@@ -169,7 +169,6 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     group->numS = config_file->procs[group->grp +1];
     int comm_type = COMM_SPAWN_PTHREAD; // TODO Pasar a CONFIG
 
-    if(group->myId == ROOT) { printf("Malleability\n");}
     state = TC(group->numS, comm_type);
 
     if (state == COMM_FINISHED){

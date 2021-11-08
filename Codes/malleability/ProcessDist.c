@@ -22,11 +22,11 @@ struct Slurm_data {
   int type_creation;
 };
 
-struct Creation_data {
+typedef struct {
   char **argv;
   int numP_childs, myId, root, type_dist;
   MPI_Comm comm;
-};
+}Creation_data;
 
 
 //--------------PRIVATE SPAWN TYPE DECLARATIONS---------------//
@@ -76,6 +76,9 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
 
     if(myId == root) {
       processes_dist(argv, numP, type_dist);
+    } else {
+      slurm_data->cmd = malloc(1 * sizeof(char));
+      slurm_data->info = MPI_INFO_NULL;
     }
     create_processes(myId, root, child, comm);
     free(slurm_data);
@@ -84,7 +87,7 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
   } else if(type_creation == COMM_SPAWN_PTHREAD) {
     commSlurm = COMM_IN_PROGRESS;
 
-    struct Creation_data *creation_data = malloc(sizeof(struct Creation_Data*));
+    Creation_data *creation_data = (Creation_data *) malloc(sizeof(Creation_data));
     creation_data->argv = argv;
     creation_data->numP_childs = numP;
     creation_data->myId = myId;
@@ -92,7 +95,7 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
     creation_data->type_dist = type_dist;
     creation_data->comm = comm;
 
-    if(pthread_create(&slurm_thread, NULL, thread_work, creation_data)) {
+    if(pthread_create(&slurm_thread, NULL, thread_work, (void *)creation_data)) {
       printf("Error al crear el hilo de contacto con SLURM\n");
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -1;
@@ -107,7 +110,7 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
  * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
 int check_slurm_comm(int myId, int root, MPI_Comm *child) {
-  int state;
+  int state=-10;
 
   if(slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
     MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
@@ -123,9 +126,12 @@ int check_slurm_comm(int myId, int root, MPI_Comm *child) {
     return -10;
   }  
 
-  commSlurm = COMM_FINISHED;
   *child = *returned_comm;
 
+  if(myId == root) {
+    MPI_Info_free(&(slurm_data->info));
+  }
+  free(slurm_data->cmd);
   free(slurm_data);
 
   return commSlurm;
@@ -141,18 +147,20 @@ int check_slurm_comm(int myId, int root, MPI_Comm *child) {
  * se avisa al hilo maestro.
  */
 void* thread_work(void* creation_data_arg) {
-  struct Creation_data *creation_data = (struct Creation_data*) creation_data_arg;
+  Creation_data *creation_data = (Creation_data*) creation_data_arg;
   returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  
   if(creation_data->myId == creation_data->root) {
-    //if(creation_data->myId == creation_data->root) { printf("WORKD SPAWN 1\n");} fflush(stdout);
     processes_dist(creation_data->argv, creation_data->numP_childs, creation_data->type_dist);
+  } else {
+    slurm_data->cmd = malloc(1 * sizeof(char));
+    slurm_data->info = MPI_INFO_NULL;
   }
 
   create_processes(creation_data->myId, creation_data->root, returned_comm, creation_data->comm);
   commSlurm = COMM_FINISHED;
 
-  //free(creation_data); //FIXME No se libera bien
+  free(creation_data);
   pthread_exit(NULL);
 }
 
@@ -215,16 +223,10 @@ void processes_dist(char *argv[], int numP_childs, int type) {
  * "processes_dist()".
  */
 int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm) {
-    //if(myId == root) { printf("WORKD SPAWN 2.1 cmd=%s pr=%d\n", slurm_data->cmd, slurm_data->qty_procs);} fflush(stdout);
   int spawn_err = MPI_Comm_spawn(slurm_data->cmd, MPI_ARGV_NULL, slurm_data->qty_procs, slurm_data->info, root, comm, child, MPI_ERRCODES_IGNORE); 
 
   if(spawn_err != MPI_SUCCESS) {
     printf("Error creating new set of %d procs.\n", slurm_data->qty_procs);
-  }
-
-  if(myId == root) {
-    MPI_Info_free(&(slurm_data->info));
-    free(slurm_data->cmd);
   }
 
   return spawn_err;
@@ -276,7 +278,7 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
       procs[i] += total_procs - asigCores;
       (*used_nodes)++;
     }
-    if(*used_nodes > job_record.num_nodes) *used_nodes = job_record.num_nodes;
+    if(*used_nodes > job_record.num_nodes) *used_nodes = job_record.num_nodes;  //FIXME Si ocurre esto no es un error?
   }
 
   *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
