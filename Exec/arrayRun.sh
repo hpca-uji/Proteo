@@ -11,7 +11,8 @@ name_dir=$1
 i=$2
 procs_parents=$3
 procs_sons=$4
-percs_array=(0 25 50 75 100)
+#percs_array=(0 25 50 75 100)
+percs_array=(0)
 
 aux=$(($i + 1))
 echo "START TEST init=$aux"
@@ -21,7 +22,7 @@ do
   for phy_dist in cpu node
   do
 
-    for ibarrier_use in 0 #TODO Simplificar
+    for ibarrier_use in 3 #TODO Simplificar
     do
       i=$(($i + 1))
       cd $name_dir/Run$i
@@ -32,7 +33,7 @@ do
       for index in 1 2 3
       do
         numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
-        mpirun -f hostfile.o$SLURM_JOB_ID -np $numP $dir$codeDir/bench.out $config_file $i
+        mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/bench.out $config_file $i
         rm hostfile.o$SLURM_JOB_ID
       done
     done  

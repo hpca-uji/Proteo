@@ -37,8 +37,9 @@ else
 fi
 max_procs=$(($node_qty * 20))
 procs_array=(2 10)
-percs_array=(0 25 50 75 100)
-at_array=(0)
+#percs_array=(0 25 50 75 100)
+percs_array=(0)
+at_array=(3)
 
 #Obtener cantidades de procesos posibles a ejecutar
 i=0
@@ -93,7 +94,7 @@ do
         done
       done
     done
-    start_i=$(($j * 10 * ${#at_array[@]})) #TODO modficar utlimo valor cuando se use ibarrier
+    start_i=$(($j * ${#percs_array[@]} * ${#at_array[@]} * 2)) #TODO modficar utlimo valor conforme cambie phy_dist
     # LANZAR SCRIPT
     echo $aux
     sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $start_i $procs_parents $procs_sons
