@@ -61,7 +61,7 @@ def read_file(f, dataA, dataB, it):
         recording = True
         it += 1
         dataA.append([None]*9)
-        dataB.append([None]*12)
+        dataB.append([None]*13)
         resizes = int(lineS[2].split('=')[1].split(',')[0])
         compute_tam = int(lineS[3].split('=')[1].split(',')[0])
         comm_tam = int(lineS[4].split('=')[1].split(',')[0])
@@ -100,7 +100,7 @@ def read_file(f, dataA, dataB, it):
           dataA[it][2] = str(previousNP) + "," + str(npr)
           dataA[it][3] += dist
           dataA[it][7] += str(iters)
-          timer = 3
+          timer = 4
         else:
           dataB[it][2] = npr
           dataB[it][4] += dist + ","
@@ -111,19 +111,21 @@ def read_file(f, dataA, dataB, it):
           previousNP = npr
 
       else: # SAVE TIMES
-        if timer == 3:
+        if timer == 4:
           dataB[it][9] = float(lineS[1])
-        elif timer == 2:
+        elif timer == 3:
           dataB[it][10] = float(lineS[1])
-        elif timer == 1:
+        elif timer == 2:
           dataB[it][11] = float(lineS[1])
+        elif timer == 1:
+          dataB[it][12] = float(lineS[1])
         else:
           dataA[it][8] = float(lineS[1])
         timer = timer - 1
           
   return it
 #columnsA1 = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Time", "Iters", "TE"] #8
-#columnsB1 = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TS", "TA"] #11
+#columnsB1 = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TS", "TA"] #12
 #Config loaded: resizes=2, matrix=1000, sdr=1000000000, adr=0, aib=0, time=2.000000 || grp=1
 #Resize 0: Iters=100, Procs=2, Factors=1.000000, Phy=2
 #Resize 1: Iters=100, Procs=4, Factors=0.500000, Phy=2
@@ -156,8 +158,8 @@ print("Number of files found: "+ str(len(lista)));
 it = -1
 dataA = []
 dataB = []
-columnsA = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Time", "Iters", "TE"] #8
-columnsB = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TS", "TA"] #11
+columnsA = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Time", "Iters", "TE"] #9
+columnsB = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TH", "TS", "TA"] #13
 
 for elem in lista:
   f = open(elem, "r")
