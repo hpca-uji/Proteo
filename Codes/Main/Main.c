@@ -129,7 +129,6 @@ int work() {
   state = MAL_COMM_UNINITIALIZED;
 
   res = 0;
-  //if(group->myId == ROOT) printf("Iter_start %d\n", group->iter_start);
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(matrix, config_file->matrix_tam, state);
   }
@@ -168,7 +167,7 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     if(config_file->iters[group->grp] > iter || config_file->resizes == group->grp + 1) {return MAL_COMM_UNINITIALIZED;}
 
     group->numS = config_file->procs[group->grp +1];
-    int comm_type = COMM_SPAWN_PTHREAD; // TODO Pasar a CONFIG
+    int comm_type = COMM_SPAWN_SERIAL; // TODO Pasar a CONFIG
 
     state = TC(group->numS, comm_type);
 
@@ -401,7 +400,7 @@ void Sons_init() {
       results->async_time[group->grp] = MPI_Wtime();
     MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
   }
-    MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents); //FIXME Quitar -- Que tenga en cuenta Pthread y async
+    //MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents); //FIXME Quitar -- Que tenga en cuenta Pthread y async
   if(config_file->sdr) { // Recibir datos sincronos
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
     results->sync_time[group->grp] = MPI_Wtime();

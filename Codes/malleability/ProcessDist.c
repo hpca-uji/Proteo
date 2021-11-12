@@ -81,7 +81,13 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
       slurm_data->info = MPI_INFO_NULL;
     }
     create_processes(myId, root, child, comm);
+
+    if(myId == root && slurm_data->info != MPI_INFO_NULL) {
+      MPI_Info_free(&(slurm_data->info));
+    }
+    free(slurm_data->cmd);
     free(slurm_data);
+
     commSlurm = COMM_FINISHED;
 
   } else if(type_creation == COMM_SPAWN_PTHREAD) {
@@ -151,7 +157,7 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child) { // TODO Bo
 
   *child = *returned_comm;
 
-  if(myId == root) {
+  if(myId == root && slurm_data->info != MPI_INFO_NULL) {
     MPI_Info_free(&(slurm_data->info));
   }
   free(slurm_data->cmd);
@@ -218,8 +224,8 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     node_dist(last_record, type, numP_childs, &procs_array, &used_nodes);
     slurm_data->qty_procs = numP_childs;
 
-    // CREATE/UPDATE HOSTFILE
-    
+    /*
+    // CREATE/UPDATE HOSTFILE 
     ptr = create_hostfile(tmp, &hostfile);
     MPI_Info_create(&(slurm_data->info));
     MPI_Info_set(slurm_data->info, "hostfile", hostfile);
@@ -228,14 +234,15 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     // SET NEW DISTRIBUTION 
     fill_hostfile(last_record, ptr, procs_array, used_nodes);
     close(ptr);
+    */
     
 
-    // TEST
-    /*
+    // TEST 
     fill_str_hostfile(last_record, procs_array, used_nodes, &hostfile);
     MPI_Info_create(&(slurm_data->info));
     MPI_Info_set(slurm_data->info, "hosts", hostfile);
-    */
+    free(hostfile);
+   
 
     // Free JOB INFO
     slurm_free_job_info_msg(j_info); 
@@ -397,6 +404,7 @@ void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, ch
     free(host);
   }
   slurm_hostlist_destroy(hostlist);
+
 }
 
 int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name) {
@@ -407,26 +415,27 @@ int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name) {
   len = qty * (len_node + 1);
 
   if(len_og == 0) { // Memoria no reservada
-    *hostfile_str = (char *) malloc(len * sizeof(char));
+    *hostfile_str = (char *) malloc(len * sizeof(char) - (1 * sizeof(char)));
   } else { // Cadena ya tiene datos
-    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char));
+    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - (1 * sizeof(char)));
   }
   if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
 
   ocurrence = (char *) malloc((len_node+1) * sizeof(char));
   if(ocurrence == NULL) return -1; // No ha sido posible alojar la memoria
-  err = sprintf(ocurrence, "%s,", node_name);
+  err = sprintf(ocurrence, ",%s", node_name);
   if(err < 0) return -2; // No ha sido posible escribir sobre la variable auxiliar
 
   i=0;
-  if(len_og == 0) {
+  if(len_og == 0) { // Si se inicializa, la primera es una copia
     i++;
-    strcpy(*hostfile_str, ocurrence);
+    strcpy(*hostfile_str, node_name);
   }
-  for(; i<qty; i++){
+  for(; i<qty; i++){ // Las siguientes se realizan con concatenan
     strcat(*hostfile_str, ocurrence);
   }
+
   
   free(ocurrence);
-  return len;
+  return len+len_og;
 }
