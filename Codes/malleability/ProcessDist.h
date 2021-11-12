@@ -15,4 +15,4 @@
 #define COMM_SPAWN_PTHREAD 1
 
 int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, int type_creation, MPI_Comm comm, MPI_Comm *child);
-int check_slurm_comm(int myId, int root, MPI_Comm *child);
+int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child);

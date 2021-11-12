@@ -17,7 +17,7 @@ void Sons_init();
 
 int checkpoint(int iter, int state, MPI_Request **comm_req);
 int TC(int numS, int comm_type);
-int start_redistribution(int numS, MPI_Request **comm_req);
+int start_redistribution(int iter, int numS, MPI_Request **comm_req);
 int check_redistribution(int iter, MPI_Request **comm_req);
 int end_redistribution(int iter);
 
@@ -129,6 +129,7 @@ int work() {
   state = MAL_COMM_UNINITIALIZED;
 
   res = 0;
+  //if(group->myId == ROOT) printf("Iter_start %d\n", group->iter_start);
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(matrix, config_file->matrix_tam, state);
   }
@@ -172,15 +173,15 @@ int checkpoint(int iter, int state, MPI_Request **comm_req) {
     state = TC(group->numS, comm_type);
 
     if (state == COMM_FINISHED){
-      state = start_redistribution(group->numS, comm_req);
+      state = start_redistribution(0, group->numS, comm_req);
     }
 
   } else if(state == COMM_IN_PROGRESS) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    state = check_slurm_comm(group->myId, ROOT, &(group->children));
+    state = check_slurm_comm(group->myId, ROOT, group->numP, &(group->children));
 
     if (state == COMM_FINISHED) {  
         results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
-      state = start_redistribution(group->numS, comm_req);
+      state = start_redistribution(iter, group->numS, comm_req);
     }
 
   } else if(state == MAL_ASYNC_PENDING) {
@@ -207,6 +208,10 @@ int TC(int numS, int comm_type){
   comm_state = init_slurm_comm(group->argv, group->myId, numS, ROOT, dist, comm_type, MPI_COMM_WORLD, &(group->children));
   if(comm_type == COMM_SPAWN_SERIAL)
       results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
+  else if(comm_type == COMM_SPAWN_PTHREAD) {
+      results->spawn_thread_time[group->grp] = MPI_Wtime() - results->spawn_start;
+      results->spawn_start = MPI_Wtime();
+  }
   return comm_state;
 }
 
@@ -224,7 +229,7 @@ int TC(int numS, int comm_type){
  * Finalmente se envian datos sobre los resultados a los hijos y se desconectan ambos
  * grupos de procesos.
  */
-int start_redistribution(int numS, MPI_Request **comm_req) {
+int start_redistribution(int iter, int numS, MPI_Request **comm_req) {
   int rootBcast = MPI_PROC_NULL;
   if(group->myId == ROOT) rootBcast = MPI_ROOT;
 
@@ -242,7 +247,7 @@ int start_redistribution(int numS, MPI_Request **comm_req) {
       return MAL_ASYNC_PENDING;
     }
   } 
-  return end_redistribution(0);
+  return end_redistribution(iter);
 }
 
 /*
@@ -396,6 +401,7 @@ void Sons_init() {
       results->async_time[group->grp] = MPI_Wtime();
     MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
   }
+    MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents); //FIXME Quitar -- Que tenga en cuenta Pthread y async
   if(config_file->sdr) { // Recibir datos sincronos
     recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
     results->sync_time[group->grp] = MPI_Wtime();
@@ -449,7 +455,8 @@ void iterate(double *matrix, int n, int async_comm) {
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
-  if(async_comm == MAL_ASYNC_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+  // TODO Que diferencie entre ambas en el IO
+  if(async_comm == MAL_ASYNC_PENDING || async_comm == COMM_IN_PROGRESS) { // Se esta realizando una redistribucion de datos asincrona
     operations=0;
   }
 

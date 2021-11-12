@@ -109,11 +109,34 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
  * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
  * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
-int check_slurm_comm(int myId, int root, MPI_Comm *child) {
+int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child) { // TODO Borrar numP si no se usa
   int state=-10;
 
   if(slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
-    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+
+    //MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    
+    if(myId == root) {
+      int i, recv_state;
+      state = commSlurm;
+      for(i=0; i<numP; i++) { //Recv states
+	if(i != myId) {
+          MPI_Recv(&recv_state, 1, MPI_INT, i, 120, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          if(recv_state == COMM_IN_PROGRESS) {
+	    state = recv_state;
+	  }
+	}
+      }
+      for(i=0; i<numP; i++) { //Send state
+	if(i != myId) {
+          MPI_Send(&state, 1, MPI_INT, i, 120, MPI_COMM_WORLD);
+	}
+      }
+    } else {
+      MPI_Send(&commSlurm, 1, MPI_INT, root, 120, MPI_COMM_WORLD);
+      MPI_Recv(&state, 1, MPI_INT, root, 120, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
     if(state != COMM_FINISHED) return state; // Continue only if asynchronous process creation has ended 
 
   } else { 
