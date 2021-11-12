@@ -14,7 +14,7 @@ en la carpeta "Codes". Ejecutar dentro de esa carpeta lo siguiente: "./compila -
 
 --------------------------------
 Para ejecutar las pruebas se utiliza el comando:
-    bash run.sh grupos-hijos tamaño-matriz cantidad-datos-sincronos tiempo-iteracion proceso-tiempo iteraciones-por-grupo cantidad-nodos
+    bash run.sh grupos-hijos tamaño-matriz tamaño-comunicacion cantidad-datos-sincronos tiempo-iteracion proceso-tiempo iteraciones-por-grupo cantidad-nodos
 Este script crea subcarpetas en "Results" donde almacena los resultados y los ficheros de configuración que crea. 
 
 grupos-hijos: Es la cantidad de grupos hijos de procesos a ejecutar. Por tanto, el valor 1 indicaría el grupo de procesos padres y un grupo de procesos hijos.

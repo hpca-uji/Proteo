@@ -33,7 +33,7 @@ do
       for index in 1 2 3
       do
         numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
-        mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/bench.out $config_file $i
+        mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/./bench.out $config_file $i
         rm hostfile.o$SLURM_JOB_ID
       done
     done  
