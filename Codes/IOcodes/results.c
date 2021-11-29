@@ -11,7 +11,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
 //======================================================||
 //======================================================||
 
-
+//TODO Generalizar ambas funciones en una sola
 /*
  * Envia una estructura de resultados al grupo de procesos al que se 
  * enlaza este grupo a traves del intercomunicador pasado como argumento.
@@ -57,7 +57,7 @@ void recv_results(results_data *results, int root, int resizes, MPI_Comm interco
  * Define un tipo derivado de MPI para mandar los tiempos
  * con una sola comunicacion.
  *
- * En concreto son tres escales y un vector de tamaño "resizes"
+ * En concreto son tres escalares y dos vectores de tamaño "resizes"
  */
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
   int i, counts = 5;
@@ -83,6 +83,30 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Type_create_struct(counts, blocklengths, displs, types, results_type);
   MPI_Type_commit(results_type);
 }
+//======================================================||
+//======================================================||
+//================SET RESULTS FUNCTIONS=================||
+//======================================================||
+//======================================================||
+
+/*
+ * Guarda los resultados respecto a la redistribución de datos
+ * tras una reconfiguración. A llamar por los hijos tras
+ * terminar la redistribución y obtener la configuración.
+ */
+void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr) {
+  if(sdr) { // Si no hay datos sincronos, el tiempo es 0
+    results->sync_time[grp]  = results->sync_end - results->sync_start;
+  } else {
+    results->sync_time[grp]  = 0;
+  }
+  if(adr) { // Si no hay datos asincronos, el tiempo es 0
+    results->async_time[grp]  = results->async_end - results->async_start;
+  } else {
+    results->async_time[grp]  = 0;
+  }
+}
+
 
 //======================================================||
 //======================================================||
@@ -96,22 +120,22 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
  * por iteracion, el tipo (Normal o durante communicacion asincrona)
  * y cuantas operaciones internas se han realizado en cada iteracion.
  */
-void print_iter_results(results_data *results, int last_normal_iter_index) {
+void print_iter_results(results_data results, int last_normal_iter_index) {
   int i, aux;
 
   printf("Titer: ");
-  for(i=0; i< results->iter_index; i++) {
-    printf("%lf ", results->iters_time[i]);
+  for(i=0; i< results.iter_index; i++) {
+    printf("%lf ", results.iters_time[i]);
   }
 
   printf("\nTtype: "); //FIXME modificar a imprimir solo la cantidad de asincronas
-  for(i=0; i< results->iter_index; i++) {
-    printf("%d ", results->iters_type[i] == 0);
+  for(i=0; i< results.iter_index; i++) {
+    printf("%d ", results.iters_type[i] == 0);
   }
 
   printf("\nTop: "); //TODO modificar a imprimir solo cuantas operaciones cuestan una iteracion?
-  for(i=0; i< results->iter_index; i++) {
-    aux = results->iters_type[i] == 0 ? results->iters_type[last_normal_iter_index] : results->iters_type[i];
+  for(i=0; i< results.iter_index; i++) {
+    aux = results.iters_type[i] == 0 ? results.iters_type[last_normal_iter_index] : results.iters_type[i];
     printf("%d ", aux);
   }
   printf("\n");
@@ -122,30 +146,30 @@ void print_iter_results(results_data *results, int last_normal_iter_index) {
  * Estos son el tiempo de creacion de procesos, los de comunicacion
  * asincrona y sincrona y el tiempo total de ejecucion.
  */
-void print_global_results(results_data *results, int resizes) {
+void print_global_results(results_data results, int resizes) {
   int i;
 
   printf("Tspawn: ");
   for(i=0; i< resizes - 1; i++) {
-    printf("%lf ", results->spawn_time[i]);
+    printf("%lf ", results.spawn_time[i]);
   }
 
   printf("\nTthread: ");
   for(i=0; i< resizes - 1; i++) {
-    printf("%lf ", results->spawn_thread_time[i]);
+    printf("%lf ", results.spawn_thread_time[i]);
   }
 
   printf("\nTsync: ");
   for(i=1; i < resizes; i++) {
-    printf("%lf ", results->sync_time[i]);
+    printf("%lf ", results.sync_time[i]);
   }
 
   printf("\nTasync: ");
   for(i=1; i < resizes; i++) {
-    printf("%lf ", results->async_time[i]);
+    printf("%lf ", results.async_time[i]);
   }
 
-  printf("\nTex: %lf\n", results->exec_time);
+  printf("\nTex: %lf\n", results.exec_time);
 }
 
 //======================================================||
@@ -160,18 +184,18 @@ void print_global_results(results_data *results, int resizes) {
  * Los argumentos "resizes" y "iters_size" se necesitan para obtener el tamaño
  * de los vectores de resultados.
  */
-void init_results_data(results_data **results, int resizes, int iters_size) {
-  *results = malloc(1 * sizeof(results_data));
+void init_results_data(results_data *results, int resizes, int iters_size) {
+  //*results = malloc(1 * sizeof(results_data)); FIXME Borrar
 
-  (*results)->spawn_time = calloc(resizes, sizeof(double));
-  (*results)->spawn_thread_time = calloc(resizes, sizeof(double));
-  (*results)->sync_time = calloc(resizes, sizeof(double));
-  (*results)->async_time = calloc(resizes, sizeof(double));
+  results->spawn_time = calloc(resizes, sizeof(double));
+  results->spawn_thread_time = calloc(resizes, sizeof(double));
+  results->sync_time = calloc(resizes, sizeof(double));
+  results->async_time = calloc(resizes, sizeof(double));
 
-  (*results)->iters_size = iters_size + 100;
-  (*results)->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
-  (*results)->iters_type = calloc(iters_size + 100, sizeof(int));
-  (*results)->iter_index = 0;
+  results->iters_size = iters_size + 100;
+  results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
+  results->iters_type = calloc(iters_size + 100, sizeof(int));
+  results->iter_index = 0;
 }
 
 void realloc_results_iters(results_data *results, int needed) {
@@ -193,13 +217,13 @@ void realloc_results_iters(results_data *results, int needed) {
 /*
  * Libera toda la memoria asociada con una estructura de resultados.
  */
-void free_results_data(results_data **results) {
-    free((*results)->spawn_time);
-    free((*results)->spawn_thread_time);
-    free((*results)->sync_time);
-    free((*results)->async_time);
+void free_results_data(results_data *results) {
+    free(results->spawn_time);
+    free(results->spawn_thread_time);
+    free(results->sync_time);
+    free(results->async_time);
 
-    free((*results)->iters_time);
-    free((*results)->iters_type);
-    free(*results);
+    free(results->iters_time);
+    free(results->iters_type);
+    //free(*results); FIXME Borrar
 }

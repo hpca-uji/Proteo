@@ -181,7 +181,7 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
 
 //================================================================================
 //================================================================================
-//========================ASINCHRONOUS FUNCTIONS==================================
+//========================ASYNCHRONOUS FUNCTIONS==================================
 //================================================================================
 //================================================================================
 
@@ -212,18 +212,18 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
 
     // MAL_USE_THREAD sigue el camino sincrono
     if(parents_wait == MAL_USE_NORMAL) {
-      *comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
+      //*comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
       *comm_req[0] = MPI_REQUEST_NULL;
       send_async_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, &(*comm_req[0])); 
 
     } else if (parents_wait == MAL_USE_IBARRIER){
-      *comm_req = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
-      (*comm_req)[0] = MPI_REQUEST_NULL;
-      (*comm_req)[1] = MPI_REQUEST_NULL;
+      //*comm_req = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
+      *comm_req[0] = MPI_REQUEST_NULL;
+      *comm_req[1] = MPI_REQUEST_NULL;
       send_async_arrays(dist_data, array, rootBcast, numP_child, idS[0], idS[1], counts, &((*comm_req)[1])); 
       MPI_Ibarrier(intercomm, &((*comm_req)[0]) );
     } else if (parents_wait == MAL_USE_POINT){
-      *comm_req = (MPI_Request *) malloc(numP_child * sizeof(MPI_Request));
+      //*comm_req = (MPI_Request *) malloc(numP_child * sizeof(MPI_Request));
       for(i=0; i<numP_child; i++){
         (*comm_req)[i] = MPI_REQUEST_NULL;
       }

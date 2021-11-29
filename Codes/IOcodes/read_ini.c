@@ -129,7 +129,7 @@ void free_config(configuration *user_config) {
     }
 }
 
-/* TODO Añadir COMMTAM
+/*
  * Imprime por salida estandar toda la informacion que contiene
  * la configuracion pasada como argumento
  */

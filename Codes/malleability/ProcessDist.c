@@ -8,9 +8,7 @@
 #include <slurm/slurm.h>
 #include "ProcessDist.h"
 
-#define ROOT 0
-
-int commSlurm = COMM_UNRESERVED;
+int commSlurm = MAL_NOT_STARTED;
 struct Slurm_data *slurm_data;  
 pthread_t slurm_thread;
 MPI_Comm *returned_comm;
@@ -23,7 +21,7 @@ struct Slurm_data {
 };
 
 typedef struct {
-  char **argv;
+  char *argv;
   int numP_childs, myId, root, type_dist;
   MPI_Comm comm;
 }Creation_data;
@@ -33,21 +31,17 @@ typedef struct {
 void* thread_work(void* creation_data_arg);
 
 //--------------PRIVATE DECLARATIONS---------------//
-
-void processes_dist(char *argv[], int numP_childs, int type_dist);
+void processes_dist(char *argv, int numP_childs, int type_dist);
 int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm);
 void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty, int *used_nodes);
 
+void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str);
+int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name);
+
+//@deprecated functions
 int create_hostfile(char *jobId, char **file_name);
 int write_hostfile_node(int ptr, int qty, char *node_name);
 void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_nodes);
-
-//TESTS
-void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str);
-int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name);
-//
-
-void print_Info(MPI_Info info);
 
 //--------------PUBLIC FUNCTIONS---------------//
 
@@ -67,7 +61,7 @@ void print_Info(MPI_Info info);
  * Devuelve el estado de el procedimiento. Si no devuelve "COMM_FINISHED", es necesario llamar a
  * "check_slurm_comm()".
  */
-int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, int type_creation, MPI_Comm comm, MPI_Comm *child) {
+int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int type_creation, MPI_Comm comm, MPI_Comm *child) {
 
   slurm_data = malloc(sizeof(struct Slurm_data));
 
@@ -88,10 +82,10 @@ int init_slurm_comm(char **argv, int myId, int numP, int root, int type_dist, in
     free(slurm_data->cmd);
     free(slurm_data);
 
-    commSlurm = COMM_FINISHED;
+    commSlurm = MAL_SPAWN_COMPLETED;
 
   } else if(type_creation == COMM_SPAWN_PTHREAD) {
-    commSlurm = COMM_IN_PROGRESS;
+    commSlurm = MAL_SPAWN_PENDING;
 
     Creation_data *creation_data = (Creation_data *) malloc(sizeof(Creation_data));
     creation_data->argv = argv;
@@ -120,30 +114,9 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child) { // TODO Bo
 
   if(slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
 
-    //MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-    
-    if(myId == root) {
-      int i, recv_state;
-      state = commSlurm;
-      for(i=0; i<numP; i++) { //Recv states
-	if(i != myId) {
-          MPI_Recv(&recv_state, 1, MPI_INT, i, 120, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-          if(recv_state == COMM_IN_PROGRESS) {
-	    state = recv_state;
-	  }
-	}
-      }
-      for(i=0; i<numP; i++) { //Send state
-	if(i != myId) {
-          MPI_Send(&state, 1, MPI_INT, i, 120, MPI_COMM_WORLD);
-	}
-      }
-    } else {
-      MPI_Send(&commSlurm, 1, MPI_INT, root, 120, MPI_COMM_WORLD);
-      MPI_Recv(&state, 1, MPI_INT, root, 120, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 
-    if(state != COMM_FINISHED) return state; // Continue only if asynchronous process creation has ended 
+    if(state != MAL_SPAWN_COMPLETED) return state; // Continue only if asynchronous process creation has ended 
 
   } else { 
     return commSlurm;
@@ -187,7 +160,7 @@ void* thread_work(void* creation_data_arg) {
   }
 
   create_processes(creation_data->myId, creation_data->root, returned_comm, creation_data->comm);
-  commSlurm = COMM_FINISHED;
+  commSlurm = MAL_SPAWN_COMPLETED;
 
   free(creation_data);
   pthread_exit(NULL);
@@ -200,8 +173,8 @@ void* thread_work(void* creation_data_arg) {
  * para una llamada a MPI_Comm_spawn, obteniendo una distribucion fisica
  * para los procesos y creando un fichero hostfile.
  */
-void processes_dist(char *argv[], int numP_childs, int type) {
-    int jobId, ptr;
+void processes_dist(char *argv, int numP_childs, int type) {
+    int jobId;
     char *tmp;
     job_info_msg_t *j_info;
     slurm_job_info_t last_record;
@@ -217,8 +190,8 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     last_record = j_info->job_array[j_info->record_count - 1];
 
     //COPY PROGRAM NAME
-    slurm_data->cmd = malloc(strlen(argv[0]) * sizeof(char));
-    strcpy(slurm_data->cmd, argv[0]);
+    slurm_data->cmd = malloc(strlen(argv) * sizeof(char));
+    strcpy(slurm_data->cmd, argv);
 
     // GET NEW DISTRIBUTION 
     node_dist(last_record, type, numP_childs, &procs_array, &used_nodes);
@@ -226,6 +199,7 @@ void processes_dist(char *argv[], int numP_childs, int type) {
 
     /*
     // CREATE/UPDATE HOSTFILE 
+    int ptr;
     ptr = create_hostfile(tmp, &hostfile);
     MPI_Info_create(&(slurm_data->info));
     MPI_Info_set(slurm_data->info, "hostfile", hostfile);
@@ -236,7 +210,6 @@ void processes_dist(char *argv[], int numP_childs, int type) {
     close(ptr);
     */
     
-
     // TEST 
     fill_str_hostfile(last_record, procs_array, used_nodes, &hostfile);
     MPI_Info_create(&(slurm_data->info));
@@ -319,6 +292,70 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
 }
 
 /*
+ * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
+ * al crear procesos e indicar donde tienen que ser creados.
+ */
+void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str) {
+  int i=0, len=0;
+  char *host;
+  hostlist_t hostlist;
+  
+  hostlist = slurm_hostlist_create(job_record.nodes);
+  while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
+    len = write_str_node(hostfile_str, len, qty[i], host);
+    i++;
+    free(host);
+  }
+  slurm_hostlist_destroy(hostlist);
+
+}
+
+/*
+ * Añade en una cadena "qty" entradas de "node_name".
+ * Realiza la reserva de memoria y la realoja si es necesario.
+ */
+int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name) {
+  int err, len_node, len, i;
+  char *ocurrence;
+
+  len_node = strlen(node_name);
+  len = qty * (len_node + 1);
+
+  if(len_og == 0) { // Memoria no reservada
+    *hostfile_str = (char *) malloc(len * sizeof(char) - (1 * sizeof(char)));
+  } else { // Cadena ya tiene datos
+    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - (1 * sizeof(char)));
+  }
+  if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
+
+  ocurrence = (char *) malloc((len_node+1) * sizeof(char));
+  if(ocurrence == NULL) return -1; // No ha sido posible alojar la memoria
+  err = sprintf(ocurrence, ",%s", node_name);
+  if(err < 0) return -2; // No ha sido posible escribir sobre la variable auxiliar
+
+  i=0;
+  if(len_og == 0) { // Si se inicializa, la primera es una copia
+    i++;
+    strcpy(*hostfile_str, node_name);
+  }
+  for(; i<qty; i++){ // Las siguientes se conctanenan
+    strcat(*hostfile_str, ocurrence);
+  }
+
+  
+  free(ocurrence);
+  return len+len_og;
+}
+
+//====================================================
+//====================================================
+//============DEPRECATED FUNCTIONS====================
+//====================================================
+//====================================================
+
+
+/*
+ * @deprecated
  * Crea un fichero que se utilizara como hostfile
  * para un nuevo grupo de procesos. 
  *
@@ -346,6 +383,7 @@ int create_hostfile(char *jobId, char **file_name) {
 }
 
 /*
+ * @deprecated
  * Rellena un fichero hostfile indicado por ptr con los nombres
  * de los nodos a utilizar indicados por "job_record" y la cantidad 
  * de procesos que alojara cada nodo indicado por "qty".
@@ -365,6 +403,7 @@ void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_node
 }
 
 /*
+ * @deprecated
  * Escribe en el fichero hostfile indicado por ptr una nueva linea.
  *
  * Esta linea indica el nombre de un nodo y la cantidad de procesos a
@@ -388,54 +427,4 @@ int write_hostfile_node(int ptr, int qty, char *node_name) {
   free(line);
 
   return 0;
-}
-
-
-
-void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str) {
-  int i=0, len=0;
-  char *host;
-  hostlist_t hostlist;
-  
-  hostlist = slurm_hostlist_create(job_record.nodes);
-  while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
-    len = write_str_node(hostfile_str, len, qty[i], host);
-    i++;
-    free(host);
-  }
-  slurm_hostlist_destroy(hostlist);
-
-}
-
-int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name) {
-  int err, len_node, len, i;
-  char *ocurrence;
-
-  len_node = strlen(node_name);
-  len = qty * (len_node + 1);
-
-  if(len_og == 0) { // Memoria no reservada
-    *hostfile_str = (char *) malloc(len * sizeof(char) - (1 * sizeof(char)));
-  } else { // Cadena ya tiene datos
-    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - (1 * sizeof(char)));
-  }
-  if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
-
-  ocurrence = (char *) malloc((len_node+1) * sizeof(char));
-  if(ocurrence == NULL) return -1; // No ha sido posible alojar la memoria
-  err = sprintf(ocurrence, ",%s", node_name);
-  if(err < 0) return -2; // No ha sido posible escribir sobre la variable auxiliar
-
-  i=0;
-  if(len_og == 0) { // Si se inicializa, la primera es una copia
-    i++;
-    strcpy(*hostfile_str, node_name);
-  }
-  for(; i<qty; i++){ // Las siguientes se realizan con concatenan
-    strcat(*hostfile_str, ocurrence);
-  }
-
-  
-  free(ocurrence);
-  return len+len_og;
 }

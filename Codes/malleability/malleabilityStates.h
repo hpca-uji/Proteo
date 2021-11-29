@@ -1,0 +1,20 @@
+#define MAL_UNRESERVED -1
+#define MAL_DENIED -2
+#define MAL_NOT_STARTED 0
+#define MAL_SPAWN_PENDING 1
+#define MAL_SPAWN_COMPLETED 2
+#define MAL_DIST_PENDING 3
+#define MAL_DIST_COMPLETED 4
+
+
+// TODO Refactor
+#define COMM_PHY_NODES 1
+#define COMM_PHY_CPU 2
+
+#define COMM_SPAWN_SERIAL 0
+#define COMM_SPAWN_PTHREAD 1
+
+#define MAL_USE_NORMAL 0
+#define MAL_USE_IBARRIER 1
+#define MAL_USE_POINT 2
+#define MAL_USE_THREAD 3
