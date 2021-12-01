@@ -120,12 +120,12 @@ void malloc_config_arrays(configuration *user_config, int resizes) {
  */
 void free_config(configuration *user_config) {
     if(user_config != NULL) {
-      free(user_config->iters);
-      free(user_config->procs);
-      free(user_config->factors);
-      free(user_config->phy_dist);
+      //free(user_config->iters);
+      //free(user_config->procs);
+      //free(user_config->factors);
+      //free(user_config->phy_dist);
 
-      free(user_config);
+      //free(user_config);
     }
 }
 

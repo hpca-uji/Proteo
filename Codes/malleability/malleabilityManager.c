@@ -32,9 +32,9 @@ typedef struct {
   int comm_type;
   int comm_threaded;
 
+  int grp;
   configuration *config_file;
   results_data *results;
-  int grp;
 } malleability_config_t;
 
 typedef struct {
@@ -67,14 +67,15 @@ void init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_e
   rep_a_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
   dist_a_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
 
-  MPI_Comm_dup(comm, &dup_comm);
-  MPI_Comm_dup(comm, &thread_comm);
+  //MPI_Comm_dup(comm, &dup_comm);
+  //MPI_Comm_dup(comm, &thread_comm);
+  mall->comm = comm;
 
   mall->myId = myId;
   mall->numP = numP;
   mall->root = root;
-  mall->comm = dup_comm;
-  mall->comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
+  //mall->comm = dup_comm;
+  //mall->comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
   mall->name_exec = name_exec;
 
   rep_s_data->entries = 0;
@@ -133,6 +134,7 @@ int malleability_checkpoint() {
     //if(CHECK_RMS()) {return MAL_DENIED;}
 
     state = spawn_step();
+	    		return MAL_DIST_COMPLETED;
 
     if (state == MAL_SPAWN_COMPLETED){
       state = start_redistribution();
@@ -359,9 +361,11 @@ void Children_init() {
 
   mall_conf->config_file = recv_config_file(mall->root, mall->intercomm);
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
-  init_results_data(mall_conf->results, mall_conf->config_file->resizes - 1, RESULTS_INIT_DATA_QTY);
+  init_results_data(mall_conf->results, mall_conf->config_file->resizes, RESULTS_INIT_DATA_QTY);
 
+  
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
+	  printf("HIJOS NO ASYNC\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
 
     if(mall_conf->comm_type == MAL_USE_NORMAL || mall_conf->comm_type == MAL_USE_IBARRIER || mall_conf->comm_type == MAL_USE_POINT) {
@@ -374,6 +378,7 @@ void Children_init() {
   }
   
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
+	  printf("HIJOS NO SYNC\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
     recv_data(numP_parents, dist_s_data, 0);
 
@@ -387,6 +392,7 @@ void Children_init() {
       //rep_s_data->arrays[i] = (void *) aux;
     } 
   }
+  
 
   // Guardar los resultados de esta transmision
   recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
@@ -445,7 +451,6 @@ int start_redistribution() {
     if(mall_conf->comm_type == MAL_USE_THREAD) {
       return thread_creation();
     } else {
-//      send_async(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, group->numS, comm_req, config_file->aib);
       send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
       return MAL_DIST_PENDING;
     }

@@ -77,6 +77,15 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
 
+
+    MPI_Comm delete; //FIXME DEBUGGING
+    MPI_Comm_get_parent(&delete);
+    if(delete != MPI_COMM_NULL ) {
+	    printf("Hijos salen\n");
+      MPI_Finalize();
+      return 0;
+    }
+
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
     }
@@ -90,6 +99,7 @@ int main(int argc, char *argv[]) {
       MPI_Comm_disconnect(&(group->parents)); //FIXME Volver a poner cuando se arregle MAIN.c
     }
 
+
     if(group->grp == 0) {
       init_application();
 
@@ -102,8 +112,8 @@ int main(int argc, char *argv[]) {
       // TODO Que habría que hacer aqui?
       get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
       get_benchmark_results(&results); //No se obtiene bien el archivo
-
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
+
       if(config_file->comm_tam) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
       }
@@ -122,9 +132,10 @@ int main(int argc, char *argv[]) {
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
 
-    print_final_results(); // Pasado este punto ya no pueden escribir los procesos
-    free_application_data();
+    //print_final_results(); // Pasado este punto ya no pueden escribir los procesos
     MPI_Finalize();
+    //free_application_data();
+
     return 0;
 }
 
@@ -157,6 +168,9 @@ int work() {
   }
   if(config_file->iters[group->grp] == iter && config_file->resizes != group->grp + 1)
     state = malleability_checkpoint();
+
+      MPI_Finalize();
+      exit(0);
 
   iter = 0;
   while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING) {
@@ -353,14 +367,15 @@ void free_application_data() {
     free(group->async_array);
   }
   
+  free_malleability();
+  free_config(config_file);
+
   if(group->grp == 0) { //FIXME Revisar porque cuando es diferente a 0 no funciona
-    //free_config(config_file);
-    //free_results_data(results);
+    free_results_data(results);
+    //free(results);
   }
   free(group);
 
-  free_malleability();
-  free(results);
 }
 
 
