@@ -46,7 +46,6 @@ typedef struct {
   int argc;
 
   int numS; // Cantidad de procesos hijos
-  //int commAsync; FIXME REMOVE
   MPI_Comm children, parents;
 
   char *compute_comm_array;
@@ -54,62 +53,37 @@ typedef struct {
   char *sync_array, *async_array;
 } group_data;
 
-/*
-typedef struct {
-  int myId, numP, numS, adr;
-  MPI_Comm children;
-  char *sync_array;
-} thread_data;
-*/
-
 configuration *config_file;
 group_data *group;
 results_data *results;
 int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
-//pthread_t async_thread; // TODO Cambiar de sitio?
-
 int main(int argc, char *argv[]) {
     int numP, myId, res;
     int req;
+    int im_child;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
-
-
-    MPI_Comm delete; //FIXME DEBUGGING
-    MPI_Comm_get_parent(&delete);
-    if(delete != MPI_COMM_NULL ) {
-	    printf("Hijos salen\n");
-      MPI_Finalize();
-      return 0;
-    }
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
     }
 
     init_group_struct(argv, argc, myId, numP);
-    init_malleability(myId, numP, ROOT, MPI_COMM_WORLD, argv[0]); //FIXME Cambiar el uso de MPI_COMM_WORLD?
+    im_child = init_malleability(myId, numP, ROOT, MPI_COMM_WORLD, argv[0]);
 
-    MPI_Comm_get_parent(&(group->parents)); //FIXME No usar esto
-    if(group->parents != MPI_COMM_NULL ) {
-      group->grp++;
-      MPI_Comm_disconnect(&(group->parents)); //FIXME Volver a poner cuando se arregle MAIN.c
-    }
-
-
-    if(group->grp == 0) {
+    if(!im_child) {
       init_application();
 
+      set_benchmark_grp(group->grp);
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
       MPI_Barrier(MPI_COMM_WORLD);
       results->exec_start = MPI_Wtime();
     } else {
-      // TODO Que habría que hacer aqui?
       get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
       get_benchmark_results(&results); //No se obtiene bien el archivo
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
@@ -117,12 +91,32 @@ int main(int argc, char *argv[]) {
       if(config_file->comm_tam) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
       }
+
+      int entries;
+      void *value = NULL;
+
+      malleability_get_entries(&entries, 1, 1);
+
+      malleability_get_data(&value, 0, 1, 1);
+      group->grp = *((int *)value);
+      free(value);
+      malleability_get_data(&value, 1, 1, 1);
+      run_id = *((int *)value);
+      free(value);
+
+      group->grp = group->grp + 1;
+      set_benchmark_grp(group->grp);
     }
 
-    if(config_file->resizes != group->grp + 1) {
+    if(config_file->resizes != group->grp + 1) { 
       int spawn_type = COMM_SPAWN_SERIAL; // TODO Pasar a CONFIG
       set_malleability_configuration(spawn_type, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
       set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
+
+      if(group->grp == 0) {
+        malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
+        malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+      }
     }
 
     res = work();
@@ -132,9 +126,9 @@ int main(int argc, char *argv[]) {
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
 
-    //print_final_results(); // Pasado este punto ya no pueden escribir los procesos
+    print_final_results(); // Pasado este punto ya no pueden escribir los procesos
     MPI_Finalize();
-    //free_application_data();
+    free_application_data();
 
     return 0;
 }
@@ -168,9 +162,6 @@ int work() {
   }
   if(config_file->iters[group->grp] == iter && config_file->resizes != group->grp + 1)
     state = malleability_checkpoint();
-
-      MPI_Finalize();
-      exit(0);
 
   iter = 0;
   while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING) {
@@ -297,7 +288,6 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
   group->numP        = numP;
   group->grp         = 0;
   group->iter_start  = 0;
-  //group->commAsync   = MAL_COMM_UN; FIXME REMOVE
   group->argc        = argc;
   group->argv        = argv;
 }
@@ -372,7 +362,7 @@ void free_application_data() {
 
   if(group->grp == 0) { //FIXME Revisar porque cuando es diferente a 0 no funciona
     free_results_data(results);
-    //free(results);
+    free(results);
   }
   free(group);
 

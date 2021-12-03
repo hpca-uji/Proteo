@@ -6,8 +6,6 @@
 #include "malleabilityStates.h"
 
 #define MALLEABILITY_INIT_DATA_QTY 100
-#define MAL_INT 0
-#define MAL_CHAR 1
 
 typedef struct {
   int entries; // Indica numero de vectores a comunicar (replicated data)

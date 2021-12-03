@@ -8,7 +8,7 @@
 #include "../IOcodes/results.h"
 #include "malleabilityStates.h"
 
-void init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec);
+int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec);
 void free_malleability();
 int malleability_checkpoint();
 void set_benchmark_grp(int grp);
@@ -18,7 +18,7 @@ void set_children_number(int numC); // TODO TO BE DEPRECATED
 
 void malleability_add_data(void *data, int total_qty, int type, int is_replicated, int is_constant);
 void malleability_get_entries(int *entries, int is_replicated, int is_constant);
-void malleability_get_data(void *data, int index, int is_replicated, int is_constant);
+void malleability_get_data(void **data, int index, int is_replicated, int is_constant);
 
 void set_benchmark_configuration(configuration *config_file);
 void get_benchmark_configuration(configuration **config_file);

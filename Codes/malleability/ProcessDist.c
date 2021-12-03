@@ -114,7 +114,7 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child) { // TODO Bo
 
   if(slurm_data->type_creation == COMM_SPAWN_PTHREAD) {
 
-    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD); // FIXME No usar MPI_COMM_WORLD
 
     if(state != MAL_SPAWN_COMPLETED) return state; // Continue only if asynchronous process creation has ended 
 
@@ -215,6 +215,7 @@ void processes_dist(char *argv, int numP_childs, int type) {
     MPI_Info_create(&(slurm_data->info));
     MPI_Info_set(slurm_data->info, "hosts", hostfile);
     free(hostfile);
+    free(procs_array);
    
 
     // Free JOB INFO

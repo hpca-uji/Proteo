@@ -18,3 +18,8 @@
 #define MAL_USE_IBARRIER 1
 #define MAL_USE_POINT 2
 #define MAL_USE_THREAD 3
+
+
+
+#define MAL_INT 0
+#define MAL_CHAR 1

@@ -49,7 +49,7 @@ void add_data(void *data, int total_qty, int type, int request_qty, malleability
  * unicamente.
  */
 void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group, int myId, int root, MPI_Comm intercomm) {
-  int rootBcast = MPI_PROC_NULL;
+  int i, rootBcast = MPI_PROC_NULL;
   MPI_Datatype entries_type, struct_type;
 
   if(is_children_group) {
@@ -63,12 +63,24 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   MPI_Bcast(&(data_struct_rep->entries), 1, entries_type, rootBcast, intercomm);
 
   if(is_children_group) {
-    if(data_struct_rep->entries == 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
-    if(data_struct_dist->entries == 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
+    if(data_struct_rep->entries != 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
+    if(data_struct_dist->entries != 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
-  MPI_Bcast(&data_struct_rep, 1, struct_type, rootBcast, intercomm);
+  MPI_Bcast(MPI_BOTTOM, 1, struct_type, rootBcast, intercomm); //FIXME Doy error
+
+  if(is_children_group) {
+    //data_struct->requests[data_struct->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request)); FIXME Crear los requests?
+    //data_struct->requests[data_struct->entries][i] = MPI_REQUEST_NULL;
+    
+    for(i=0; i < data_struct_rep->entries; i++) {
+      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
+    }
+    for(i=0; i < data_struct_dist->entries; i++) {
+      data_struct_dist->arrays[i] = (void *) malloc(data_struct_dist->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
+    }
+  }
 
   MPI_Type_free(&entries_type);
   MPI_Type_free(&struct_type);
@@ -129,7 +141,8 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
   max = data_struct->entries;
   if(max != 0) {
     for(i=0; i<max; i++) {
-      free(data_struct->requests[i]);
+      //free(data_struct->arrays[i]); //FIXME Valores alojados con 1 elemento no se liberan?
+      //free(data_struct->requests[i]); //TODO Plantear como crearlos
     }
 
     free(data_struct->qty);
@@ -168,26 +181,22 @@ void def_malleability_entries(malleability_data_t *data_struct_rep, malleability
  * de datos de dos estructuras de descripcion de datos.
  * El vector de "requests" no es enviado ya que solo es necesario
  * en los padres.
+ * TODO Refactor?
  */
 void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, MPI_Datatype *new_type) {
-  int i, counts = 4;
+  int counts = 4;
   int blocklengths[counts];
-  MPI_Aint displs[counts], dir;
+  MPI_Aint displs[counts];
   MPI_Datatype types[counts];
 
   types[0] = types[1] = types[2] = types[3] = MPI_INT;
   blocklengths[0] = blocklengths[1] = data_struct_rep->entries;
   blocklengths[2] = blocklengths[3] = data_struct_dist->entries;
 
-  // Obtener direccion base
-  MPI_Get_address(data_struct_rep, &dir);
-
-  MPI_Get_address(&(data_struct_rep->qty), &displs[0]);
-  MPI_Get_address(&(data_struct_rep->types), &displs[1]);
-  MPI_Get_address(&(data_struct_dist->qty), &displs[2]);
-  MPI_Get_address(&(data_struct_dist->types), &displs[3]);
-
-  for(i=0;i<counts;i++) displs[i] -= dir;
+  MPI_Get_address((data_struct_rep->qty), &displs[0]);
+  MPI_Get_address((data_struct_rep->types), &displs[1]);
+  MPI_Get_address((data_struct_dist->qty), &displs[2]);
+  MPI_Get_address((data_struct_dist->types), &displs[3]);
 
   MPI_Type_create_struct(counts, blocklengths, displs, types, new_type);
   MPI_Type_commit(new_type);

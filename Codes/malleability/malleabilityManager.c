@@ -56,8 +56,10 @@ malleability_data_t *dist_s_data;
 malleability_data_t *rep_a_data;
 malleability_data_t *dist_a_data;
 
-
-void init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec) {
+/*
+ * TODO HACER
+ */
+int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec) {
   MPI_Comm dup_comm, thread_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
@@ -67,15 +69,14 @@ void init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_e
   rep_a_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
   dist_a_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
 
-  //MPI_Comm_dup(comm, &dup_comm);
-  //MPI_Comm_dup(comm, &thread_comm);
-  mall->comm = comm;
+  MPI_Comm_dup(comm, &dup_comm);
+  MPI_Comm_dup(comm, &thread_comm);
 
   mall->myId = myId;
   mall->numP = numP;
   mall->root = root;
-  //mall->comm = dup_comm;
-  //mall->comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
+  mall->comm = dup_comm;
+  mall->comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
   mall->name_exec = name_exec;
 
   rep_s_data->entries = 0;
@@ -89,7 +90,9 @@ void init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_e
   MPI_Comm_get_parent(&(mall->intercomm));
   if(mall->intercomm != MPI_COMM_NULL ) { 
     Children_init();
+    return MALLEABILITY_CHILDREN;
   }
+  return MALLEABILITY_NOT_CHILDREN;
 }
 
 void free_malleability() {	
@@ -134,7 +137,6 @@ int malleability_checkpoint() {
     //if(CHECK_RMS()) {return MAL_DENIED;}
 
     state = spawn_step();
-	    		return MAL_DIST_COMPLETED;
 
     if (state == MAL_SPAWN_COMPLETED){
       state = start_redistribution();
@@ -169,7 +171,7 @@ void set_benchmark_configuration(configuration *config_file) {
   mall_conf->config_file = config_file;
 }
 
-void get_benchmark_configuration(configuration **config_file) { //FIXME Revisar posible error de memoria
+void get_benchmark_configuration(configuration **config_file) {
   *config_file = mall_conf->config_file;
 }
 
@@ -177,7 +179,7 @@ void set_benchmark_results(results_data *results) {
   mall_conf->results = results;
 }
 
-void get_benchmark_results(results_data **results) { //FIXME Revisar posible error de memoria
+void get_benchmark_results(results_data **results) {
   *results = mall_conf->results;
 }
 //-------------------------------------------------------------------------------------------------------------
@@ -260,7 +262,7 @@ void malleability_get_entries(int *entries, int is_replicated, int is_constant){
  * Es tarea del usuario saber el tipo de esos datos.
  * TODO Refactor a que sea automatico
  */
-void malleability_get_data(void *data, int index, int is_replicated, int is_constant) {
+void malleability_get_data(void **data, int index, int is_replicated, int is_constant) {
   malleability_data_t *data_struct;
 
   if(is_constant) {
@@ -277,7 +279,7 @@ void malleability_get_data(void *data, int index, int is_replicated, int is_cons
     }
   }
 
-  data = (void *) data_struct->arrays[index];
+  *data = data_struct->arrays[index];
 }
 
 
@@ -349,12 +351,9 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 void Children_init() {
 
   /* FIXME
-   * grp -- a constante replicado || TODO Acordarse de sumar 1
-   * run_id -- a constante replicado
    * iter_start -- a constante replicado || TODO Setear valor segun adr==0
    */
   int numP_parents, root_parents, i;
-  //int *aux;
 
   MPI_Bcast(&root_parents, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
   MPI_Bcast(&numP_parents, 1, MPI_INT, root_parents, mall->intercomm);
@@ -365,7 +364,6 @@ void Children_init() {
 
   
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
-	  printf("HIJOS NO ASYNC\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
 
     if(mall_conf->comm_type == MAL_USE_NORMAL || mall_conf->comm_type == MAL_USE_IBARRIER || mall_conf->comm_type == MAL_USE_POINT) {
@@ -377,9 +375,8 @@ void Children_init() {
     mall_conf->results->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
   
+  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
-	  printf("HIJOS NO SYNC\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-    comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
     recv_data(numP_parents, dist_s_data, 0);
 
     mall_conf->results->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
@@ -387,9 +384,7 @@ void Children_init() {
     // TODO Crear funcion especifica y anyadir para Asinc
     // TODO Tener en cuenta el tipo y qty
     for(i=0; i<rep_s_data->entries; i++) {
-      //aux = (int *) rep_s_data->arrays[i]; //TODO Comprobar que realmente es un int
-      MPI_Bcast(rep_s_data->arrays[i], 1, MPI_INT, root_parents, mall->intercomm);
-      //rep_s_data->arrays[i] = (void *) aux;
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, root_parents, mall->intercomm);
     } 
   }
   
@@ -397,7 +392,7 @@ void Children_init() {
   // Guardar los resultados de esta transmision
   recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
 
-  //MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Volver a poner cuando se arregle MAIN.c
+  MPI_Comm_disconnect(&(mall->intercomm));
 }
 
 //======================================================||
@@ -528,8 +523,7 @@ int end_redistribution() {
     // TODO Crear funcion especifica y anyadir para Asinc
     // TODO Tener en cuenta el tipo y qty
     for(i=0; i<rep_s_data->entries; i++) {
-      //aux = (int *) rep_s_data->arrays[i]; //TODO Comprobar que realmente es un int
-      MPI_Bcast(rep_s_data->arrays[i], 1, MPI_INT, rootBcast, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, rootBcast, mall->intercomm);
     } 
   }
 
