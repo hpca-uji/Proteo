@@ -60,7 +60,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
 
   // Mandar primero numero de entradas
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
-  MPI_Bcast(&(data_struct_rep->entries), 1, entries_type, rootBcast, intercomm);
+  MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
   if(is_children_group) {
     if(data_struct_rep->entries != 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
@@ -164,15 +164,18 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
  */
 void def_malleability_entries(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, MPI_Datatype *new_type) {
   int counts = 2;
-  int blocklength = 1;
-  MPI_Aint displs, dir;
+  int blocklengths[counts];
+  MPI_Aint displs[counts];
+  MPI_Datatype types[counts];
+
+  blocklengths[0] = blocklengths[1] = 1;
+  types[0] = types[1] = MPI_INT;
 
   // Obtener direccion base
-  MPI_Get_address(&(data_struct_rep->entries), &dir);
-  MPI_Get_address(&(data_struct_dist->entries), &displs);
-  displs -= dir;
+  MPI_Get_address(&(data_struct_rep->entries), &displs[0]);
+  MPI_Get_address(&(data_struct_dist->entries), &displs[1]);
 
-  MPI_Type_create_hvector(counts, blocklength, displs, MPI_INT, new_type);
+  MPI_Type_create_struct(counts, blocklengths, displs, types, new_type);
   MPI_Type_commit(new_type);
 }
 

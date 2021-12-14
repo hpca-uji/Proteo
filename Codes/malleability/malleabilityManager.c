@@ -6,8 +6,6 @@
 #include "CommDist.h"
 
 #define MALLEABILITY_ROOT 0
-#define MALLEABILITY_CHILDREN 1
-#define MALLEABILITY_NOT_CHILDREN 0
 #define MALLEABILITY_USE_SYNCHRONOUS 0
 #define MALLEABILITY_USE_ASYNCHRONOUS 1
 
@@ -28,6 +26,7 @@ void* thread_async_work(void* void_arg);
 typedef struct {
   int spawn_type;
   int spawn_dist;
+  int spawn_is_single;
   int spawn_threaded;
   int comm_type;
   int comm_threaded;
@@ -38,10 +37,11 @@ typedef struct {
 } malleability_config_t;
 
 typedef struct {
-  int myId, numP, numC, root, root_parents;
+  int myId, numP, numC, numC_spawned, root, root_parents;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm;
   MPI_Comm intercomm;
+  MPI_Comm user_comm;
   
   char *name_exec;
 } malleability_t;
@@ -76,7 +76,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   mall->numP = numP;
   mall->root = root;
   mall->comm = dup_comm;
-  mall->comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
+  mall->thread_comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
+  mall->user_comm = comm;
   mall->name_exec = name_exec;
 
   rep_s_data->entries = 0;
@@ -87,8 +88,10 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   state = MAL_NOT_STARTED;
 
   // Si son el primer grupo de procesos, obtienen los datos de los padres
+      printf("TESTHHH 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   MPI_Comm_get_parent(&(mall->intercomm));
   if(mall->intercomm != MPI_COMM_NULL ) { 
+      printf("TESTHHH 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     Children_init();
     return MALLEABILITY_CHILDREN;
   }
@@ -143,10 +146,10 @@ int malleability_checkpoint() {
     }
 
   } else if(state == MAL_SPAWN_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm));
+    state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm);
 
     if (state == MAL_SPAWN_COMPLETED) {  
-        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
       state = start_redistribution();
     }
 
@@ -184,8 +187,9 @@ void get_benchmark_results(results_data **results) {
 }
 //-------------------------------------------------------------------------------------------------------------
 
-void set_malleability_configuration(int spawn_type, int spawn_dist, int spawn_threaded, int comm_type, int comm_threaded) {
+void set_malleability_configuration(int spawn_type, int spawn_is_single, int spawn_dist, int spawn_threaded, int comm_type, int comm_threaded) {
   mall_conf->spawn_type = spawn_type;
+  mall_conf->spawn_is_single = spawn_is_single;
   mall_conf->spawn_dist = spawn_dist;
   mall_conf->spawn_threaded = spawn_threaded;
   mall_conf->comm_type = comm_type;
@@ -194,9 +198,31 @@ void set_malleability_configuration(int spawn_type, int spawn_dist, int spawn_th
 
 /*
  * To be deprecated
+ * Tiene que ser llamado despues de setear la config
  */
 void set_children_number(int numC){
-  mall->numC = numC;
+  if((mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) && (numC - mall->numP >= 0)) {
+    mall->numC = numC;
+    mall->numC_spawned = numC - mall->numP;
+
+    if(numC == mall->numP) { // Migrar
+      mall->numC_spawned = numC;
+      if(mall_conf->spawn_type == COMM_SPAWN_MERGE)
+        mall_conf->spawn_type = COMM_SPAWN_SERIAL;
+      else
+	mall_conf->spawn_type = COMM_SPAWN_PTHREAD;
+    }
+  } else {
+    mall->numC = numC;
+    mall->numC_spawned = numC;
+  }
+}
+
+/*
+ * TODO
+ */
+void get_malleability_user_comm(MPI_Comm *comm) {
+  *comm = mall->user_comm;
 }
 
 /*
@@ -349,11 +375,14 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
  * ya sea de forma sincrona, asincrona o ambas.
  */
 void Children_init() {
-
-  /* FIXME
-   * iter_start -- a constante replicado || TODO Setear valor segun adr==0
-   */
   int numP_parents, root_parents, i;
+  int spawn_is_single;
+  MPI_Comm aux;
+
+  MPI_Bcast(&spawn_is_single, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
+  if(spawn_is_single) {
+    malleability_establish_connection(mall->myId, MALLEABILITY_ROOT, &(mall->intercomm));
+  }
 
   MPI_Bcast(&root_parents, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
   MPI_Bcast(&numP_parents, 1, MPI_INT, root_parents, mall->intercomm);
@@ -362,7 +391,6 @@ void Children_init() {
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->resizes, RESULTS_INIT_DATA_QTY);
 
-  
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
 
@@ -387,10 +415,21 @@ void Children_init() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, root_parents, mall->intercomm);
     } 
   }
-  
 
   // Guardar los resultados de esta transmision
   recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
+
+      printf("HIJOS 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+    proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN);
+
+    //if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+
+    MPI_Comm_dup(mall->comm, &aux);
+    mall->thread_comm = aux;
+    MPI_Comm_dup(mall->comm, &aux);
+    mall->user_comm = aux;
+  } 
 
   MPI_Comm_disconnect(&(mall->intercomm));
 }
@@ -407,16 +446,56 @@ void Children_init() {
  */
 int spawn_step(){
   mall_conf->results->spawn_start = MPI_Wtime();
-  state = init_slurm_comm(mall->name_exec, mall->myId, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall->comm, &(mall->intercomm));
+  state = init_slurm_comm(mall->name_exec, mall->myId, mall->numC_spawned, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
+      printf("TEST 2 un total de %d\n", mall->numC_spawned); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
-  if(mall_conf->spawn_type == COMM_SPAWN_SERIAL)
+  if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-  else if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD) {
+  else if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
       mall_conf->results->spawn_thread_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
       mall_conf->results->spawn_start = MPI_Wtime();
   }
   return state;
 }
+
+/*
+ * TODO Si los eliminados pertenecen al mismo COMMWORLD
+ * eliminar del todo
+ * TODO Eliminar los procesos por encima de numC y modificar numP
+ */
+/*
+void malleability_zombies(int *pids, int *offset_pids) {
+
+  // Zombies treatment
+  int pid = getpid();
+  int *pids_counts = malloc(*numP * sizeof(int));
+  int *pids_displs = malloc(*numP * sizeof(int));
+  int count=1;
+  if(myId < new_numP) {
+    count = 0;
+    if(myId == mall->root) {
+      int i;
+      for(i=0; i < new_numP; i++) {
+        pids_counts[i] = 0;
+      }
+      for(i=new_numP; i<*numP; i++) {
+        pids_counts[i] = 1;
+	pids_displs[i] = (i + *offset_pids) - new_numP;
+      }
+      *offset_pids += *numP - new_numP;
+    }
+  }
+
+  MPI_Gatherv(&pid, count, MPI_INT, pids, pids_counts, pids_displs, MPI_INT, ROOT, *comm);
+  if(myId == ROOT) {
+    int i;
+    for(i=0;i<*offset_pids;i++){
+      printf("PID[%d]=%d\n",i,pids[i]);
+    }
+  }
+    //free pids_counts, pids_displs
+}
+*/
 
 /*
  * Comienza la redistribucion de los datos con el nuevo grupo de procesos.
@@ -512,7 +591,8 @@ int check_redistribution() {
  * Finalmente termina enviando los datos temporales a los hijos.
  */ 
 int end_redistribution() {
-  int i, rootBcast = MPI_PROC_NULL;
+  int result, i, rootBcast = MPI_PROC_NULL;
+  MPI_Comm aux;
   if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
@@ -529,9 +609,34 @@ int end_redistribution() {
 
   send_results(mall_conf->results, rootBcast, mall_conf->config_file->resizes, mall->intercomm);
 
+  if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+    double time_adapt = MPI_Wtime();
+    if(mall->numP > mall->numC) { //Shrink
+      //proc_adapt_shrink( numC, MPI_Comm *comm, mall->myId);
+      //malleability_zombies()
+      if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
+        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt;
+
+    } else {
+      proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_NOT_CHILDREN);
+
+     // if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); FIXME
+
+      MPI_Comm_dup(mall->comm, &aux);
+      mall->thread_comm = aux;
+      MPI_Comm_dup(mall->comm, &aux);
+      mall->user_comm = aux;
+      if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
+        mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_adapt;
+    }
+    result = MAL_DIST_ADAPTED;
+  } else {
+    result = MAL_DIST_COMPLETED;
+  }
+
   MPI_Comm_disconnect(&(mall->intercomm));
   state = MAL_NOT_STARTED;
-  return MAL_DIST_COMPLETED;
+  return result;
 }
 
 // TODO MOVER A OTRO LADO??

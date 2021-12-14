@@ -216,17 +216,17 @@ void realloc_results_iters(results_data *results, int needed) {
 
 /*
  * Libera toda la memoria asociada con una estructura de resultados.
+ * TODO Asegurar que ha sido inicializado?
  */
 void free_results_data(results_data *results) {
     if(results != NULL) {
-      //free(results->spawn_time);
-      //free(results->spawn_thread_time);
-      //free(results->sync_time);
-      //if(results->async_time != NULL)
-      //  free(results->async_time);
+      free(results->spawn_time);
+      free(results->spawn_thread_time);
+      free(results->sync_time);
+      free(results->async_time);
 
-      //free(results->iters_time);
-      //free(results->iters_type);
+      free(results->iters_time);
+      free(results->iters_type);
     }
     //free(*results); FIXME Borrar
 }

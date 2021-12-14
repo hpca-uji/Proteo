@@ -13,8 +13,9 @@ void free_malleability();
 int malleability_checkpoint();
 void set_benchmark_grp(int grp);
 
-void set_malleability_configuration(int spawn_type, int spawn_dist, int spawn_threaded, int comm_type, int comm_threaded);
+void set_malleability_configuration(int spawn_type, int spawn_is_single, int spawn_dist, int spawn_threaded, int comm_type, int comm_threaded);
 void set_children_number(int numC); // TODO TO BE DEPRECATED
+void get_malleability_user_comm(MPI_Comm *comm);
 
 void malleability_add_data(void *data, int total_qty, int type, int is_replicated, int is_constant);
 void malleability_get_entries(int *entries, int is_replicated, int is_constant);

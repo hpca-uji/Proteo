@@ -35,6 +35,7 @@ void obtain_op_times();
 void free_application_data();
 
 void print_general_info(int myId, int grp, int numP);
+int print_local_results();
 int print_final_results();
 int create_out_file(char *nombre, int *ptr, int newstdout);
 
@@ -56,6 +57,7 @@ typedef struct {
 configuration *config_file;
 group_data *group;
 results_data *results;
+MPI_Comm comm;
 int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
@@ -66,13 +68,14 @@ int main(int argc, char *argv[]) {
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
+    comm = MPI_COMM_WORLD;
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = init_malleability(myId, numP, ROOT, MPI_COMM_WORLD, argv[0]);
+    im_child = init_malleability(myId, numP, ROOT, comm, argv[0]);
 
     if(!im_child) {
       init_application();
@@ -81,12 +84,14 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
-    } else {
+    } else { //Init hijos
+      get_malleability_user_comm(&comm);
       get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
       get_benchmark_results(&results); //No se obtiene bien el archivo
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
+      printf("HIJOS 2\n"); fflush(stdout); MPI_Barrier(comm);
 
       if(config_file->comm_tam) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
@@ -105,24 +110,39 @@ int main(int argc, char *argv[]) {
       free(value);
 
       group->grp = group->grp + 1;
+    }
+
+    int spawn_type = COMM_SPAWN_MERGE; // TODO Pasar a CONFIG
+    int spawn_is_single = COMM_SPAWN_MULTIPLE; // TODO Pasar a CONFIG
+    group->grp = group->grp - 1; // TODO REFACTOR???
+    do {
+
+      group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
-    }
+      get_malleability_user_comm(&comm);
+      MPI_Comm_size(comm, &(group->numP));
+      MPI_Comm_rank(comm, &(group->myId));
+      printf("MAIN 2\n"); fflush(stdout); MPI_Barrier(comm);
 
-    if(config_file->resizes != group->grp + 1) { 
-      int spawn_type = COMM_SPAWN_SERIAL; // TODO Pasar a CONFIG
-      set_malleability_configuration(spawn_type, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
-      set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
+      if(config_file->resizes != group->grp + 1) { 
+        set_malleability_configuration(spawn_type, spawn_is_single, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
+        set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
 
-      if(group->grp == 0) {
-        malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
-        malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+        if(group->grp == 0) {
+          malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
+          malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+        }
       }
-    }
+      printf("MAIN 3\n"); fflush(stdout); MPI_Barrier(comm);
 
-    res = work();
+      res = work();
+
+      print_local_results();
+    } while((config_file->resizes > group->grp + 1) && (spawn_type == COMM_SPAWN_MERGE || spawn_type == COMM_SPAWN_MERGE_PTHREAD));
+
 
     if(res) { // Se he llegado al final de la aplicacion
-      MPI_Barrier(MPI_COMM_WORLD);
+//      MPI_Barrier(comm); FIXME?
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
 
@@ -155,6 +175,15 @@ int work() {
   maxiter = config_file->iters[group->grp];
   //initMatrix(&matrix, config_file->matrix_tam);
   state = MAL_NOT_STARTED;
+
+  if(group->grp == 0) {
+    malleability_add_data(&iter, 1, MAL_INT, 1, 1);
+  } else {
+    void *value = NULL;
+    malleability_get_data(&value, 2, 1, 1);
+    group->iter_start = *((int *)value);
+    free(value);
+  }
 
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
@@ -201,7 +230,7 @@ void iterate(double *matrix, int n, int async_comm) {
   }
 
   if(config_file->comm_tam) {
-    MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, comm);
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
@@ -240,17 +269,17 @@ void print_general_info(int myId, int grp, int numP) {
   free(version);
 }
 
+
 /*
  * Pide al proceso raiz imprimir los datos sobre las iteraciones realizadas por el grupo de procesos.
- *
- * Si es el ultimo grupo de procesos, muestra los datos obtenidos de tiempo de ejecucion, creacion de procesos
- * y las comunicaciones.
  */
-int print_final_results() {
-  int ptr_local, ptr_global, err;
+int print_local_results() {
+  int ptr_local, ptr_out, err;
   char *file_name;
 
   if(group->myId == ROOT) {
+    ptr_out = dup(1);
+
     file_name = NULL;
     file_name = malloc(40 * sizeof(char));
     if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
@@ -261,6 +290,22 @@ int print_final_results() {
     print_config_group(config_file, group->grp);
     print_iter_results(*results, config_file->iters[group->grp] -1);
     free(file_name);
+
+    close(1);
+    dup(ptr_out);
+  }
+  return 0;
+}
+
+/*
+ * Si es el ultimo grupo de procesos, pide al proceso raiz mostrar los datos obtenidos de tiempo de ejecucion, creacion de procesos
+ * y las comunicaciones.
+ */
+int print_final_results() {
+  int ptr_global, err;
+  char *file_name;
+
+  if(group->myId == ROOT) {
 
     if(group->grp == config_file->resizes -1) {
       file_name = NULL;
@@ -340,7 +385,7 @@ void obtain_op_times() {
   //fflush(stdout);
 
   config_file->Top = (MPI_Wtime() - start_time) / qty; //Tiempo de una operacion
-  MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, MPI_COMM_WORLD); 
+  MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, comm);
 }
 
 /*
@@ -392,281 +437,3 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
 
   return 0;
 }
-
-
-
-
-/*
- * Se realiza el redimensionado de procesos por parte de los padres.
- *
- * Se crean los nuevos procesos con la distribucion fisica elegida y
- * a continuacion se transmite la informacion a los mismos.
- *
- * Si hay datos asincronos a transmitir, primero se comienza a
- * transmitir estos y se termina la funcion. Se tiene que comprobar con
- * llamando a la función de nuevo que se han terminado de enviar
- *
- * Si hay ademas datos sincronos a enviar, no se envian aun.
- *
- * Si solo hay datos sincronos se envian tras la creacion de los procesos
- * y finalmente se desconectan los dos grupos de procesos.
- */
-/*
-int checkpoint(int iter, int state, MPI_Request **comm_req) {
-  
-  if(state == MAL_COMM_UNINITIALIZED) {
-    // Comprobar si se tiene que realizar un redimensionado
-    //if(config_file->iters[group->grp] > iter || config_file->resizes == group->grp + 1) {return MAL_COMM_UNINITIALIZED;}
-
-    group->numS = config_file->procs[group->grp +1];
-    int comm_type = COMM_SPAWN_SERIAL; // TODO Pasar a CONFIG
-
-    state = TC(group->numS, comm_type);
-
-    if (state == COMM_FINISHED){
-      state = start_redistribution(0, group->numS, comm_req);
-    }
-
-  } else if(state == COMM_IN_PROGRESS) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    state = check_slurm_comm(group->myId, ROOT, group->numP, &(group->children));
-
-    if (state == COMM_FINISHED) {  
-        results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
-      state = start_redistribution(iter, group->numS, comm_req);
-    }
-
-  } else if(state == MAL_ASYNC_PENDING) {
-    if(config_file->aib == MAL_USE_THREAD) {
-      state = thread_check(iter);
-    } else {
-      state = check_redistribution(iter, comm_req);
-    }
-  }
-
-  return state;
-}
-*/
-/*
- * Se encarga de realizar la creacion de los procesos hijos.
- * Si se pide en segundo plano devuelve el estado actual.
- */
-/*
-int TC(int numS, int comm_type){
-  // Inicialización de la comunicación con SLURM
-  int dist = config_file->phy_dist[group->grp +1];
-  int comm_state;
-  MPI_Comm *new_comm = malloc(sizeof(MPI_Comm));
-
-      results->spawn_start = MPI_Wtime();
-  MPI_Comm_dup(MPI_COMM_WORLD, new_comm);
-  comm_state = init_slurm_comm(group->argv, group->myId, numS, ROOT, dist, comm_type, *new_comm, &(group->children));
-  if(comm_type == COMM_SPAWN_SERIAL)
-      results->spawn_time[group->grp] = MPI_Wtime() - results->spawn_start;
-  else if(comm_type == COMM_SPAWN_PTHREAD) {
-      results->spawn_thread_time[group->grp] = MPI_Wtime() - results->spawn_start;
-      results->spawn_start = MPI_Wtime();
-  }
-  return comm_state;
-}
-*/
-/*
- * Comienza la redistribucion de los datos con el nuevo grupo de procesos.
- *
- * Primero se envia la configuracion a utilizar al nuevo grupo de procesos y a continuacion
- * se realiza el envio asincrono y/o sincrono si lo hay.
- *
- * En caso de que haya comunicacion asincrona, se comienza y se termina la funcion 
- * indicando que se ha comenzado un envio asincrono.
- *
- * Si no hay comunicacion asincrono se pasa a realizar la sincrona si la hubiese.
- *
- * Finalmente se envian datos sobre los resultados a los hijos y se desconectan ambos
- * grupos de procesos.
- */
-/*
-int start_redistribution(int iter, int numS, MPI_Request **comm_req) {
-  int rootBcast = MPI_PROC_NULL;
-  if(group->myId == ROOT) rootBcast = MPI_ROOT;
-
-  // Enviar a los hijos que grupo de procesos son
-  MPI_Bcast(&(group->grp), 1, MPI_INT, rootBcast, group->children);
-  MPI_Bcast(&run_id, 1, MPI_INT, rootBcast, group->children);
-  send_config_file(config_file, rootBcast, group->children);
-
-  if(config_file->adr > 0) {
-    results->async_start = MPI_Wtime();
-    if(config_file->aib == MAL_USE_THREAD) {
-      return thread_creation();
-    } else {
-      send_async(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, group->numS, comm_req, config_file->aib);
-      return MAL_ASYNC_PENDING;
-    }
-  } 
-  return end_redistribution(iter);
-}
-*/
-/*
- * Crea una hebra para ejecutar una comunicación en segundo plano.
- */
-/*
-int thread_creation() {
-  if(pthread_create(&async_thread, NULL, thread_async_work, NULL)) {
-    printf("Error al crear el hilo\n");
-    MPI_Abort(MPI_COMM_WORLD, -1);
-    return -1;
-  }
-  return MAL_ASYNC_PENDING;
-}
-*/
-/*
- * Comprobación por parte de una hebra maestra que indica
- * si una hebra esclava ha terminado su comunicación en segundo plano.
- *
- * El estado de la comunicación es devuelto al finalizar la función. 
- */
-/*
-int thread_check(int iter) {
-  int all_completed = 0;
-
-  // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
-  MPI_Allreduce(&group->commAsync, &all_completed, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-  if(all_completed != MAL_COMM_COMPLETED) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
-
-  if(pthread_join(async_thread, NULL)) {
-    printf("Error al esperar al hilo\n");
-    MPI_Abort(MPI_COMM_WORLD, -1);
-    return -2;
-  } 
-  return end_redistribution(iter);
-}
-*/
-/*
- * Función ejecutada por una hebra.
- * Ejecuta una comunicación síncrona con los hijos que
- * para el usuario se puede considerar como en segundo plano.
- *
- * Cuando termina la comunicación la hebra maestra puede comprobarlo
- * por el valor "commAsync".
- */
-/*
-void* thread_async_work(void* void_arg) {
-  send_sync(group->async_array, config_file->adr, group->myId, group->numP, ROOT, group->children, group->numS);
-  group->commAsync = MAL_COMM_COMPLETED;
-  pthread_exit(NULL);
-}
-*/
-/*
- * @deprecated
- * Comprueba si la redistribucion asincrona ha terminado. 
- * Si no ha terminado la funcion termina indicandolo, en caso contrario,
- * se continua con la comunicacion sincrona, el envio de resultados y
- * se desconectan los grupos de procesos.
- *
- * Esta funcion permite dos modos de funcionamiento al comprobar si la
- * comunicacion asincrona ha terminado.
- * Si se utiliza el modo "MAL_USE_NORMAL" o "MAL_USE_POINT", se considera 
- * terminada cuando los padres terminan de enviar.
- * Si se utiliza el modo "MAL_USE_IBARRIER", se considera terminada cuando
- * los hijos han terminado de recibir.
- */
-/*
-int check_redistribution(int iter, MPI_Request **comm_req) {
-  int completed, all_completed, test_err;
-  MPI_Request *req_completed;
-
-  if (config_file->aib == MAL_USE_POINT) {
-    test_err = MPI_Testall(group->numS, *comm_req, &completed, MPI_STATUSES_IGNORE);
-  } else {
-    if(config_file->aib == MAL_USE_NORMAL) {
-      req_completed = &(*comm_req)[0];
-    } else if (config_file->aib == MAL_USE_IBARRIER) {
-      req_completed = &(*comm_req)[1];
-    }
-    test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
-  }
- 
-  if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
-    printf("P%d aborting -- Test Async\n", group->myId);
-    MPI_Abort(MPI_COMM_WORLD, test_err);
-  }
-
-  MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-  if(!all_completed) return MAL_ASYNC_PENDING; // Continue only if asynchronous send has ended 
-  
-
-  if(config_file->aib == MAL_USE_IBARRIER) {
-    MPI_Wait(&(*comm_req)[0], MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
-    //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
-    //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
-  }
-  free(*comm_req);
-  return end_redistribution(iter);
-}
-*/
-
-/*
- * Termina la redistribución de los datos con los hijos, comprobando
- * si se han realizado iteraciones con comunicaciones en segundo plano
- * y enviando cuantas iteraciones se han realizado a los hijos.
- *
- * Además se realizan las comunicaciones síncronas se las hay.
- * Finalmente termina enviando los datos temporales a los hijos.
- */ 
-/*
-int end_redistribution(int iter) {
-  int rootBcast = MPI_PROC_NULL;
-  if(group->myId == ROOT) rootBcast = MPI_ROOT;
-
-  if(config_file->sdr > 0) { // Realizar envio sincrono
-      results->sync_start = MPI_Wtime();
-    send_sync(group->sync_array, config_file->sdr, group->myId, group->numP, ROOT, group->children, group->numS);
-  }
-
-  MPI_Bcast(&iter, 1, MPI_INT, rootBcast, group->children);
-  send_results(results, rootBcast, config_file->resizes, group->children);
-  // Desconectar intercomunicador con los hijos
-  MPI_Comm_disconnect(&(group->children));
-  return MAL_COMM_COMPLETED;
-}
-*/
-/*
- * Inicializacion de los datos de los hijos.
- * En la misma se reciben datos de los padres: La configuracion
- * de la ejecucion a realizar; y los datos a recibir de los padres
- * ya sea de forma sincrona, asincrona o ambas.
- */
-/*
-void Sons_init() {
-
-  // Enviar a los hijos que grupo de procesos son
-  MPI_Bcast(&(group->grp), 1, MPI_INT, ROOT, group->parents);
-  MPI_Bcast(&run_id, 1, MPI_INT, ROOT, group->parents);
-  group->grp++;
-
-  config_file = recv_config_file(ROOT, group->parents);
-  int numP_parents = config_file->procs[group->grp -1];
-  results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->resizes - 1, config_file->iters[group->grp]);
-
-  if(config_file->adr) { // Recibir datos asincronos
-    if(config_file->aib == MAL_USE_NORMAL || config_file->aib == MAL_USE_IBARRIER || config_file->aib == MAL_USE_POINT) {
-      recv_async(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents, config_file->aib);
-    } else if (config_file->aib == MAL_USE_THREAD) {
-      recv_sync(&(group->async_array), config_file->adr, group->myId, group->numP, ROOT, group->parents, numP_parents);
-    }
-
-      results->async_end = MPI_Wtime();
-  }
-  if(config_file->sdr) { // Recibir datos sincronos
-    recv_sync(&(group->sync_array), config_file->sdr, group->myId, group->numP, ROOT, group->parents, numP_parents);
-    results->sync_end = MPI_Wtime();
-  }
-  MPI_Bcast(&(group->iter_start), 1, MPI_INT, ROOT, group->parents);
-
-  // Guardar los resultados de esta transmision
-  recv_results(results, ROOT, config_file->resizes, group->parents);
-
-  // Desconectar intercomunicador con los hijos
-  MPI_Comm_disconnect(&(group->parents));
-}
-*/
