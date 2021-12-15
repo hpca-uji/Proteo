@@ -88,10 +88,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   state = MAL_NOT_STARTED;
 
   // Si son el primer grupo de procesos, obtienen los datos de los padres
-      printf("TESTHHH 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   MPI_Comm_get_parent(&(mall->intercomm));
   if(mall->intercomm != MPI_COMM_NULL ) { 
-      printf("TESTHHH 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     Children_init();
     return MALLEABILITY_CHILDREN;
   }
@@ -383,6 +381,7 @@ void Children_init() {
   if(spawn_is_single) {
     malleability_establish_connection(mall->myId, MALLEABILITY_ROOT, &(mall->intercomm));
   }
+  MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
 
   MPI_Bcast(&root_parents, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
   MPI_Bcast(&numP_parents, 1, MPI_INT, root_parents, mall->intercomm);
@@ -419,17 +418,20 @@ void Children_init() {
   // Guardar los resultados de esta transmision
   recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
 
-      printf("HIJOS 1\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      printf("HIJOS 1 %d\n", mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
-    proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN);
+    
+    proc_adapt_expand(&(mall->numP), mall->numP+numP_parents, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN); //TODO Que valor se pasa?
 
-    //if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
 
     MPI_Comm_dup(mall->comm, &aux);
     mall->thread_comm = aux;
     MPI_Comm_dup(mall->comm, &aux);
     mall->user_comm = aux;
+    
   } 
+      printf("HIJOS 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   MPI_Comm_disconnect(&(mall->intercomm));
 }
@@ -447,7 +449,6 @@ void Children_init() {
 int spawn_step(){
   mall_conf->results->spawn_start = MPI_Wtime();
   state = init_slurm_comm(mall->name_exec, mall->myId, mall->numC_spawned, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
-      printf("TEST 2 un total de %d\n", mall->numC_spawned); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
@@ -515,6 +516,7 @@ int start_redistribution() {
   int rootBcast = MPI_PROC_NULL;
   if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
+  MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->root), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->numP), 1, MPI_INT, rootBcast, mall->intercomm);
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
@@ -609,6 +611,8 @@ int end_redistribution() {
 
   send_results(mall_conf->results, rootBcast, mall_conf->config_file->resizes, mall->intercomm);
 
+      printf("PADRES 7\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
     double time_adapt = MPI_Wtime();
     if(mall->numP > mall->numC) { //Shrink
@@ -618,9 +622,11 @@ int end_redistribution() {
         mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt;
 
     } else {
+	    
+      printf("PADRES 8\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_NOT_CHILDREN);
 
-     // if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); FIXME
+      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
 
       MPI_Comm_dup(mall->comm, &aux);
       mall->thread_comm = aux;
@@ -628,11 +634,13 @@ int end_redistribution() {
       mall->user_comm = aux;
       if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
         mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_adapt;
+	
     }
     result = MAL_DIST_ADAPTED;
   } else {
     result = MAL_DIST_COMPLETED;
   }
+      printf("PADRES 11\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   MPI_Comm_disconnect(&(mall->intercomm));
   state = MAL_NOT_STARTED;

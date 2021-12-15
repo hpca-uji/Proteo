@@ -74,7 +74,7 @@ int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int
 
   slurm_data->type_creation = type_creation;
   slurm_data->spawn_is_single = spawn_is_single;
-  if(type_creation == COMM_SPAWN_SERIAL) {
+  if(type_creation == COMM_SPAWN_SERIAL || slurm_data->type_creation == COMM_SPAWN_MERGE) {
 
     if(myId == root) {
       processes_dist(argv, numP, type_dist);
@@ -85,7 +85,7 @@ int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int
 
     // WORK
     generic_spawn(myId, root, slurm_data->spawn_is_single, child, comm);
-    if(slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD && 0) {
+    if(slurm_data->type_creation == COMM_SPAWN_MERGE) {
       int numParents;
       MPI_Comm_size(comm, &numParents);
       if(numParents < numP) { //Expand
@@ -102,7 +102,7 @@ int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int
 
     commSlurm = MAL_SPAWN_COMPLETED;
 
-  } else if(type_creation == COMM_SPAWN_PTHREAD) {
+  } else if(type_creation == COMM_SPAWN_PTHREAD || slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD) {
     commSlurm = MAL_SPAWN_PENDING;
     
     if((spawn_is_single && myId == root) || !spawn_is_single) {
@@ -229,7 +229,7 @@ void proc_adapt_expand(int *numP, int numC, MPI_Comm intercomm, MPI_Comm *comm, 
 
   *numP = numC;
   if(*comm != MPI_COMM_WORLD && *comm != MPI_COMM_NULL) {
-    //MPI_Comm_free(comm); FIXME
+    MPI_Comm_free(comm);
   }
   *comm=new_comm;
 }
@@ -281,8 +281,7 @@ void* thread_work(void* creation_data_arg) {
   
   generic_spawn(creation_data->myId, creation_data->root, slurm_data->spawn_is_single, returned_comm, creation_data->comm);
 
-  //TODO Eliminar el && 0
-  if(slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD && 0) {
+  if(slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD) {
     //MPI_Comm_size(creation_data->comm, &numP);
     numP= 1; //FIXME BORRAR
     if(numP < creation_data->numP_childs) { //Expand
@@ -360,8 +359,10 @@ void generic_spawn(int myId, int root, int spawn_is_single, MPI_Comm *child, MPI
   if(spawn_is_single) {
     single_spawn_connection(myId, root, comm, child);
   } else {
+    int rootBcast = MPI_PROC_NULL;
+    if(myId == root) rootBcast = MPI_ROOT;
     create_processes(myId, root, child, comm);
-    MPI_Bcast(&spawn_is_single, 1, MPI_INT, MPI_ROOT, *child);
+    MPI_Bcast(&spawn_is_single, 1, MPI_INT, rootBcast, *child);
   }
 }
 

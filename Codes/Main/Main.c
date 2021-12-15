@@ -91,7 +91,6 @@ int main(int argc, char *argv[]) {
       get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
       get_benchmark_results(&results); //No se obtiene bien el archivo
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
-      printf("HIJOS 2\n"); fflush(stdout); MPI_Barrier(comm);
 
       if(config_file->comm_tam) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
@@ -115,14 +114,20 @@ int main(int argc, char *argv[]) {
     int spawn_type = COMM_SPAWN_MERGE; // TODO Pasar a CONFIG
     int spawn_is_single = COMM_SPAWN_MULTIPLE; // TODO Pasar a CONFIG
     group->grp = group->grp - 1; // TODO REFACTOR???
+      printf("TEST 3\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     do {
 
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
+      printf("TEST 4\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      if(comm == MPI_COMM_NULL) {
+	      printf("Mi comunicador es nulo?\n");
+      }
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
-      printf("MAIN 2\n"); fflush(stdout); MPI_Barrier(comm);
+      printf("TEST 5\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      //printf("MAIN 2\n"); fflush(stdout); MPI_Barrier(comm);
 
       if(config_file->resizes != group->grp + 1) { 
         set_malleability_configuration(spawn_type, spawn_is_single, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
@@ -133,9 +138,10 @@ int main(int argc, char *argv[]) {
           malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
         }
       }
-      printf("MAIN 3\n"); fflush(stdout); MPI_Barrier(comm);
+        printf("TEST 7\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
       res = work();
+        printf("TEST 8\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
       print_local_results();
     } while((config_file->resizes > group->grp + 1) && (spawn_type == COMM_SPAWN_MERGE || spawn_type == COMM_SPAWN_MERGE_PTHREAD));
@@ -148,7 +154,7 @@ int main(int argc, char *argv[]) {
 
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
     MPI_Finalize();
-    free_application_data();
+//    free_application_data();
 
     return 0;
 }
