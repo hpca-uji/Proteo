@@ -39,8 +39,12 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) {
         pconfig->adr = atoi(value);
-    } else if (MATCH("general", "AIB")) {
+    } else if (MATCH("general", "AIB")) { //TODO Refactor cambiar nombre
         pconfig->aib = atoi(value);
+    } else if (MATCH("general", "CST")) {
+        pconfig->cst = atoi(value);
+    } else if (MATCH("general", "CSS")) {
+        pconfig->css = atoi(value);
     } else if (MATCH("general", "time")) {
         pconfig->general_time = atof(value);
 
@@ -136,8 +140,8 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d, time=%f || grp=%d\n",
-        user_config->resizes, user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->general_time, grp);
+    printf("Config loaded: resizes=%d, matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d, time=%f || grp=%d\n",
+        user_config->resizes, user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, user_config->general_time, grp);
     for(i=0; i<user_config->resizes; i++) {
       printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
         i, user_config->iters[i], user_config->procs[i], user_config->factors[i], user_config->phy_dist[i]);
@@ -161,8 +165,8 @@ void print_config_group(configuration *user_config, int grp) {
       sons = user_config->procs[grp+1];
     }
 
-    printf("Config: matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d time=%f\n",
-        user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->general_time);
+    printf("Config: matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d, time=%f\n",
+        user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, user_config->general_time);
     printf("Config Group: iters=%d, factor=%f, phy=%d, procs=%d, parents=%d, sons=%d\n",
         user_config->iters[grp], user_config->factors[grp], user_config->phy_dist[grp], user_config->procs[grp], parents, sons);
   }
@@ -247,15 +251,15 @@ configuration *recv_config_file(int root, MPI_Comm intercomm) {
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
-  int i, counts = 9;
-  int blocklengths[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 11;
+  int blocklengths[11] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_INT;
-  types[7] = MPI_FLOAT;
-  types[8] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = types[7] = types[8] = MPI_INT;
+  types[9] = MPI_FLOAT;
+  types[10] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -267,8 +271,10 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Get_address(&(config_file->sdr), &displs[4]);
   MPI_Get_address(&(config_file->adr), &displs[5]);
   MPI_Get_address(&(config_file->aib), &displs[6]);
-  MPI_Get_address(&(config_file->general_time), &displs[7]);
-  MPI_Get_address(&(config_file->Top), &displs[8]);
+  MPI_Get_address(&(config_file->css), &displs[7]);
+  MPI_Get_address(&(config_file->cst), &displs[8]);
+  MPI_Get_address(&(config_file->general_time), &displs[9]);
+  MPI_Get_address(&(config_file->Top), &displs[10]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 

@@ -21,6 +21,7 @@ void send_results(results_data *results, int root, int resizes, MPI_Comm interco
 void recv_results(results_data *results, int root, int resizes, MPI_Comm intercomm);
 
 void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr);
+void reset_results_index(results_data *results);
 
 void print_iter_results(results_data results, int last_normal_iter_index);
 void print_global_results(results_data results, int resizes);

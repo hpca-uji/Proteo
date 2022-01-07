@@ -15,7 +15,7 @@ MPI_Comm *returned_comm;
 
 struct Slurm_data {
   char *cmd; // Executable name
-  int qty_procs;
+  int qty_procs, result_procs;
   MPI_Info info;
   int type_creation;
   int spawn_is_single;
@@ -68,12 +68,20 @@ void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_node
  * Devuelve el estado de el procedimiento. Si no devuelve "COMM_FINISHED", es necesario llamar a
  * "check_slurm_comm()".
  */
-int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int type_creation, int spawn_is_single, MPI_Comm comm, MPI_Comm *child) {
-
+int init_slurm_comm(char *argv, int myId, int numP, int numC, int root, int type_dist, int type_creation, int spawn_is_single, MPI_Comm comm, MPI_Comm *child) {
+  int spawn_qty;
   slurm_data = malloc(sizeof(struct Slurm_data));
 
   slurm_data->type_creation = type_creation;
   slurm_data->spawn_is_single = spawn_is_single;
+  slurm_data->result_procs = numC;
+  spawn_qty = numC;
+  if(type_creation == COMM_SPAWN_MERGE || type_creation == COMM_SPAWN_MERGE_PTHREAD) {
+    if (numP < slurm_data->result_procs) {
+      spawn_qty = slurm_data->result_procs - numP;
+    }
+  }
+
   if(type_creation == COMM_SPAWN_SERIAL || slurm_data->type_creation == COMM_SPAWN_MERGE) {
 
     if(myId == root) {
@@ -105,14 +113,13 @@ int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int
   } else if(type_creation == COMM_SPAWN_PTHREAD || slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD) {
     commSlurm = MAL_SPAWN_PENDING;
     
-    if((spawn_is_single && myId == root) || !spawn_is_single) {
+    if((spawn_is_single && myId == root) || !spawn_is_single || (slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD && numP > slurm_data->result_procs)) {
       Creation_data *creation_data = (Creation_data *) malloc(sizeof(Creation_data));
       creation_data->argv = argv;
-      creation_data->numP_childs = numP;
+      creation_data->numP_childs = spawn_qty;
       creation_data->myId = myId;
       creation_data->root = root;
       creation_data->type_dist = type_dist;
-      creation_data->spawn_method = type_creation;
       creation_data->comm = comm;
 
       if(pthread_create(&slurm_thread, NULL, thread_work, (void *)creation_data)) {
@@ -126,44 +133,51 @@ int init_slurm_comm(char *argv, int myId, int numP, int root, int type_dist, int
   return commSlurm;
 }
 
+
 /*
  * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
  * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
-int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm comm, MPI_Comm comm_thread) { // TODO Borrar numP si no se usa
+int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm comm, MPI_Comm comm_thread) {
   int state=-10;
-
   
-  if(slurm_data->type_creation == COMM_SPAWN_PTHREAD && slurm_data->spawn_is_single == 0) {
+  if(slurm_data->type_creation == COMM_SPAWN_PTHREAD || slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD) {
+    if(!slurm_data->spawn_is_single || (slurm_data->type_creation == COMM_SPAWN_MERGE_PTHREAD && numP > slurm_data->result_procs)) {
 
-    MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, comm);
-    if(state != MAL_SPAWN_COMPLETED) return state; // Continue only if asynchronous process creation has ended 
+      MPI_Allreduce(&commSlurm, &state, 1, MPI_INT, MPI_MIN, comm);
+      if(state != MAL_SPAWN_COMPLETED) return state; // Continue only if asynchronous process creation has ended 
 
-    if(pthread_join(slurm_thread, NULL)) {
-      printf("Error al esperar al hilo\n");
-      MPI_Abort(MPI_COMM_WORLD, -1);
-      return -10;
-    }  
-
-    *child = *returned_comm;
-
-  } else if (slurm_data->type_creation == COMM_SPAWN_PTHREAD && slurm_data->spawn_is_single) {
-    MPI_Bcast(&commSlurm, 1, MPI_INT, root, comm);
-    state = commSlurm;
-    if(state == MAL_SPAWN_PENDING) return state; // Continue only if asynchronous process creation has ended 
-
-    if(myId == root) {
       if(pthread_join(slurm_thread, NULL)) {
         printf("Error al esperar al hilo\n");
         MPI_Abort(MPI_COMM_WORLD, -1);
         return -10;
       }  
       *child = *returned_comm;
-    } else {
-      slurm_data->cmd = malloc(1 * sizeof(char));
-      generic_spawn(myId, root, slurm_data->spawn_is_single, child, comm_thread);
-    }
 
+    } else if (slurm_data->spawn_is_single) {
+
+      MPI_Bcast(&commSlurm, 1, MPI_INT, root, comm);
+      state = commSlurm;
+      if(state == MAL_SPAWN_PENDING) return state; // Continue only if asynchronous process creation has ended 
+
+      if(myId == root) {
+        if(pthread_join(slurm_thread, NULL)) {
+          printf("Error al esperar al hilo\n");
+          MPI_Abort(MPI_COMM_WORLD, -1);
+          return -10;
+        }  
+        *child = *returned_comm;
+      } else {
+        slurm_data->cmd = malloc(1 * sizeof(char));
+        slurm_data->info = MPI_INFO_NULL;
+        generic_spawn(myId, root, slurm_data->spawn_is_single, child, comm_thread);
+      }
+
+    } else {
+      printf("Error Check spawn: Configuracion invalida\n");
+      MPI_Abort(MPI_COMM_WORLD, -1);
+      return -10;
+    }
   } else {  
     return commSlurm;
   }
@@ -177,7 +191,6 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm com
 
   return commSlurm;
 }
-
 
 /*
  * Conectar grupo de hijos con grupo de padres
@@ -222,7 +235,6 @@ void malleability_establish_connection(int myId, int root, MPI_Comm *intercomm) 
 void proc_adapt_expand(int *numP, int numC, MPI_Comm intercomm, MPI_Comm *comm, int is_children_group) {
   MPI_Comm new_comm = MPI_COMM_NULL;
 
-  // TODO Indicar por Bcast que es con MERGE
   MPI_Intercomm_merge(intercomm, is_children_group, &new_comm); //El que pone 0 va primero
   //MPI_Comm_free(intercomm); TODO Nueva redistribucion para estos casos y liberar aqui
   // *intercomm = MPI_COMM_NULL;
@@ -290,7 +302,6 @@ void* thread_work(void* creation_data_arg) {
       //*returned_comm = aux_comm;
     }
   }
-  //commSlurm = MAL_SPAWN_COMPLETED; 
 
   free(creation_data);
   pthread_exit(NULL);
@@ -363,7 +374,9 @@ void generic_spawn(int myId, int root, int spawn_is_single, MPI_Comm *child, MPI
     if(myId == root) rootBcast = MPI_ROOT;
     create_processes(myId, root, child, comm);
     MPI_Bcast(&spawn_is_single, 1, MPI_INT, rootBcast, *child);
+    if(*child == MPI_COMM_NULL) {printf("P%d tiene un error --\n", myId); fflush(stdout);} else {printf("P%d guay\n", myId);}
   }
+  commSlurm = MAL_SPAWN_COMPLETED; 
 }
 
 

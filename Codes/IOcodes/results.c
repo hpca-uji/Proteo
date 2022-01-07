@@ -107,6 +107,19 @@ void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr)
   }
 }
 
+/*
+ * Pone el indice del siguiente elemento a escribir a 0 para los vectores
+ * que tengan que ver con las iteraciones.
+ * Por tanto, todos los anteriores valores de esos vectores pasan a ser invalidos
+ * si se intentan acceder desde un código externo.
+ *
+ * Solo es necesario llamar a esta funcion cuando se ha realizado una
+ * expansion con el metodo MERGE
+ */
+void reset_results_index(results_data *results) {
+  results->iter_index = 0;
+}
+
 
 //======================================================||
 //======================================================||

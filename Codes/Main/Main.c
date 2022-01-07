@@ -15,18 +15,6 @@
 #define ROOT 0
 
 int work();
-/*void Sons_init();
-
-int checkpoint(int iter, int state, MPI_Request **comm_req);
-int TC(int numS, int comm_type);
-int start_redistribution(int iter, int numS, MPI_Request **comm_req);
-int check_redistribution(int iter, MPI_Request **comm_req);
-int end_redistribution(int iter);
-
-int thread_creation();
-int thread_check(int iter);
-void* thread_async_work(void* void_arg);
-*/
 void iterate(double *matrix, int n, int async_comm);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
@@ -90,71 +78,70 @@ int main(int argc, char *argv[]) {
       get_malleability_user_comm(&comm);
       get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
       get_benchmark_results(&results); //No se obtiene bien el archivo
-      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
+      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
 
       if(config_file->comm_tam) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
       }
 
-      int entries;
       void *value = NULL;
-
-      malleability_get_entries(&entries, 1, 1);
-
       malleability_get_data(&value, 0, 1, 1);
       group->grp = *((int *)value);
       free(value);
       malleability_get_data(&value, 1, 1, 1);
       run_id = *((int *)value);
       free(value);
+      
+      malleability_get_data(&value, 2, 1, 1);
+      group->iter_start = *((int *)value);
+      free(value);
 
       group->grp = group->grp + 1;
     }
 
-    int spawn_type = COMM_SPAWN_MERGE; // TODO Pasar a CONFIG
-    int spawn_is_single = COMM_SPAWN_MULTIPLE; // TODO Pasar a CONFIG
+    //config_file->cst = COMM_SPAWN_MERGE; // TODO Pasar a CONFIG
+    //config_file->css = COMM_SPAWN_MULTIPLE; // TODO Pasar a CONFIG
+
     group->grp = group->grp - 1; // TODO REFACTOR???
-      printf("TEST 3\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     do {
 
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
-      printf("TEST 4\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-      if(comm == MPI_COMM_NULL) {
-	      printf("Mi comunicador es nulo?\n");
-      }
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
-      printf("TEST 5\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-      //printf("MAIN 2\n"); fflush(stdout); MPI_Barrier(comm);
 
       if(config_file->resizes != group->grp + 1) { 
-        set_malleability_configuration(spawn_type, spawn_is_single, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
+        set_malleability_configuration(config_file->cst, config_file->css, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
         set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
 
         if(group->grp == 0) {
           malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
           malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+          malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
         }
       }
-        printf("TEST 7\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
       res = work();
-        printf("TEST 8\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
       print_local_results();
-    } while((config_file->resizes > group->grp + 1) && (spawn_type == COMM_SPAWN_MERGE || spawn_type == COMM_SPAWN_MERGE_PTHREAD));
+      reset_results_index(results);
+    } while((config_file->resizes > group->grp + 1) && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD));
 
 
     if(res) { // Se he llegado al final de la aplicacion
-//      MPI_Barrier(comm); FIXME?
+      MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
 
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
+
+    if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
+      MPI_Comm_free(&comm);
+    }
+
     MPI_Finalize();
-//    free_application_data();
+    free_application_data();
 
     return 0;
 }
@@ -181,20 +168,12 @@ int work() {
   maxiter = config_file->iters[group->grp];
   //initMatrix(&matrix, config_file->matrix_tam);
   state = MAL_NOT_STARTED;
-
-  if(group->grp == 0) {
-    malleability_add_data(&iter, 1, MAL_INT, 1, 1);
-  } else {
-    void *value = NULL;
-    malleability_get_data(&value, 2, 1, 1);
-    group->iter_start = *((int *)value);
-    free(value);
-  }
-
+  
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(matrix, config_file->matrix_tam, state);
   }
+
   if(config_file->iters[group->grp] == iter && config_file->resizes != group->grp + 1)
     state = malleability_checkpoint();
 
@@ -204,6 +183,7 @@ int work() {
     iter++;
     state = malleability_checkpoint();
   }
+  group->iter_start = iter;
   
   if(config_file->resizes - 1 == group->grp) res=1;
   return res;

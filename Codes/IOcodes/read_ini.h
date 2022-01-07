@@ -8,6 +8,7 @@ typedef struct
     int resizes;
     int actual_resize;
     int matrix_tam, comm_tam, sdr, adr;
+    int css, cst;
     int aib;
     float general_time;
     double Top;
