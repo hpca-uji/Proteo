@@ -36,10 +36,13 @@ else
   iters_first_group=$first_iter
 fi
 max_procs=$(($node_qty * 20))
-procs_array=(2 10)
+procs_array=(1 10)
 #percs_array=(0 25 50 75 100)
 percs_array=(0)
-at_array=(3)
+at_array=(0)
+dist_array=(cpu)
+cst_array=(0 1 2 3)
+css_array=(0 1)
 
 #Obtener cantidades de procesos posibles a ejecutar
 i=0
@@ -66,39 +69,57 @@ i=0
 j=0
 for procs_parents in "${procs_array[@]}"
 do
+  node_qty1=$(($procs_parents / 20))
   for procs_sons in "${procs_array[@]}"
   do
-    for adr_perc in "${percs_array[@]}"
-    do
+    node_qty2=$(($procs_sons / 20))
+    if [ $node_qty1 -lt $node_qty2 ]
+    then
+      node_qty1=$node_qty2
+    fi
+    if [ $node_qty1 -eq 0 ]
+    then
+      node_qty1=1
+    fi
 
-      for phy_dist in cpu node
+    if [ $procs_parents -ne $procs_sons ]
+    then
+      for adr_perc in "${percs_array[@]}"
       do
-
-        for ibarrier_use in "${at_array[@]}"
+        for phy_dist in "${dist_array[@]}"
         do
-          i=$(($i + 1))
+          for ibarrier_use in "${at_array[@]}"
+          do
+            for cst in "${cst_array[@]}"
+            do
+              for css in "${css_array[@]}"
+              do
+                i=$(($i + 1))
 
-	  # Crear directorio para esta ejecucion
-          cd $dir$ResultsDir$name_res
-	  mkdir Run$i
-	  cd Run$i
+	        # Crear directorio para esta ejecucion
+                cd $dir$ResultsDir$name_res
+	        mkdir Run$i
+                cd Run$i
 
-          # Crear archivo de configuracion
-	  echo "Config $procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- RUN $i"
-          array0=($iters_first_group $procs_parents $phy_dist)
-          array=("${array0[@]}")
-          array0=($iters $procs_sons $phy_dist)
-          array+=("${array0[@]}")
-          python3 $dir$execDir/./create_ini.py config$i.ini 1 $matrix_tam $comm_tam $N_qty $adr_perc $ibarrier_use $time $proc_init "${array[@]}"
-
+                # Crear archivo de configuracion
+                echo "Config $procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- $cst -- $css -- RUN $i"
+                array0=($iters_first_group $procs_parents $phy_dist)
+                array=("${array0[@]}")
+                array0=($iters $procs_sons $phy_dist)
+                array+=("${array0[@]}")
+                python3 $dir$execDir/./create_ini.py config$i.ini 1 $matrix_tam $comm_tam $N_qty $adr_perc $ibarrier_use $cst $css $time $proc_init "${array[@]}"
+  	      done
+            done
+          done
         done
-      done
-    done
-    start_i=$(($j * ${#percs_array[@]} * ${#at_array[@]} * 2)) #TODO modficar utlimo valor conforme cambie phy_dist
+      done #adr_perc
+
+    start_i=$(($j * ${#percs_array[@]} * ${#dist_array[@]} * ${#at_array[@]} * ${#cst_array[@]} * ${#css_array[@]}))
     # LANZAR SCRIPT
     echo $aux
-    sbatch -N $node_qty $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $start_i $procs_parents $procs_sons
+    sbatch -N $node_qty1 $dir$execDir./arrayRun.sh $dir$ResultsDir$name_res $start_i $procs_parents $procs_sons
     j=$(($j + 1))
+    fi
   done
 done
 

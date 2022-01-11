@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
     }
     free_application_data();
 
-    if(group->myId == ROOT) MPI_Abort(MPI_COMM_WORLD, 0);
+    if(group->myId == ROOT) MPI_Abort(MPI_COMM_WORLD, -100);
     MPI_Finalize();
 
     return 0;
