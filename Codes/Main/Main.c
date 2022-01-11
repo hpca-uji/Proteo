@@ -99,9 +99,6 @@ int main(int argc, char *argv[]) {
       group->grp = group->grp + 1;
     }
 
-    //config_file->cst = COMM_SPAWN_MERGE; // TODO Pasar a CONFIG
-    //config_file->css = COMM_SPAWN_MULTIPLE; // TODO Pasar a CONFIG
-
     group->grp = group->grp - 1; // TODO REFACTOR???
     do {
 
@@ -123,13 +120,14 @@ int main(int argc, char *argv[]) {
       }
 
       res = work();
+      if(res == MAL_ZOMBIE) break;
 
       print_local_results();
       reset_results_index(results);
     } while((config_file->resizes > group->grp + 1) && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD));
 
 
-    if(res) { // Se he llegado al final de la aplicacion
+    if(res==1) { // Se he llegado al final de la aplicacion
       MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
@@ -139,9 +137,10 @@ int main(int argc, char *argv[]) {
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
     }
-
-    MPI_Finalize();
     free_application_data();
+
+    if(group->myId == ROOT) MPI_Abort(MPI_COMM_WORLD, 0);
+    MPI_Finalize();
 
     return 0;
 }
@@ -186,6 +185,7 @@ int work() {
   group->iter_start = iter;
   
   if(config_file->resizes - 1 == group->grp) res=1;
+  if(state == MAL_ZOMBIE) res=state;
   return res;
 }
 

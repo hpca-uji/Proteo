@@ -2,6 +2,7 @@
 #include "malleabilityManager.h"
 #include "malleabilityStates.h"
 #include "malleabilityTypes.h"
+#include "malleabilityZombies.h"
 #include "ProcessDist.h"
 #include "CommDist.h"
 
@@ -18,6 +19,7 @@ int spawn_step();
 int start_redistribution();
 int check_redistribution();
 int end_redistribution();
+int shrink_redistribution();
 
 int thread_creation();
 int thread_check();
@@ -36,7 +38,7 @@ typedef struct {
   results_data *results;
 } malleability_config_t;
 
-typedef struct {
+typedef struct { //FIXME numC_spawned no se esta usando
   int myId, numP, numC, numC_spawned, root, root_parents;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm;
@@ -93,6 +95,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
     Children_init();
     return MALLEABILITY_CHILDREN;
   }
+
+  zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;
 }
 
@@ -111,6 +115,10 @@ void free_malleability() {
   //MPI_Comm_free(&(mall->thread_comm));
   free(mall);
   free(mall_conf);
+
+  zombies_awake();
+  zombies_service_free();
+
   state = MAL_UNRESERVED;
 }
 
@@ -136,7 +144,7 @@ int malleability_checkpoint() {
   if(state == MAL_NOT_STARTED) {
     // Comprobar si se tiene que realizar un redimensionado
     //if(CHECK_RMS()) {return MAL_DENIED;}
-
+    
     state = spawn_step();
 
     if (state == MAL_SPAWN_COMPLETED){
@@ -148,7 +156,6 @@ int malleability_checkpoint() {
     //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
     if (state == MAL_SPAWN_COMPLETED) {  
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-        printf("TEST PADRES\n");
       state = start_redistribution();
     }
 
@@ -427,7 +434,7 @@ void Children_init() {
     MPI_Comm_dup(mall->comm, &aux);
     mall->thread_comm = aux;
     MPI_Comm_dup(mall->comm, &aux);
-    mall->user_comm = aux;   
+    mall->user_comm = aux;
   } 
 
   MPI_Comm_disconnect(&(mall->intercomm));
@@ -445,7 +452,13 @@ void Children_init() {
  */
 int spawn_step(){
   mall_conf->results->spawn_start = MPI_Wtime();
-  state = init_slurm_comm(mall->name_exec, mall->myId, mall->numP, mall->numC_spawned, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
+
+  if((mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) && mall->numP > mall->numC) {
+    state = shrink_redistribution();
+    return state; 
+  }
+
+  state = init_slurm_comm(mall->name_exec, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
 
   if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
@@ -456,44 +469,6 @@ int spawn_step(){
   return state;
 }
 
-/*
- * TODO Si los eliminados pertenecen al mismo COMMWORLD
- * eliminar del todo
- * TODO Eliminar los procesos por encima de numC y modificar numP
- */
-/*
-void malleability_zombies(int *pids, int *offset_pids) {
-
-  // Zombies treatment
-  int pid = getpid();
-  int *pids_counts = malloc(*numP * sizeof(int));
-  int *pids_displs = malloc(*numP * sizeof(int));
-  int count=1;
-  if(myId < new_numP) {
-    count = 0;
-    if(myId == mall->root) {
-      int i;
-      for(i=0; i < new_numP; i++) {
-        pids_counts[i] = 0;
-      }
-      for(i=new_numP; i<*numP; i++) {
-        pids_counts[i] = 1;
-	pids_displs[i] = (i + *offset_pids) - new_numP;
-      }
-      *offset_pids += *numP - new_numP;
-    }
-  }
-
-  MPI_Gatherv(&pid, count, MPI_INT, pids, pids_counts, pids_displs, MPI_INT, ROOT, *comm);
-  if(myId == ROOT) {
-    int i;
-    for(i=0;i<*offset_pids;i++){
-      printf("PID[%d]=%d\n",i,pids[i]);
-    }
-  }
-    //free pids_counts, pids_displs
-}
-*/
 
 /*
  * Comienza la redistribucion de los datos con el nuevo grupo de procesos.
@@ -513,14 +488,10 @@ int start_redistribution() {
   int rootBcast = MPI_PROC_NULL;
   if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
-    printf("TEST EXPAND PADRES 1\n"); 
-    if(mall->intercomm == MPI_COMM_NULL) {printf("P%d tiene un error\n", mall->myId);}
-    fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->root), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->numP), 1, MPI_INT, rootBcast, mall->intercomm);
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
-    printf("TEST EXPAND PADRES 2\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     mall_conf->results->async_start = MPI_Wtime();
@@ -614,25 +585,18 @@ int end_redistribution() {
     
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
     double time_adapt = MPI_Wtime();
-    if(mall->numP > mall->numC) { //Shrink
-      //proc_adapt_shrink( numC, MPI_Comm *comm, mall->myId);
-      //malleability_zombies()
-      if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
-        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt;
 
-    } else {    
-      proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_NOT_CHILDREN);
+    proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_NOT_CHILDREN);
 
-      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
 
-      MPI_Comm_dup(mall->comm, &aux);
-      mall->thread_comm = aux;
-      MPI_Comm_dup(mall->comm, &aux);
-      mall->user_comm = aux;
-      if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
-        mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_adapt;
+    MPI_Comm_dup(mall->comm, &aux);
+    mall->thread_comm = aux;
+    MPI_Comm_dup(mall->comm, &aux);
+    mall->user_comm = aux;
+    mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_adapt;
 	
-    }
+    
 //    result = MAL_DIST_ADAPTED;
   }
   result = MAL_DIST_COMPLETED;
@@ -640,6 +604,28 @@ int end_redistribution() {
   MPI_Comm_disconnect(&(mall->intercomm));
   state = MAL_NOT_STARTED;
   return result;
+}
+
+int shrink_redistribution() {
+    double time_adapt = MPI_Wtime();
+    MPI_Comm aux_comm;
+    MPI_Comm_dup(mall->comm, &aux_comm);
+
+    proc_adapt_shrink( mall->numC, &(mall->comm), mall->myId);
+    zombies_collect_suspended(aux_comm, mall->myId, mall->numP, mall->numC, mall->root);
+    MPI_Comm_free(&aux_comm);
+    
+    if(mall->myId < mall->numC) {
+      MPI_Comm_dup(mall->comm, &aux_comm);
+      mall->thread_comm = aux_comm;
+      MPI_Comm_dup(mall->comm, &aux_comm);
+      mall->user_comm = aux_comm;
+
+      mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt;
+      return MAL_DIST_COMPLETED; //FIXME Refactor Poner a SPAWN_COMPLETED
+    } else {
+      return MAL_ZOMBIE;
+    }
 }
 
 // TODO MOVER A OTRO LADO??

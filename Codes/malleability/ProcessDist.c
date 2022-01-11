@@ -279,7 +279,6 @@ void proc_adapt_shrink(int numC, MPI_Comm *comm, int myId) {
  */
 void* thread_work(void* creation_data_arg) {
   int numP;
-  MPI_Comm aux_comm;
   Creation_data *creation_data = (Creation_data*) creation_data_arg;
   returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  
@@ -374,7 +373,6 @@ void generic_spawn(int myId, int root, int spawn_is_single, MPI_Comm *child, MPI
     if(myId == root) rootBcast = MPI_ROOT;
     create_processes(myId, root, child, comm);
     MPI_Bcast(&spawn_is_single, 1, MPI_INT, rootBcast, *child);
-    if(*child == MPI_COMM_NULL) {printf("P%d tiene un error --\n", myId); fflush(stdout);} else {printf("P%d guay\n", myId);}
   }
   commSlurm = MAL_SPAWN_COMPLETED; 
 }

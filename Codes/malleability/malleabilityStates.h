@@ -1,5 +1,6 @@
 #define MAL_UNRESERVED -1
 #define MAL_DENIED -2
+#define MAL_ZOMBIE -3
 #define MAL_NOT_STARTED 0
 #define MAL_SPAWN_PENDING 1
 #define MAL_SPAWN_COMPLETED 2
