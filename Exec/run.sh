@@ -46,10 +46,19 @@ css_array=(0 1)
 
 #Obtener cantidades de procesos posibles a ejecutar
 i=0
+#while [[ $value -lt $max_procs ]]
+#do
+#  i=$(($i + 1))
+#  value=$((20 * $i))
+#  procs_array=(${procs_array[@]} $value)
+#done
+
+i=0
 while [[ $value -lt $max_procs ]]
 do
   i=$(($i + 1))
-  value=$((20 * $i))
+  value=$((2 ** $i))
+  value=$(($value * 10))
   procs_array=(${procs_array[@]} $value)
 done
 

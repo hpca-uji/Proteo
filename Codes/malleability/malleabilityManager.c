@@ -423,9 +423,6 @@ void Children_init() {
     } 
   }
 
-  // Guardar los resultados de esta transmision
-  recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
-
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
     proc_adapt_expand(&(mall->numP), mall->numP+numP_parents, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN); //TODO Que valor se pasa?
 
@@ -437,7 +434,11 @@ void Children_init() {
     mall->user_comm = aux;
   } 
 
+  // Guardar los resultados de esta transmision
+  recv_results(mall_conf->results, mall->root, mall_conf->config_file->resizes, mall->intercomm);
+
   MPI_Comm_disconnect(&(mall->intercomm));
+
 }
 
 //======================================================||
@@ -457,7 +458,7 @@ int spawn_step(){
     state = shrink_redistribution();
     return state; 
   }
-
+ 
   state = init_slurm_comm(mall->name_exec, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
 
   if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
@@ -491,6 +492,7 @@ int start_redistribution() {
   MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->root), 1, MPI_INT, rootBcast, mall->intercomm);
   MPI_Bcast(&(mall->numP), 1, MPI_INT, rootBcast, mall->intercomm);
+
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
@@ -569,8 +571,7 @@ int end_redistribution() {
   MPI_Comm aux;
   if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
-  if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
-    mall_conf->results->sync_start = MPI_Wtime();
+  if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
@@ -580,8 +581,6 @@ int end_redistribution() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, rootBcast, mall->intercomm);
     } 
   }
-
-  send_results(mall_conf->results, rootBcast, mall_conf->config_file->resizes, mall->intercomm);
     
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
     double time_adapt = MPI_Wtime();
@@ -599,6 +598,8 @@ int end_redistribution() {
     
 //    result = MAL_DIST_ADAPTED;
   }
+
+  send_results(mall_conf->results, rootBcast, mall_conf->config_file->resizes, mall->intercomm);
   result = MAL_DIST_COMPLETED;
 
   MPI_Comm_disconnect(&(mall->intercomm));

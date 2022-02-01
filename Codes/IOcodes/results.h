@@ -14,8 +14,8 @@ typedef struct {
   double sync_start, sync_end,  *sync_time;
   double async_start, async_end, *async_time;
   double exec_start, exec_time;
+  //Overcharge time is time spent in malleability that is from IO modules
 } results_data;
-
 
 void send_results(results_data *results, int root, int resizes, MPI_Comm intercomm);
 void recv_results(results_data *results, int root, int resizes, MPI_Comm intercomm);

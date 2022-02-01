@@ -75,9 +75,10 @@ int main(int argc, char *argv[]) {
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
     } else { //Init hijos
+
       get_malleability_user_comm(&comm);
-      get_benchmark_configuration(&config_file); //No se obtiene bien el archivo
-      get_benchmark_results(&results); //No se obtiene bien el archivo
+      get_benchmark_configuration(&config_file);
+      get_benchmark_results(&results);
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
 
       if(config_file->comm_tam) {
@@ -131,15 +132,16 @@ int main(int argc, char *argv[]) {
       MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
-
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
     }
-    free_application_data();
 
-    if(group->myId == ROOT) MPI_Abort(MPI_COMM_WORLD, -100);
+    if(group->myId == ROOT && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD)) {
+      MPI_Abort(MPI_COMM_WORLD, -100);
+    }
+    free_application_data();
     MPI_Finalize();
 
     return 0;
@@ -173,16 +175,19 @@ int work() {
     iterate(matrix, config_file->matrix_tam, state);
   }
 
-  if(config_file->iters[group->grp] == iter && config_file->resizes != group->grp + 1)
+  if(config_file->resizes != group->grp + 1)
     state = malleability_checkpoint();
 
   iter = 0;
   while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING) {
-    iterate(matrix, config_file->matrix_tam, state);
-    iter++;
+    if(iter < config_file->iters[group->grp+1]) {
+      iterate(matrix, config_file->matrix_tam, state);
+      iter++;
+      group->iter_start = iter;
+    }
+
     state = malleability_checkpoint();
   }
-  group->iter_start = iter;
   
   if(config_file->resizes - 1 == group->grp) res=1;
   if(state == MAL_ZOMBIE) res=state;
@@ -208,13 +213,14 @@ void iterate(double *matrix, int n, int async_comm) {
   int i, operations = 0;
   double aux = 0;
 
-  start_time = actual_time = MPI_Wtime();
+  start_time = MPI_Wtime();
 
   operations = time / Top; //FIXME Calcular una sola vez
+  
   for(i=0; i < operations; i++) {
     aux += computePiSerial(n);
   }
-
+  
   if(config_file->comm_tam) {
     MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, comm);
   }
@@ -277,6 +283,7 @@ int print_local_results() {
     print_iter_results(*results, config_file->iters[group->grp] -1);
     free(file_name);
 
+    fflush(stdout);
     close(1);
     dup(ptr_out);
   }
@@ -303,6 +310,7 @@ int print_final_results() {
       create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
       print_global_results(*results, config_file->resizes);
+      fflush(stdout);
       free(file_name);
       
     }
@@ -396,7 +404,6 @@ void free_application_data() {
     free(results);
   }
   free(group);
-
 }
 
 

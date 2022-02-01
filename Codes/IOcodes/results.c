@@ -240,6 +240,6 @@ void free_results_data(results_data *results) {
 
       free(results->iters_time);
       free(results->iters_type);
-    }
-    //free(*results); FIXME Borrar
+      }
+      //free(*results); FIXME Borrar
 }
