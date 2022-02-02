@@ -151,7 +151,7 @@ int malleability_checkpoint() {
       state = start_redistribution();
     }
 
-  } else if(state == MAL_SPAWN_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
+  } else if(state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
     state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm);
     //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
     if (state == MAL_SPAWN_COMPLETED) {  

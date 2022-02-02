@@ -33,6 +33,7 @@ typedef struct {
 
 //--------------PRIVATE SPAWN TYPE DECLARATIONS---------------//
 void* thread_work(void* creation_data_arg);
+void* thread_join_single(void* creation_data_arg);
 
 //--------------PRIVATE DECLARATIONS---------------//
 void processes_dist(char *argv, int numP_childs, int already_created, int type_dist);
@@ -151,21 +152,34 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm com
     } else if (slurm_data->spawn_is_single) {
 
       MPI_Bcast(&commSlurm, 1, MPI_INT, root, comm);
-      state = commSlurm;
-      if(state != MAL_SPAWN_SINGLE_PENDING) return state; // Continue only if asynchronous process creation has ended 
+      if(commSlurm == MAL_SPAWN_SINGLE_START) { // Non-root processes join root to finalize the spawn
+        commSlurm = MAL_SPAWN_SINGLE_PENDING;
+        if(myId != root) {
+          Creation_data *creation_data = (Creation_data *) malloc(sizeof(Creation_data));
+          creation_data->argv = NULL;
+          creation_data->numP_childs = -1;
+          creation_data->already_created = -1;
+          creation_data->myId = myId;
+          creation_data->root = root;
+          creation_data->type_dist = -1;
+          creation_data->comm = comm_thread;
 
-      if(myId == root) {
-        if(pthread_join(slurm_thread, NULL)) {
-          printf("Error al esperar al hilo\n");
-          MPI_Abort(MPI_COMM_WORLD, -1);
-          return -10;
-        }  
-        *child = *returned_comm;
-      } else {
-        slurm_data->cmd = malloc(1 * sizeof(char));
-        slurm_data->info = MPI_INFO_NULL;
-        generic_spawn(myId, root, slurm_data->spawn_is_single, child, comm_thread);
+          if(pthread_create(&slurm_thread, NULL, thread_join_single, (void *)creation_data)) {
+            printf("Error al crear el hilo de apoyo\n");
+            MPI_Abort(MPI_COMM_WORLD, -1);
+            return -1;
+          }
+	}
       }
+
+      if(commSlurm != MAL_SPAWN_COMPLETED) return commSlurm; // Continue only if asynchronous process creation has ended 
+
+      if(pthread_join(slurm_thread, NULL)) {
+        printf("Error al esperar al hilo\n");
+        MPI_Abort(MPI_COMM_WORLD, -1);
+        return -10;
+      }
+      *child = *returned_comm;
 
     } else {
       printf("Error Check spawn: Configuracion invalida\n");
@@ -288,6 +302,23 @@ void* thread_work(void* creation_data_arg) {
   pthread_exit(NULL);
 }
 
+
+/*
+ * Funcion llamada por un hilo para que este finalize junto al proceso raiz
+ * la creacion de procesos single.
+ *
+ * Una vez se ha realizado la union con los hijos, se avisa al hilo maestro.
+ */
+void* thread_join_single(void* creation_data_arg) {
+  Creation_data *creation_data = (Creation_data*) creation_data_arg;
+  returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
+  
+  generic_spawn(creation_data->myId, creation_data->root, slurm_data->spawn_is_single, returned_comm, creation_data->comm);
+
+  free(creation_data);
+  pthread_exit(NULL);
+}
+
 //--------------PRIVATE SPAWN CREATION FUNCTIONS---------------//
 
 /*
@@ -375,7 +406,7 @@ void single_spawn_connection(int myId, int root, MPI_Comm comm, MPI_Comm *child)
 
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, root, 130, *child, MPI_STATUS_IGNORE);
-    commSlurm = MAL_SPAWN_SINGLE_PENDING; 
+    commSlurm = MAL_SPAWN_SINGLE_START; // Indicate other processes to join root to end spawn procedure
   } else {
     port_name = malloc(1);
   }

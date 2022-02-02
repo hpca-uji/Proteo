@@ -179,13 +179,12 @@ int work() {
     state = malleability_checkpoint();
 
   iter = 0;
-  while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING) {
+  while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) {
     if(iter < config_file->iters[group->grp+1]) {
       iterate(matrix, config_file->matrix_tam, state);
       iter++;
       group->iter_start = iter;
     }
-
     state = malleability_checkpoint();
   }
   
@@ -227,7 +226,7 @@ void iterate(double *matrix, int n, int async_comm) {
 
   actual_time = MPI_Wtime(); // Guardar tiempos
   // TODO Que diferencie entre ambas en el IO
-  if(async_comm == MAL_DIST_PENDING || async_comm == MAL_SPAWN_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+  if(async_comm == MAL_DIST_PENDING || async_comm == MAL_SPAWN_PENDING || async_comm == MAL_SPAWN_SINGLE_PENDING) { // Se esta realizando una redistribucion de datos asincrona
     operations=0;
   }
 
