@@ -6,7 +6,7 @@
 #include "malleabilityStates.h"
 
 int init_slurm_comm(char *argv, int myId, int numP, int numC, int root, int type_dist, int type_creation, int spawn_is_single, MPI_Comm comm, MPI_Comm *child);
-int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm comm, MPI_Comm comm_thread);
+int check_slurm_comm(int myId, int root, int numP, int outside_state, MPI_Comm *child, MPI_Comm comm, MPI_Comm comm_thread);
 
 void malleability_establish_connection(int myId, int root, MPI_Comm *intercomm);
 

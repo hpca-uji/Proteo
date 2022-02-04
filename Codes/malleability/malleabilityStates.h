@@ -1,3 +1,4 @@
+//States
 #define MAL_UNRESERVED -1
 #define MAL_DENIED -2
 #define MAL_ZOMBIE -3
@@ -10,6 +11,9 @@
 #define MAL_DIST_COMPLETED 6
 #define MAL_DIST_ADAPTED 7
 
+
+#define MAL_APP_EXECUTING 0
+#define MAL_APP_ENDED 1
 
 // TODO Refactor
 #define COMM_PHY_NODES 1

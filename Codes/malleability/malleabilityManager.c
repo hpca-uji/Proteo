@@ -49,6 +49,7 @@ typedef struct { //FIXME numC_spawned no se esta usando
 } malleability_t;
 
 int state = MAL_UNRESERVED; //FIXME Mover a otro lado
+int outside_state = MAL_APP_EXECUTING;
 
 malleability_config_t *mall_conf;
 malleability_t *mall;
@@ -59,7 +60,14 @@ malleability_data_t *rep_a_data;
 malleability_data_t *dist_a_data;
 
 /*
- * TODO HACER
+ * Inicializa la reserva de memoria para el modulo de maleabilidad
+ * creando todas las estructuras necesarias y copias de comunicadores
+ * para no interferir en la aplicación.
+ *
+ * Si es llamada por un grupo de procesos creados de forma dinámica,
+ * inicializan la comunicacion con sus padres. En este caso, al terminar 
+ * la comunicacion los procesos hijo estan preparados para ejecutar la
+ * aplicacion.
  */
 int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec) {
   MPI_Comm dup_comm, thread_comm;
@@ -100,6 +108,11 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   return MALLEABILITY_NOT_CHILDREN;
 }
 
+/*
+ * Elimina toda la memoria reservado por el modulo
+ * de maleabilidad y asegura que los zombies
+ * despierten si los hubiese.
+ */
 void free_malleability() {	
   free_malleability_data_struct(rep_s_data);
   free_malleability_data_struct(rep_a_data);
@@ -120,6 +133,15 @@ void free_malleability() {
   zombies_service_free();
 
   state = MAL_UNRESERVED;
+}
+
+/*
+ * FIXME Deprecated -- Borrar si al final no es necesario
+ * -- Es para evitar casos asincronos donde la aplicacion ha terminado
+ * pero la maleabilidad sigue en curso
+ */
+void indicate_ending_malleability(int new_outside_state) {
+  outside_state = new_outside_state;
 }
 
 /*
@@ -152,10 +174,10 @@ int malleability_checkpoint() {
     }
 
   } else if(state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm);
-    //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
+    state = check_slurm_comm(mall->myId, mall->root, mall->numP, outside_state, &(mall->intercomm), mall->comm, mall->thread_comm);
     if (state == MAL_SPAWN_COMPLETED) {  
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
       state = start_redistribution();
     }
 
@@ -424,7 +446,7 @@ void Children_init() {
   }
 
   if(mall_conf->spawn_type == COMM_SPAWN_MERGE || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
-    proc_adapt_expand(&(mall->numP), mall->numP+numP_parents, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN); //TODO Que valor se pasa?
+    proc_adapt_expand(&(mall->numP), mall->numP+numP_parents, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN);
 
     if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
 
@@ -544,6 +566,7 @@ int check_redistribution() {
     printf("P%d aborting -- Test Async\n", mall->myId);
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
+  //FIXME No se tiene en cuenta el estado MAL_APP_ENDED
 
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MAL_DIST_PENDING; // Continue only if asynchronous send has ended 
@@ -660,6 +683,7 @@ int thread_check() {
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
   MPI_Allreduce(&state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
   if(all_completed != MAL_DIST_COMPLETED) return MAL_DIST_PENDING; // Continue only if asynchronous send has ended 
+  //FIXME No se tiene en cuenta el estado MAL_APP_ENDED
 
   if(pthread_join(mall->async_thread, NULL)) {
     printf("Error al esperar al hilo\n");

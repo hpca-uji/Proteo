@@ -10,6 +10,7 @@
 
 int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec);
 void free_malleability();
+void indicate_ending_malleability(int new_outside_state);
 int malleability_checkpoint();
 void set_benchmark_grp(int grp);
 

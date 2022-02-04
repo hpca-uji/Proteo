@@ -5,10 +5,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "computing_func.h"
-//#include "../IOcodes/read_ini.h"
-//#include "../IOcodes/results.h"
-//#include "../malleability/ProcessDist.h"
-#include "../malleability/CommDist.h" //TODO Refactor para que no haga falta
+#include "../malleability/CommDist.h"
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
 
@@ -65,7 +62,7 @@ int main(int argc, char *argv[]) {
     init_group_struct(argv, argc, myId, numP);
     im_child = init_malleability(myId, numP, ROOT, comm, argv[0]);
 
-    if(!im_child) {
+    if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
 
       set_benchmark_grp(group->grp);
@@ -85,6 +82,8 @@ int main(int argc, char *argv[]) {
         group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
       }
 
+      // TODO Refactor - Que sea una unica funcion
+      // Obtiene las variables que van a utilizar los hijos
       void *value = NULL;
       malleability_get_data(&value, 0, 1, 1);
       group->grp = *((int *)value);
@@ -184,6 +183,7 @@ int work() {
       iterate(matrix, config_file->matrix_tam, state);
       iter++;
       group->iter_start = iter;
+      if(iter == config_file->iters[group->grp+1]) indicate_ending_malleability(MAL_APP_ENDED);
     }
     state = malleability_checkpoint();
   }
