@@ -75,7 +75,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(&(results->sync_start), &displs[0]);
   MPI_Get_address(&(results->async_start), &displs[1]);
   MPI_Get_address(&(results->exec_start), &displs[2]);
-  MPI_Get_address(&(results->spawn_thread_time[0]), &displs[3]);
+  MPI_Get_address(&(results->spawn_real_time[0]), &displs[3]);
   MPI_Get_address(&(results->spawn_time[0]), &displs[4]); //TODO Revisar si se puede simplificar //FIXME Si hay mas de un spawn error?
 
   for(i=0;i<counts;i++) displs[i] -= dir;
@@ -162,14 +162,14 @@ void print_iter_results(results_data results, int last_normal_iter_index) {
 void print_global_results(results_data results, int resizes) {
   int i;
 
-  printf("Tspawn: ");
+  printf("Tspawn: ");  // FIXME REFACTOR Cambiar nombre a T_resize_real
   for(i=0; i< resizes - 1; i++) {
     printf("%lf ", results.spawn_time[i]);
   }
 
-  printf("\nTthread: ");
+  printf("\nTspawn_real: "); // FIXME REFACTOR Cambiar nombre a T_resize
   for(i=0; i< resizes - 1; i++) {
-    printf("%lf ", results.spawn_thread_time[i]);
+    printf("%lf ", results.spawn_real_time[i]);
   }
 
   printf("\nTsync: ");
@@ -201,7 +201,7 @@ void init_results_data(results_data *results, int resizes, int iters_size) {
   //*results = malloc(1 * sizeof(results_data)); FIXME Borrar
 
   results->spawn_time = calloc(resizes, sizeof(double));
-  results->spawn_thread_time = calloc(resizes, sizeof(double));
+  results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
 
@@ -234,7 +234,7 @@ void realloc_results_iters(results_data *results, int needed) {
 void free_results_data(results_data *results) {
     if(results != NULL) {
       free(results->spawn_time);
-      free(results->spawn_thread_time);
+      free(results->spawn_real_time);
       free(results->sync_time);
       free(results->async_time);
 

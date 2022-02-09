@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH --exclude=c01,c00
+#SBATCH --exclude=c01,c00,c02
 
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"

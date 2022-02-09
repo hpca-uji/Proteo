@@ -49,7 +49,6 @@ typedef struct { //FIXME numC_spawned no se esta usando
 } malleability_t;
 
 int state = MAL_UNRESERVED; //FIXME Mover a otro lado
-int outside_state = MAL_APP_EXECUTING;
 
 malleability_config_t *mall_conf;
 malleability_t *mall;
@@ -136,15 +135,6 @@ void free_malleability() {
 }
 
 /*
- * FIXME Deprecated -- Borrar si al final no es necesario
- * -- Es para evitar casos asincronos donde la aplicacion ha terminado
- * pero la maleabilidad sigue en curso
- */
-void indicate_ending_malleability(int new_outside_state) {
-  outside_state = new_outside_state;
-}
-
-/*
  * Se realiza el redimensionado de procesos por parte de los padres.
  *
  * Se crean los nuevos procesos con la distribucion fisica elegida y
@@ -174,9 +164,14 @@ int malleability_checkpoint() {
     }
 
   } else if(state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    state = check_slurm_comm(mall->myId, mall->root, mall->numP, outside_state, &(mall->intercomm), mall->comm, mall->thread_comm);
+    double end_real_time;
+    state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm, &end_real_time);
     if (state == MAL_SPAWN_COMPLETED) {  
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+        mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
+      }
+
       //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
       state = start_redistribution();
     }
@@ -486,8 +481,8 @@ int spawn_step(){
   if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
   else if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
-      mall_conf->results->spawn_thread_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-      mall_conf->results->spawn_start = MPI_Wtime();
+      //mall_conf->results->spawn_thread_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      //mall_conf->results->spawn_start = MPI_Wtime();
   }
   return state;
 }

@@ -12,7 +12,7 @@
 #define ROOT 0
 
 int work();
-void iterate(double *matrix, int n, int async_comm);
+void iterate(double *matrix, int n, int async_comm, int iter);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
@@ -171,7 +171,7 @@ int work() {
   
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
-    iterate(matrix, config_file->matrix_tam, state);
+    iterate(matrix, config_file->matrix_tam, state, iter);
   }
 
   if(config_file->resizes != group->grp + 1)
@@ -180,10 +180,9 @@ int work() {
   iter = 0;
   while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) {
     if(iter < config_file->iters[group->grp+1]) {
-      iterate(matrix, config_file->matrix_tam, state);
+      iterate(matrix, config_file->matrix_tam, state, iter);
       iter++;
       group->iter_start = iter;
-      if(iter == config_file->iters[group->grp+1]) indicate_ending_malleability(MAL_APP_ENDED);
     }
     state = malleability_checkpoint();
   }
@@ -205,7 +204,7 @@ int work() {
  * Simula la ejecucción de una iteración de computo en la aplicación
  * que dura al menos un tiempo de "time" segundos.
  */
-void iterate(double *matrix, int n, int async_comm) {
+void iterate(double *matrix, int n, int async_comm, int iter) {
   double start_time, actual_time;
   double time = config_file->general_time * config_file->factors[group->grp];
   double Top = config_file->Top;
@@ -219,7 +218,7 @@ void iterate(double *matrix, int n, int async_comm) {
   for(i=0; i < operations; i++) {
     aux += computePiSerial(n);
   }
-  
+
   if(config_file->comm_tam) {
     MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, comm);
   }
