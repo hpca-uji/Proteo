@@ -267,6 +267,7 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
+  compute_results_iter(results, group->myId, ROOT, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -278,7 +279,7 @@ int print_local_results() {
     create_out_file(file_name, &ptr_local, 1);
   
     print_config_group(config_file, group->grp);
-    print_iter_results(*results, config_file->iters[group->grp] -1);
+    print_iter_results(*results, config_file->iters[group->grp] - 1);
     free(file_name);
 
     fflush(stdout);

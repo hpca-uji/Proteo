@@ -23,6 +23,8 @@ void recv_results(results_data *results, int root, int resizes, MPI_Comm interco
 void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr);
 void reset_results_index(results_data *results);
 
+void compute_results_iter(results_data *results, int myId, int root, MPI_Comm comm);
+
 void print_iter_results(results_data results, int last_normal_iter_index);
 void print_global_results(results_data results, int resizes);
 void init_results_data(results_data *results, int resizes, int iters_size);

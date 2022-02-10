@@ -39,6 +39,9 @@ then
 fi
 rm errores2.txt
 
+#Comprobar que el número de archivos es correcto
+#Pueden estar todos los archivos pero no estar los archivos
+#completos -- Esto se comprueba más tarde
 qtyG=$(ls R*/R*_Global.out | wc -l)
 qtyG=$(($qtyG * 2))
 qtyL=$(ls R*/R*_G?N*.out | wc -l)
@@ -128,6 +131,7 @@ fi
 #Comprobar que todas las ejecuciones tienen todas las ejecucciones que tocan
 #Solo es necesario comprobar el global.
 qty_missing=0
+cd $dir$ResultsDir$ResultsDirName
 for ((i=1; i<$maxIndex; i++))
 do
   qtyEx=$(grep Tex -r Run$i | wc -l)

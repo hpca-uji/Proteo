@@ -121,6 +121,20 @@ void reset_results_index(results_data *results) {
 }
 
 
+/*
+ * Obtiene para cada iteracion, el tiempo maximo entre todos los procesos
+ * que han participado.
+ *
+ * Es necesario obtener el maximo, pues es el que representa el tiempo real
+ * que se ha utilizado.
+ */
+void compute_results_iter(results_data *results, int myId, int root, MPI_Comm comm) {
+  if(myId == root)
+    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  else
+    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+}
+
 //======================================================||
 //======================================================||
 //===============PRINT RESULTS FUNCTIONS================||

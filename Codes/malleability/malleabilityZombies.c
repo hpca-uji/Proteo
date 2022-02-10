@@ -6,6 +6,7 @@
 #include <mpi.h>
 //#include <slurm/slurm.h>
 #include <signal.h>
+#include "../IOcodes/results.h"
 #include "malleabilityZombies.h"
 
 #define PIDS_QTY 320
@@ -17,7 +18,7 @@ int offset_pids, *pids = NULL;
 
 void gestor_usr2() {}
 
-void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root) {
+void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void, MPI_Comm user_comm) {
   int pid = getpid();
   int *pids_counts = malloc(numP * sizeof(int));
   int *pids_displs = malloc(numP * sizeof(int));
@@ -41,6 +42,9 @@ void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int 
   free(pids_displs);
 
   if(myId >= numC) {
+    // Needed to ensure iteration times are collected before suspending these processes
+    results_data *results = (results_data *) results_void;
+    compute_results_iter(results, myId, root, user_comm); 
     zombies_suspend();
   }
 }

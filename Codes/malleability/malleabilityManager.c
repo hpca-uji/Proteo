@@ -561,7 +561,6 @@ int check_redistribution() {
     printf("P%d aborting -- Test Async\n", mall->myId);
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
-  //FIXME No se tiene en cuenta el estado MAL_APP_ENDED
 
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MAL_DIST_PENDING; // Continue only if asynchronous send has ended 
@@ -631,7 +630,7 @@ int shrink_redistribution() {
     MPI_Comm_dup(mall->comm, &aux_comm);
 
     proc_adapt_shrink( mall->numC, &(mall->comm), mall->myId);
-    zombies_collect_suspended(aux_comm, mall->myId, mall->numP, mall->numC, mall->root);
+    zombies_collect_suspended(aux_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->user_comm);
     MPI_Comm_free(&aux_comm);
     
     if(mall->myId < mall->numC) {
