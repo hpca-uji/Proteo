@@ -431,7 +431,7 @@ void processes_dist(char *argv, int numP_childs, int already_created, int type) 
     strcpy(slurm_data->cmd, argv);
 
     // GET NEW DISTRIBUTION 
-    node_dist(type, numP_childs, already_created, &procs_array, &used_nodes); //TODO REFACTOR
+    node_dist(type, numP_childs, already_created, &procs_array, &used_nodes);
     slurm_data->qty_procs = numP_childs;
 
     /*
@@ -448,16 +448,15 @@ void processes_dist(char *argv, int numP_childs, int already_created, int type) 
     */
     
     // CREATE AND SET STRING HOSTFILE
-    fill_str_hostfile(procs_array, used_nodes, &hostfile); //TODO REFACTOR
+    fill_str_hostfile(procs_array, used_nodes, &hostfile);
     MPI_Info_create(&(slurm_data->info));
-    printf("hosts %s\n", hostfile);
     MPI_Info_set(slurm_data->info, "hosts", hostfile);
     free(hostfile);
     free(procs_array);
    
 
     // Free JOB INFO
-    //slurm_free_job_info_msg(j_info);  //TODO REFACTOR
+    //slurm_free_job_info_msg(j_info);
 }
 
 /*
