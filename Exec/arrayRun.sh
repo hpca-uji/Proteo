@@ -5,6 +5,10 @@
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
 ResultsDir="/Results"
+
+nodelist=$SLURM_JOB_NODELIST
+nodes=$SLURM_JOB_NUM_NODES
+
 module load mpich-3.4.1-noucx
 
 name_dir=$1
@@ -40,7 +44,7 @@ do
           for index in 1 2 3 4 5 6 7 8 9 10
           do
             numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
-            mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/./bench.out $config_file $i
+            mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/./bench.out $config_file $i $nodelist $nodes
             rm hostfile.o$SLURM_JOB_ID
           done
 

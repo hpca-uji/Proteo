@@ -45,7 +45,8 @@ typedef struct { //FIXME numC_spawned no se esta usando
   MPI_Comm intercomm;
   MPI_Comm user_comm;
   
-  char *name_exec;
+  char *name_exec, *nodelist;
+  int num_cpus, num_nodes;
 } malleability_t;
 
 int state = MAL_UNRESERVED; //FIXME Mover a otro lado
@@ -68,7 +69,7 @@ malleability_data_t *dist_a_data;
  * la comunicacion los procesos hijo estan preparados para ejecutar la
  * aplicacion.
  */
-int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec) {
+int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
   MPI_Comm dup_comm, thread_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
@@ -87,7 +88,11 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
   mall->user_comm = comm;
+
   mall->name_exec = name_exec;
+  mall->nodelist = nodelist;
+  mall->num_cpus = num_cpus;
+  mall->num_nodes = num_nodes;
 
   rep_s_data->entries = 0;
   rep_a_data->entries = 0;
@@ -436,7 +441,13 @@ void Children_init() {
     // TODO Crear funcion especifica y anyadir para Asinc
     // TODO Tener en cuenta el tipo y qty
     for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, root_parents, mall->intercomm);
+      MPI_Datatype datatype;
+      if(rep_s_data->types[i] == MAL_INT) {
+        datatype = MPI_INT;
+      } else {
+        datatype = MPI_CHAR;
+      }
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
   }
 
@@ -476,7 +487,7 @@ int spawn_step(){
     return state; 
   }
  
-  state = init_slurm_comm(mall->name_exec, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
+  state = init_slurm_comm(mall->name_exec, mall->num_cpus, mall->num_nodes, mall->nodelist, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm));
 
   if(mall_conf->spawn_type == COMM_SPAWN_SERIAL || mall_conf->spawn_type == COMM_SPAWN_MERGE)
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
@@ -593,9 +604,15 @@ int end_redistribution() {
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc
-    // TODO Tener en cuenta el tipo y qty
+    // TODO Tener en cuenta el tipo
     for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], MPI_INT, rootBcast, mall->intercomm);
+      MPI_Datatype datatype;
+      if(rep_s_data->types[i] == MAL_INT) {
+        datatype = MPI_INT;
+      } else {
+        datatype = MPI_CHAR;
+      }
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
     } 
   }
     

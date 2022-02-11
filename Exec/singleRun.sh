@@ -6,6 +6,9 @@ dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
 ResultsDir="/Results"
 
+nodelist=$SLURM_JOB_NODELIST
+nodes=$SLURM_JOB_NUM_NODES
+
 module load mpich-3.4.1-noucx
 echo "START TEST"
 
@@ -24,7 +27,7 @@ for ((i=0; i<qty; i++))
 do
   echo "Iter $i"
   numP=$(bash $dir$codeDir/recordMachinefile.sh $1)
-  mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/bench.out $1 $2
+  mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/bench.out $1 $2 $nodelist $nodes
   rm hostfile.o$SLURM_JOB_ID
 done
 

@@ -50,6 +50,16 @@ int main(int argc, char *argv[]) {
     int req;
     int im_child;
 
+    //FIXME El codigo no es capaz de hacer mas de una redistribucion - Arreglar malleabilityTypes.c
+    int num_cpus, num_nodes; //nodelist_len; //FIXME Eliminar cuando se utilice Slurm
+    char *nodelist = NULL;
+    num_cpus = 20; //FIXME NUMERO MAGICO
+    if (argc >= 5) {
+      nodelist = argv[3];
+      //nodelist_len = strlen(nodelist);
+      num_nodes = atoi(argv[4]);
+    }
+
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
@@ -60,7 +70,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = init_malleability(myId, numP, ROOT, comm, argv[0]);
+    im_child = init_malleability(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
@@ -96,6 +106,18 @@ int main(int argc, char *argv[]) {
       group->iter_start = *((int *)value);
       free(value);
 
+      //FIXME Eliminar cuando se utilice SLURM
+      /*
+      malleability_get_data(&value, 4, 1, 1);
+      num_nodes = *((int *)value);
+      free(value);
+
+      malleability_get_data(&value, 5, 1, 1);
+      nodelist = (char *)value;
+      //free(value);
+      nodelist_len = strlen(nodelist);
+      */
+
       group->grp = group->grp + 1;
     }
 
@@ -116,6 +138,10 @@ int main(int argc, char *argv[]) {
           malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
           malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
           malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
+
+	  //FIXME Eliminar cuando se utilice SLURM
+          //malleability_add_data(&num_nodes, 1, MAL_INT, 1, 1);
+          //malleability_add_data(&nodelist, nodelist_len, MAL_CHAR, 1, 1);
         }
       }
 

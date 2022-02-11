@@ -6,6 +6,9 @@
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
 
+nodelist=$SLURM_JOB_NODELIST
+nodes=$SLURM_JOB_NUM_NODES
+
 echo "MPICH"
 module load mpich-3.4.1-noucx
 #export HYDRA_DEBUG=1
@@ -13,8 +16,7 @@ module load mpich-3.4.1-noucx
 
 numP=$(bash recordMachinefile.sh $1)
 
-#mpirun -f hostfile.o$SLURM_JOB_ID ./a.out $1 $2
-mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $1 $2
+mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $1 $2 $nodelist $nodes
 rm hostfile.o$SLURM_JOB_ID
 
 echo "END RUN"

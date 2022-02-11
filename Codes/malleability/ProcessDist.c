@@ -18,6 +18,8 @@ double end_time; //FIXME REFACTOR
 
 struct Slurm_data {
   char *cmd; // Executable name
+  char *nodelist;
+  int num_cpus, num_nodes;
   int qty_procs, result_procs;
   MPI_Info info;
   int type_creation;
@@ -44,9 +46,9 @@ void generic_spawn(int myId, int root, int is_single, MPI_Comm *child, MPI_Comm 
 void single_spawn_connection(int myId, int root, MPI_Comm comm, MPI_Comm *child);
 int create_processes(int myId, int root, MPI_Comm *child, MPI_Comm comm);
 
-void node_dist(slurm_job_info_t job_record, int type, int total_procs, int already_created, int **qty, int *used_nodes);
+void node_dist(int type, int total_procs, int already_created, int **qty, int *used_nodes);
 
-void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str);
+void fill_str_hostfile(int *qty, int used_nodes, char **hostfile_str);
 int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name);
 
 //@deprecated functions
@@ -72,7 +74,7 @@ void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_node
  * Devuelve el estado de el procedimiento. Si no devuelve "COMM_FINISHED", es necesario llamar a
  * "check_slurm_comm()".
  */
-int init_slurm_comm(char *argv, int myId, int numP, int numC, int root, int type_dist, int type_creation, int spawn_is_single, MPI_Comm comm, MPI_Comm *child) {
+int init_slurm_comm(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId, int numP, int numC, int root, int type_dist, int type_creation, int spawn_is_single, MPI_Comm comm, MPI_Comm *child) {
   int spawn_qty, already_created = 0;
   slurm_data = malloc(sizeof(struct Slurm_data));
 
@@ -80,6 +82,9 @@ int init_slurm_comm(char *argv, int myId, int numP, int numC, int root, int type
   slurm_data->type_creation = type_creation;
   slurm_data->spawn_is_single = spawn_is_single;
   slurm_data->result_procs = numC;
+  slurm_data->num_cpus = num_cpus;
+  slurm_data->num_nodes = num_nodes;
+  slurm_data->nodelist = nodelist;
   spawn_qty = numC;
   if(type_creation == COMM_SPAWN_MERGE || type_creation == COMM_SPAWN_MERGE_PTHREAD) {
     if (numP < slurm_data->result_procs) {
@@ -305,7 +310,7 @@ void generic_spawn(int myId, int root, int spawn_is_single, MPI_Comm *child, MPI
     MPI_Bcast(&spawn_is_single, 1, MPI_INT, rootBcast, *child);
   }
   pthread_mutex_lock(&spawn_mutex);
-    commState = MAL_SPAWN_COMPLETED; 
+  commState = MAL_SPAWN_COMPLETED; 
     end_time = MPI_Wtime();
   pthread_mutex_unlock(&spawn_mutex);
 }
@@ -406,27 +411,27 @@ void proc_adapt_shrink(int numC, MPI_Comm *comm, int myId) {
  * para los procesos y creando un fichero hostfile.
  */
 void processes_dist(char *argv, int numP_childs, int already_created, int type) {
-    int jobId;
-    char *tmp;
-    job_info_msg_t *j_info;
-    slurm_job_info_t last_record;
+    //int jobId;
+    //char *tmp;
+    //job_info_msg_t *j_info;
+    //slurm_job_info_t last_record;
 
     int used_nodes=0;
     int *procs_array;
     char *hostfile;
 
     // Get Slurm job info
-    tmp = getenv("SLURM_JOB_ID");
-    jobId = atoi(tmp);
-    slurm_load_job(&j_info, jobId, 1);
-    last_record = j_info->job_array[j_info->record_count - 1];
+    //tmp = getenv("SLURM_JOB_ID");
+    //jobId = atoi(tmp);
+    //slurm_load_job(&j_info, jobId, 1);
+    //last_record = j_info->job_array[j_info->record_count - 1];
 
     //COPY PROGRAM NAME
     slurm_data->cmd = malloc(strlen(argv) * sizeof(char));
     strcpy(slurm_data->cmd, argv);
 
     // GET NEW DISTRIBUTION 
-    node_dist(last_record, type, numP_childs, already_created, &procs_array, &used_nodes);
+    node_dist(type, numP_childs, already_created, &procs_array, &used_nodes); //TODO REFACTOR
     slurm_data->qty_procs = numP_childs;
 
     /*
@@ -442,16 +447,17 @@ void processes_dist(char *argv, int numP_childs, int already_created, int type) 
     close(ptr);
     */
     
-    // TEST 
-    fill_str_hostfile(last_record, procs_array, used_nodes, &hostfile);
+    // CREATE AND SET STRING HOSTFILE
+    fill_str_hostfile(procs_array, used_nodes, &hostfile); //TODO REFACTOR
     MPI_Info_create(&(slurm_data->info));
+    printf("hosts %s\n", hostfile);
     MPI_Info_set(slurm_data->info, "hosts", hostfile);
     free(hostfile);
     free(procs_array);
    
 
     // Free JOB INFO
-    slurm_free_job_info_msg(j_info); 
+    //slurm_free_job_info_msg(j_info);  //TODO REFACTOR
 }
 
 /*
@@ -466,26 +472,26 @@ void processes_dist(char *argv, int numP_childs, int already_created, int type) 
  *  COMM_PHY_CPU   (2): Orientada a completar la capacidad de un nodo antes de
  *                      ocupar otro nodo.
  */
-void node_dist(slurm_job_info_t job_record, int type, int total_procs, int already_created, int **qty, int *used_nodes) {
+void node_dist(int type, int total_procs, int already_created, int **qty, int *used_nodes) {
   int i, asigCores;
   int tamBl, remainder;
   int *procs;
 
-  procs = calloc(job_record.num_nodes, sizeof(int)); // Numero de procesos por nodo
+  procs = calloc(slurm_data->num_nodes, sizeof(int)); // Numero de procesos por nodo
 
   /* GET NEW DISTRIBUTION  */
   if(type == 1) { // DIST NODES
-    *used_nodes = job_record.num_nodes;
-    tamBl = total_procs / job_record.num_nodes;
-    remainder = total_procs % job_record.num_nodes;
+    *used_nodes = slurm_data->num_nodes;
+    tamBl = total_procs / slurm_data->num_nodes;
+    remainder = total_procs % slurm_data->num_nodes;
     for(i=0; i<remainder; i++) {
       procs[i] = tamBl + 1; 
     }
-    for(i=remainder; i<job_record.num_nodes; i++) {
+    for(i=remainder; i<slurm_data->num_nodes; i++) {
       procs[i] = tamBl; 
     }
   } else if (type == 2) { // DIST CPUs
-    tamBl = job_record.num_cpus / job_record.num_nodes;
+    tamBl = slurm_data->num_cpus / slurm_data->num_nodes;
     asigCores = 0;
     i = already_created / tamBl;
     *used_nodes = already_created / tamBl;
@@ -493,7 +499,7 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int alrea
     while(asigCores+tamBl <= total_procs) {
       asigCores += tamBl;
       procs[i] += tamBl;
-      i = (i+1) % job_record.num_nodes;
+      i = (i+1) % slurm_data->num_nodes;
       (*used_nodes)++;
     }
 
@@ -501,7 +507,7 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int alrea
       procs[i] += total_procs - asigCores;
       (*used_nodes)++;
     }
-    if(*used_nodes > job_record.num_nodes) *used_nodes = job_record.num_nodes;  //FIXME Si ocurre esto no es un error?
+    if(*used_nodes > slurm_data->num_nodes) *used_nodes = slurm_data->num_nodes;  //FIXME Si ocurre esto no es un error?
   }
 
   *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
@@ -516,12 +522,12 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int alrea
  * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
  * al crear procesos e indicar donde tienen que ser creados.
  */
-void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, char **hostfile_str) {
+void fill_str_hostfile(int *qty, int used_nodes, char **hostfile_str) {
   int i=0, len=0;
   char *host;
   hostlist_t hostlist;
   
-  hostlist = slurm_hostlist_create(job_record.nodes);
+  hostlist = slurm_hostlist_create(slurm_data->nodelist);
   while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
     if(qty[i] != 0) {
       len = write_str_node(hostfile_str, len, qty[i], host);
@@ -530,7 +536,6 @@ void fill_str_hostfile(slurm_job_info_t job_record, int *qty, int used_nodes, ch
     free(host);
   }
   slurm_hostlist_destroy(hostlist);
-
 }
 
 /*

@@ -8,7 +8,7 @@
 #include "../IOcodes/results.h"
 #include "malleabilityStates.h"
 
-int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec);
+int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes);
 void free_malleability();
 void indicate_ending_malleability(int new_outside_state);
 int malleability_checkpoint();
