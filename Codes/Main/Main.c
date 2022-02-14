@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
       nodelist = argv[3];
       //nodelist_len = strlen(nodelist);
       num_nodes = atoi(argv[4]);
+      num_cpus = num_nodes * num_cpus;
     }
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
