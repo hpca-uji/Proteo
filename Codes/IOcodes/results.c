@@ -223,6 +223,7 @@ void init_results_data(results_data *results, int resizes, int iters_size) {
   results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
   results->iters_type = calloc(iters_size + 100, sizeof(int));
   results->iter_index = 0;
+
 }
 
 void realloc_results_iters(results_data *results, int needed) {

@@ -492,9 +492,17 @@ void node_dist(int type, int total_procs, int already_created, int **qty, int *u
   } else if (type == 2) { // DIST CPUs
     tamBl = slurm_data->num_cpus / slurm_data->num_nodes;
     asigCores = 0;
-    i = already_created / tamBl;
-    *used_nodes = already_created / tamBl;
+    i = *used_nodes = already_created / tamBl;
+    remainder = already_created % tamBl;
 
+    //First node could already have existing procs
+    if (remainder) {
+      procs[i] = asigCores = tamBl - remainder;
+      i = (i+1) % slurm_data->num_nodes;
+      (*used_nodes)++;
+    }
+
+    //Assing tamBl to each node
     while(asigCores+tamBl <= total_procs) {
       asigCores += tamBl;
       procs[i] += tamBl;
@@ -502,7 +510,8 @@ void node_dist(int type, int total_procs, int already_created, int **qty, int *u
       (*used_nodes)++;
     }
 
-    if(asigCores < total_procs) {
+    //Last node could have less procs than tamBl
+    if(asigCores < total_procs) { 
       procs[i] += total_procs - asigCores;
       (*used_nodes)++;
     }

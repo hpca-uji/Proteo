@@ -122,6 +122,9 @@ int main(int argc, char *argv[]) {
       group->grp = group->grp + 1;
     }
 
+    //
+    // EMPIEZA LA EJECUCION-------------------------------
+    //
     group->grp = group->grp - 1; // TODO REFACTOR???
     do {
 
@@ -152,6 +155,10 @@ int main(int argc, char *argv[]) {
       print_local_results();
       reset_results_index(results);
     } while((config_file->resizes > group->grp + 1) && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD));
+
+    //
+    // TERMINA LA EJECUCION ----------------------------------------------------------
+    //
 
 
     if(res==1) { // Se he llegado al final de la aplicacion
@@ -242,9 +249,21 @@ void iterate(double *matrix, int n, int async_comm, int iter) {
 
   operations = time / Top; //FIXME Calcular una sola vez
   
+  
   for(i=0; i < operations; i++) {
     aux += computePiSerial(n);
   }
+  
+  /*
+  if(time >= 1) {
+    sleep(time);
+  }
+  else {
+    unsigned int sleep_time = time * 1000000;
+    usleep(sleep_time);
+  }
+  */
+  
 
   if(config_file->comm_tam) {
     MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, comm);
