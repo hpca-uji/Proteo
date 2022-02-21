@@ -98,10 +98,11 @@ then
     for ((i=0; i<qty; i++))
     do 
       fin=$(grep -n - R* | grep Tex | cut -d ':' -f2 | head -n1)
-      init=$(($fin - 6))
+      init=$(($fin - 7))
       sed -i ''$init','$fin'd' R${realRun}_Global.out
 
-      aux=$(($fin / 7)) #Utilizado para saber de entre las ejecuciones del fichero, cual es la erronea
+      #Se borran las lineas de los ficheros locales asociados
+      aux=$(($fin / 8)) #Utilizado para saber de entre las ejecuciones del fichero, cual es la erronea
       fin=$(($aux * 5))
       init=$(($fin - 4))
       for ((j=0; j<cantidadGrupos; j++)); do
@@ -114,11 +115,11 @@ then
     proc_parents=$(echo $proc_list | cut -d ' ' -f1)
     proc_children=$(echo $proc_list | cut -d ' ' -f2)
     nodes=8 # Maximo actual
-    if [ $procs_parents -gt $procs_children ]
+    if [ $proc_parents -gt $proc_children ]
     then
-      nodes=$(($procs_parents / 20))
+      nodes=$(($proc_parents / 20))
     else
-      nodes=$(($procs_children / 20))
+      nodes=$(($proc_children / 20))
     fi
 
     sbatch -N $nodes $dir$execDir./singleRun.sh config$realRun.ini $index
