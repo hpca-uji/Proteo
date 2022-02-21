@@ -60,31 +60,38 @@ def read_file(f, dataA, dataB, it):
       if lineS[0] == "Config": # CONFIG LINE
         recording = True
         it += 1
-        dataA.append([None]*9)
-        dataB.append([None]*13)
-        resizes = int(lineS[2].split('=')[1].split(',')[0])
+        dataA.append([None]*13)
+        dataB.append([None]*15)
+        #resizes = int(lineS[2].split('=')[1].split(',')[0])
+        resizes = 2
         compute_tam = int(lineS[3].split('=')[1].split(',')[0])
         comm_tam = int(lineS[4].split('=')[1].split(',')[0])
         sdr = int(lineS[5].split('=')[1].split(',')[0])
         adr = int(lineS[6].split('=')[1].split(',')[0]) #TODO Que lo tome como porcentaje
+        css = int(lineS[8].split('=')[1].split(',')[0])
+        cst = int(lineS[9].split('=')[1].split(',')[0])
         # TODO Que obtenga Aib
-        time = float(lineS[8].split('=')[1])
+        time = float(lineS[10].split('=')[1])
 
         dataB[it][0] = sdr
         dataB[it][1] = adr 
         dataB[it][4] = "" 
         dataB[it][5] = compute_tam
         dataB[it][6] = comm_tam
-        dataB[it][7] = time
-        dataB[it][8] = "" 
+        dataB[it][7] = cst
+        dataB[it][8] = css
+        dataB[it][9] = time
+        dataB[it][10] = "" 
 
         dataA[it][0] = sdr
         dataA[it][1] = adr 
-        dataA[it][3] = ""
-        dataA[it][4] = compute_tam
-        dataA[it][5] = comm_tam
-        dataA[it][6] = time
-        dataA[it][7] = ""
+        dataA[it][5] = ""
+        dataA[it][6] = compute_tam
+        dataA[it][7] = comm_tam
+        dataA[it][8] = cst
+        dataA[it][9] = css
+        dataA[it][10] = time
+        dataA[it][11] = ""
 
       elif recording and resizes != 0: # RESIZE LINE
         iters = int(lineS[2].split('=')[1].split(',')[0])
@@ -95,44 +102,49 @@ def read_file(f, dataA, dataB, it):
         if resizes == 0:
           dataB[it][3] = npr
           dataB[it][4] += dist
-          dataB[it][8] += str(iters)
+          dataB[it][10] += str(iters)
 
+          dataA[it][4] = npr #FIXME No sera correcta si hay mas de una reconfig
           dataA[it][2] = str(previousNP) + "," + str(npr)
-          dataA[it][3] += dist
-          dataA[it][7] += str(iters)
+          dataA[it][5] += dist
+          dataA[it][11] += str(iters)
           timer = 4
         else:
           dataB[it][2] = npr
           dataB[it][4] += dist + ","
-          dataB[it][8] += str(iters) + ","
+          dataB[it][10] += str(iters) + ","
 
-          dataA[it][3] += dist + ","
-          dataA[it][7] += str(iters) + ","
+          dataA[it][3] = npr
+          dataA[it][5] += dist + ","
+          dataA[it][11] += str(iters) + ","
           previousNP = npr
 
       else: # SAVE TIMES
         if timer == 4:
-          dataB[it][9] = float(lineS[1])
-        elif timer == 3:
-          dataB[it][10] = float(lineS[1])
-        elif timer == 2:
           dataB[it][11] = float(lineS[1])
-        elif timer == 1:
+        elif timer == 3:
           dataB[it][12] = float(lineS[1])
+        elif timer == 2:
+          dataB[it][13] = float(lineS[1])
+        elif timer == 1:
+          dataB[it][14] = float(lineS[1])
         else:
-          dataA[it][8] = float(lineS[1])
+          dataA[it][12] = float(lineS[1])
         timer = timer - 1
           
   return it
-#columnsA1 = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Time", "Iters", "TE"] #8
-#columnsB1 = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TS", "TA"] #12
+#columnsA1 = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TE"] #8
+#columnsB1 = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TC", "TS", "TA"] #12
 #Config loaded: resizes=2, matrix=1000, sdr=1000000000, adr=0, aib=0, time=2.000000 || grp=1
 #Resize 0: Iters=100, Procs=2, Factors=1.000000, Phy=2
 #Resize 1: Iters=100, Procs=4, Factors=0.500000, Phy=2
 #Tspawn: 0.249393 
+#Tthread: 0 
 #Tsync: 0.330391 
 #Tasync: 0
 #Tex: 301.428615
+
+#Config loaded: resizes=1, matrix=0, comm_tam=0, sdr=0, adr=0, aib=0, cst=3, css=1, time=1 || grp=1
 #-----------------------------------------------
 
 if len(sys.argv) < 2:
@@ -158,8 +170,8 @@ print("Number of files found: "+ str(len(lista)));
 it = -1
 dataA = []
 dataB = []
-columnsA = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Time", "Iters", "TE"] #9
-columnsB = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Time", "Iters", "TC", "TH", "TS", "TA"] #13
+columnsA = ["N", "%Async", "Groups", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TE"] #13
+columnsB = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TC", "TH", "TS", "TA"] #15
 
 for elem in lista:
   f = open(elem, "r")
