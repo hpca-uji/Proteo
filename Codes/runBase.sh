@@ -1,5 +1,6 @@
 #!/bin/bash
 
+#SBATCH -p P1
 #SBATCH -N 1
 #SBATCH --exclude=c01,c00,c02
 
@@ -17,6 +18,7 @@ module load mpich-3.4.1-noucx
 numP=$(bash recordMachinefile.sh $1)
 
 mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $1 $2 $nodelist $nodes
+#mpirun -np $numP $dir$codeDir/a.out $1 $2 $nodelist $nodes
 rm hostfile.o$SLURM_JOB_ID
 
 echo "END RUN"

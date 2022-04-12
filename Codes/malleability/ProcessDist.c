@@ -157,7 +157,7 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm com
       int state=-10;
 
       //printf("[%d][3] Test min\n", myId); fflush(stdout);
-      //pthread_mutex_lock(&spawn_mutex);
+      //pthread_mutex_lock(&spawn_mutex); // TODO Descomentar
       MPI_Allreduce(&commState, &state, 1, MPI_INT, MPI_MIN, comm);
       //pthread_mutex_unlock(&spawn_mutex);
 
@@ -173,7 +173,7 @@ int check_slurm_comm(int myId, int root, int numP, MPI_Comm *child, MPI_Comm com
 
     } else if (slurm_data->spawn_is_single) {
 
-      //pthread_mutex_lock(&spawn_mutex);
+      //pthread_mutex_lock(&spawn_mutex); // TODO Descomentar
       MPI_Bcast(&commState, 1, MPI_INT, root, comm);
       //pthread_mutex_unlock(&spawn_mutex);
       int threads_not_spawned = pthread_equal(pthread_self(), spawn_thread);

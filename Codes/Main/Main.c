@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
+    //FIXME No funciona en OpenMPI
     im_child = init_malleability(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
@@ -248,7 +249,6 @@ void iterate(double *matrix, int n, int async_comm, int iter) {
   start_time = MPI_Wtime();
 
   operations = time / Top; //FIXME Calcular una sola vez
-  
   
   for(i=0; i < operations; i++) {
     aux += computePiSerial(n);

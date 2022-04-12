@@ -170,15 +170,20 @@ int malleability_checkpoint() {
 
   } else if(state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
     double end_real_time;
-    state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm, &end_real_time);
-    if (state == MAL_SPAWN_COMPLETED) {  
-      mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-      if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
-        mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
-      }
 
-      //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
-      state = start_redistribution();
+    if(mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD && mall->numP > mall->numC) {
+      state = shrink_redistribution(); //TODO REFACTOR
+
+    } else {
+      state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm, &end_real_time);
+      if (state == MAL_SPAWN_COMPLETED) {  
+        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+        if(mall_conf->spawn_type == COMM_SPAWN_PTHREAD || mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+          mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
+        }
+        //TODO Si es MERGE SHRINK, metodo diferente de redistribucion de datos
+        state = start_redistribution();
+      }
     }
 
   } else if(state == MAL_DIST_PENDING) {
@@ -641,16 +646,71 @@ int end_redistribution() {
   return result;
 }
 
-int shrink_redistribution() {
-    double time_adapt = MPI_Wtime();
-    MPI_Comm aux_comm;
-    MPI_Comm_dup(mall->comm, &aux_comm);
 
-    proc_adapt_shrink( mall->numC, &(mall->comm), mall->myId);
+///=============================================
+///=============================================
+///=============================================
+double time_adapt;
+int state_shrink=0; //TODO Refactor
+pthread_t thread_shrink;
+MPI_Comm comm_shrink;
+
+int thread_shrink_creation();
+void *thread_shrink_work();
+/*
+ * Crea una hebra para ejecutar una comunicación en segundo plano.
+ */
+int thread_shrink_creation() {
+  if(pthread_create(&thread_shrink, NULL, thread_shrink_work, NULL)) {
+    printf("Error al crear el hilo\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    return -1;
+  }
+  return MAL_SPAWN_PENDING;
+}
+void* thread_shrink_work() {
+  proc_adapt_shrink(mall->numC, &comm_shrink, mall->myId);
+  state_shrink=2;
+  pthread_exit(NULL);
+}
+///=============================================
+///=============================================
+///=============================================
+int shrink_redistribution() {
+    int global_state;
+    MPI_Comm aux_comm;
+
+    if(mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+      if(state_shrink == 0) {
+        time_adapt = MPI_Wtime();
+	state_shrink = 1;
+        MPI_Comm_dup(mall->comm, &comm_shrink);
+        thread_shrink_creation();
+	return MAL_SPAWN_PENDING;
+      } else if(state_shrink>0) {
+        MPI_Allreduce(&state_shrink, &global_state, 1, MPI_INT, MPI_MIN, mall->comm);
+
+	if(global_state < 2) return MAL_SPAWN_PENDING;
+        if(pthread_join(thread_shrink, NULL)) { 
+          printf("Error al esperar al hilo\n");
+          MPI_Abort(MPI_COMM_WORLD, -1);
+          return -10;
+        }
+        MPI_Comm_dup(mall->comm, &aux_comm);
+	mall->comm = comm_shrink;
+      }
+
+    } else {
+      time_adapt = MPI_Wtime();
+      MPI_Comm_dup(mall->comm, &aux_comm);
+      proc_adapt_shrink( mall->numC, &(mall->comm), mall->myId);
+    }
+
+    //TODO REFACTOR -- Que solo la llamada de collect iters este fuera de los hilos
     zombies_collect_suspended(aux_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->user_comm);
-    MPI_Comm_free(&aux_comm);
     
     if(mall->myId < mall->numC) {
+      MPI_Comm_free(&aux_comm);
       MPI_Comm_dup(mall->comm, &aux_comm);
       mall->thread_comm = aux_comm;
       MPI_Comm_dup(mall->comm, &aux_comm);
