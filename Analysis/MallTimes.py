@@ -183,4 +183,8 @@ dfA = pd.DataFrame(dataA, columns=columnsA)
 dfA.to_csv(name + 'G.csv')
 
 dfB = pd.DataFrame(dataB, columns=columnsB)
+
+#Poner en TC el valor real y en TH el necesario para la app
+cond = dfB.TH != 0
+dfB.loc[cond, ['TC', 'TH']] = dfB.loc[cond, ['TH', 'TC']].values
 dfB.to_csv(name + 'M.csv')

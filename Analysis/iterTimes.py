@@ -117,7 +117,7 @@ if len(sys.argv) < 2:
 if len(sys.argv) >= 3:
     BaseDir = sys.argv[2]
     print("Searching in directory: "+ BaseDir)
-else:
+else: #FIXME
     BaseDir = sys.argv[2]
 
 if len(sys.argv) >= 4:
