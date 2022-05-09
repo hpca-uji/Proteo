@@ -650,7 +650,7 @@ int end_redistribution() {
 ///=============================================
 ///=============================================
 ///=============================================
-double time_adapt;
+double time_adapt, time_adapt_end;
 int state_shrink=0; //TODO Refactor
 pthread_t thread_shrink;
 MPI_Comm comm_shrink;
@@ -670,6 +670,7 @@ int thread_shrink_creation() {
 }
 void* thread_shrink_work() {
   proc_adapt_shrink(mall->numC, &comm_shrink, mall->myId);
+  time_adapt_end = MPI_Wtime();
   state_shrink=2;
   pthread_exit(NULL);
 }
@@ -678,6 +679,7 @@ void* thread_shrink_work() {
 ///=============================================
 int shrink_redistribution() {
     int global_state;
+    double time_aux;
     MPI_Comm aux_comm;
 
     if(mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
@@ -691,6 +693,7 @@ int shrink_redistribution() {
         MPI_Allreduce(&state_shrink, &global_state, 1, MPI_INT, MPI_MIN, mall->comm);
 
 	if(global_state < 2) return MAL_SPAWN_PENDING;
+	time_aux = MPI_Wtime();
         if(pthread_join(thread_shrink, NULL)) { 
           printf("Error al esperar al hilo\n");
           MPI_Abort(MPI_COMM_WORLD, -1);
@@ -717,6 +720,9 @@ int shrink_redistribution() {
       mall->user_comm = aux_comm;
 
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt;
+      if(mall_conf->spawn_type == COMM_SPAWN_MERGE_PTHREAD) {
+          mall_conf->results->spawn_real_time[mall_conf->grp] = time_adapt_end - time_adapt + MPI_Wtime() - time_aux;
+      }
       return MAL_DIST_COMPLETED; //FIXME Refactor Poner a SPAWN_COMPLETED
     } else {
       return MAL_ZOMBIE;
