@@ -1,20 +1,28 @@
 Los archivos de esta carpeta son para ejecutar pruebas con todas las posibles configuraciones.
 Se tienen tres ficheros en esta carpeta:
 -- run.sh: Para ejecutar una serie de pruebas.
--- arrayRun.sh: Script para ejecutar por slurm para las pruebas. Es llamado por run.sh.
+-- arrayRun.sh: Script para ejecutar por slurm las pruebas. Es llamado por run.sh.
 -- singleRun.sh: Para ejecutar pruebas con un fichero de configuración.
 -- CheckRun.sh: Para comprobar que las ejecuciones realizadas por run.sh son correctas, y en caso de que algunas fallen, relanzarlas.
 -- create_ini.py: Crea un fichero de configuración de tipo "config.ini" a partir de los argumentos pasados
 
+-- runSpawn.sh: Para ejecutar una serie de pruebas dedicadas a la creacion de procesos.
+-- arraySpawnRun.sh: Script para ejecutar por slurm las pruebas. Es llamado por runSpawn.sh
+
+Para que la mayoria de estos scripts funcionen correctamente es necesario compilar el código
+en la carpeta "Codes". Ejecutar dentro de esa carpeta lo siguiente: "./compila -e"
+
 --------------------------------
 Para ejecutar las pruebas se utiliza el comando:
-    bash run.sh grupos-hijos tamaño-matriz cantidad-datos-sincronos tiempo-iteracion proceso-tiempo iteraciones-por-grupo cantidad-nodos
+    bash run.sh grupos-hijos tamaño-matriz tamaño-comunicacion cantidad-datos-sincronos tiempo-iteracion proceso-tiempo iteraciones-por-grupo cantidad-nodos
 Este script crea subcarpetas en "Results" donde almacena los resultados y los ficheros de configuración que crea. 
 
 grupos-hijos: Es la cantidad de grupos hijos de procesos a ejecutar. Por tanto, el valor 1 indicaría el grupo de procesos padres y un grupo de procesos hijos.
         Actualmente solo funciona con el valor |1|
 
 tamaño-matriz: Cantidad de filas en la matriz rectangular. Esta matriz se utiliza para realizar el computo de la aplicación.
+
+tamaño-comunicacion: Numero de bytes a comunicar en la aplicacion cuando se realiza computo.
 
 cantidad-datos-sincronos: Indica la cantidad de bytes que se tienen que transmitir desde un grupo de procesos a otro en una redimensión
 
@@ -28,8 +36,13 @@ proceso-tiempo: Ligado al valor "tiempo-iteracion". Indica con cuantos procesos 
 iteraciones-por-grupo: Cantidad de iteraciones a realizar en cada grupo para que consideren terminada su ejecución.
                        Actualmente todos los grupos de procesos realizan la misma cantidad de iteraciones.
 
+primera-iter: Indica si el primer grupo de procesos sigue el valor en "iteraciones-por-grupo" (0), o realiza el numero indicado en este argumento antes de realizar la redistribucion (>=1).
+
 cantidad-nodos: Cantidad de nodos a utilizar en las ejecuciones. La cantidad de nodos también influye en la cantidad de procesos por grupo, donde nunca habrá más procesos en un grupo 
                 que núcleos entre todos los nodos. Si se elige el valor 2 y habiendo 20 núcleos por nodo, no se realizarán pruebas con más de 40 procesos por grupo. 
+
+EJEMPLO:
+  bash run.sh 1 100000 10000000 1000000000 2 2 10 1 2
                 
 --------------------------------
 Para ejecutar una sola prueba con un fichero de configuración se utiliza el siguiente comando:
