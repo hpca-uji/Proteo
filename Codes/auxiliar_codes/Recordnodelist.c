@@ -102,15 +102,11 @@ void node_dist(slurm_job_info_t job_record, int type, int total_procs, int **qty
       procs[i] += total_procs - asigCores;
       (*used_nodes)++;
     }
-    if(*used_nodes > job_record.num_nodes) *used_nodes = job_record.num_nodes;
+    if(*used_nodes > job_record.num_nodes) *used_nodes = job_record.num_nodes; //FIXME Si ocurre esto no es un error?
   }
 
   *used_nodes=job_record.num_nodes;
-  for(i=0; i<*used_nodes; i++) {
-    if(procs[i] == 0){
-      procs[i]++;
-    }
-  }
+  // Antes se ponia aqui todos los nodos sin cpus a 1
   *qty = procs;
 }
 
@@ -153,7 +149,8 @@ void fill_hostfile(slurm_job_info_t job_record, int ptr, int *qty, int used_node
   
   hostlist = slurm_hostlist_create(job_record.nodes);
   while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
-    write_hostfile_node(ptr, qty[i], host);
+    if(qty[i] != 0)
+      write_hostfile_node(ptr, qty[i], host);
     i++;
     free(host);
   }
