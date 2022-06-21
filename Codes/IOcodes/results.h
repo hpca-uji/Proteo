@@ -7,7 +7,7 @@
 typedef struct {
   // Iters data
   double *iters_time;
-  int *iters_type, iter_index, iters_size;
+  int iters_async, iter_index, iters_size;
 
   // Spawn, Thread, Sync, Async and Exec time
   double spawn_start, *spawn_time, *spawn_real_time;

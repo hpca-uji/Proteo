@@ -9,16 +9,17 @@ codeDir="/Codes"
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
+configFile=$1
+outIndex=$2
 
 echo "MPICH"
 module load mpich-3.4.1-noucx
 #export HYDRA_DEBUG=1
-#-disable-hostname-propagation -disable-auto-cleanup -pmi-port -hosts n00,n01
 
-numP=$(bash recordMachinefile.sh $1)
+numP=$(bash recordMachinefile.sh $configFile)
 
-mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $1 $2 $nodelist $nodes
-#mpirun -np $numP $dir$codeDir/a.out $1 $2 $nodelist $nodes
+#mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
+mpirun -np $numP $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
 rm hostfile.o$SLURM_JOB_ID
 
 echo "END RUN"

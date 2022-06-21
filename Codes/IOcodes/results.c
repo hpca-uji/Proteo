@@ -144,28 +144,17 @@ void compute_results_iter(results_data *results, int myId, int root, MPI_Comm co
 /*
  * Imprime por pantalla los resultados locales.
  * Estos son los relacionados con las iteraciones, que son el tiempo
- * por iteracion, el tipo (Normal o durante communicacion asincrona)
- * y cuantas operaciones internas se han realizado en cada iteracion.
+ * por iteracion, el tipo (Normal o durante communicacion asincrona).
  */
 void print_iter_results(results_data results, int last_normal_iter_index) {
-  int i, aux;
+  int i;
 
   printf("Titer: ");
   for(i=0; i< results.iter_index; i++) {
     printf("%lf ", results.iters_time[i]);
   }
 
-  printf("\nTtype: "); //FIXME modificar a imprimir solo la cantidad de asincronas
-  for(i=0; i< results.iter_index; i++) {
-    printf("%d ", results.iters_type[i] == 0);
-  }
-
-  printf("\nTop: "); //TODO modificar a imprimir solo cuantas operaciones cuestan una iteracion?
-  for(i=0; i< results.iter_index; i++) {
-    aux = results.iters_type[i] == 0 ? results.iters_type[last_normal_iter_index] : results.iters_type[i];
-    printf("%d ", aux);
-  }
-  printf("\n");
+  printf("\nTtype: %d\n", results.iters_async);
 }
 
 /*
@@ -221,25 +210,22 @@ void init_results_data(results_data *results, int resizes, int iters_size) {
 
   results->iters_size = iters_size + 100;
   results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
-  results->iters_type = calloc(iters_size + 100, sizeof(int));
+  results->iters_async = 0;
   results->iter_index = 0;
 
 }
 
 void realloc_results_iters(results_data *results, int needed) {
   double *time_aux;
-  int *type_aux;
 
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
-  type_aux = (int *) realloc(results->iters_type, needed * sizeof(int));
 
-  if(time_aux == NULL || type_aux == NULL) {
+  if(time_aux == NULL) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
   results->iters_time = time_aux;
-  results->iters_type = type_aux;
 }
 
 /*
@@ -254,7 +240,6 @@ void free_results_data(results_data *results) {
       free(results->async_time);
 
       free(results->iters_time);
-      free(results->iters_type);
       }
       //free(*results); FIXME Borrar
 }

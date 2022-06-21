@@ -54,3 +54,12 @@ void initMatrix(double **matrix, int n) {
     }
   }
 }
+
+
+void freeMatrix(double **matrix) {
+  // Init matrix
+  if(*matrix != NULL) {
+    free(*matrix);
+    *matrix = NULL;
+  }
+}

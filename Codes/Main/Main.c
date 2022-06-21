@@ -4,15 +4,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "computing_func.h"
+#include "process_stage.h"
+#include "Main_datatypes.h"
 #include "../malleability/CommDist.h"
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
 
-#define ROOT 0
-
 int work();
-void iterate(double *matrix, int n, int async_comm, int iter);
+double iterate(double *matrix, int n, int async_comm, int iter);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
@@ -23,21 +22,6 @@ void print_general_info(int myId, int grp, int numP);
 int print_local_results();
 int print_final_results();
 int create_out_file(char *nombre, int *ptr, int newstdout);
-
-typedef struct {
-  int myId;
-  int numP;
-  int grp;
-  int iter_start;
-  int argc;
-
-  int numS; // Cantidad de procesos hijos
-  MPI_Comm children, parents;
-
-  char *compute_comm_array;
-  char **argv;
-  char *sync_array, *async_array;
-} group_data;
 
 configuration *config_file;
 group_data *group;
@@ -90,10 +74,6 @@ int main(int argc, char *argv[]) {
       get_benchmark_results(&results);
       set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
 
-      if(config_file->comm_tam) {
-        group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
-      }
-
       // TODO Refactor - Que sea una unica funcion
       // Obtiene las variables que van a utilizar los hijos
       void *value = NULL;
@@ -130,6 +110,7 @@ int main(int argc, char *argv[]) {
     do {
 
       group->grp = group->grp + 1;
+      obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));
@@ -162,7 +143,7 @@ int main(int argc, char *argv[]) {
     //
 
 
-    if(res==1) { // Se he llegado al final de la aplicacion
+    if(res==1) { // Se ha llegado al final de la aplicacion
       MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
       results->exec_time = MPI_Wtime() - results->exec_start;
     }
@@ -176,6 +157,7 @@ int main(int argc, char *argv[]) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
     free_application_data();
+
     MPI_Finalize();
 
     return 0;
@@ -221,6 +203,7 @@ int work() {
     }
     state = malleability_checkpoint();
   }
+
   
   if(config_file->resizes - 1 == group->grp) res=1;
   if(state == MAL_ZOMBIE) res=state;
@@ -239,48 +222,31 @@ int work() {
  * Simula la ejecucción de una iteración de computo en la aplicación
  * que dura al menos un tiempo de "time" segundos.
  */
-void iterate(double *matrix, int n, int async_comm, int iter) {
+double iterate(double *matrix, int n, int async_comm, int iter) {
   double start_time, actual_time;
-  double time = config_file->general_time * config_file->factors[group->grp];
-  double Top = config_file->Top;
-  int i, operations = 0;
+  int i, cnt_async = 0;
   double aux = 0;
 
   start_time = MPI_Wtime();
 
-  operations = time / Top; //FIXME Calcular una sola vez
-  
-  for(i=0; i < operations; i++) {
-    aux += computePiSerial(n);
-  }
-  
-  /*
-  if(time >= 1) {
-    sleep(time);
-  }
-  else {
-    unsigned int sleep_time = time * 1000000;
-    usleep(sleep_time);
-  }
-  */
-  
-
-  if(config_file->comm_tam) {
-    MPI_Bcast(group->compute_comm_array, config_file->comm_tam, MPI_CHAR, ROOT, comm);
+  for(i=0; i < config_file->iter_stages; i++) {
+    aux+= process_stage((void*)config_file, i, (void*)group, comm);
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
   // TODO Que diferencie entre ambas en el IO
   if(async_comm == MAL_DIST_PENDING || async_comm == MAL_SPAWN_PENDING || async_comm == MAL_SPAWN_SINGLE_PENDING) { // Se esta realizando una redistribucion de datos asincrona
-    operations=0;
+    cnt_async=1;
   }
 
   if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
     realloc_results_iters(results, results->iters_size + 100);
   }
   results->iters_time[results->iter_index] = actual_time - start_time;
-  results->iters_type[results->iter_index] = operations;
+  results->iters_async += cnt_async;
   results->iter_index = results->iter_index + 1;
+
+  return aux;
 }
 
 //======================================================||
@@ -340,7 +306,7 @@ int print_local_results() {
  * y las comunicaciones.
  */
 int print_final_results() {
-  int ptr_global, err;
+  int ptr_global, err, ptr_out;
   char *file_name;
 
   if(group->myId == ROOT) {
@@ -352,12 +318,15 @@ int print_final_results() {
       err = snprintf(file_name, 20, "R%d_Global.out", run_id);
       if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
 
+      ptr_out = dup(1);
       create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
       print_global_results(*results, config_file->resizes);
       fflush(stdout);
       free(file_name);
-      
+
+      close(1);
+      dup(ptr_out);
     }
   }
   return 0;
@@ -397,43 +366,33 @@ void init_application() {
   config_file = read_ini_file(group->argv[1]);
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->resizes, config_file->iters[group->grp]);
-  if(config_file->comm_tam) {
-    group->compute_comm_array = malloc(config_file->comm_tam * sizeof(char));
-  }
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
   if(config_file->adr) {
     malloc_comm_array(&(group->async_array), config_file->adr , group->myId, group->numP);
   }
-   
-  obtain_op_times();
+
+  int message_tam = 100000000;
+  config_file->latency_m = latency(group->myId, group->numP, comm);
+  config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
+  obtain_op_times(1);
 }
 
 /*
  * Obtiene cuanto tiempo es necesario para realizar una operacion de PI
  */
-void obtain_op_times() {
-  double result, start_time = MPI_Wtime();
-  int i, qty = 20000;
-  result = 0;
-  for(i=0; i<qty; i++) {
-    result += computePiSerial(config_file->matrix_tam);
+void obtain_op_times(int compute) {
+  int i;
+  for(i=0; i<config_file->iter_stages; i++) {
+    init_stage((void*)config_file, i, (void*)group, comm, compute);
   }
-  //printf("Creado Top con valor %lf\n", result);
-  //fflush(stdout);
-
-  config_file->Top = (MPI_Wtime() - start_time) / qty; //Tiempo de una operacion
-  MPI_Bcast(&(config_file->Top), 1, MPI_DOUBLE, ROOT, comm);
 }
 
 /*
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
-  if(config_file->comm_tam) {
-    free(group->compute_comm_array);
-  }
   if(config_file->sdr) {
     free(group->sync_array);
   }

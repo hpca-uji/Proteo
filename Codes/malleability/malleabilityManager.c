@@ -421,7 +421,8 @@ void Children_init() {
   MPI_Bcast(&root_parents, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
   MPI_Bcast(&numP_parents, 1, MPI_INT, root_parents, mall->intercomm);
 
-  mall_conf->config_file = recv_config_file(mall->root, mall->intercomm);
+  recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
+
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->resizes, RESULTS_INIT_DATA_QTY);
 
