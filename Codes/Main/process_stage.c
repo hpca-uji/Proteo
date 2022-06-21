@@ -8,6 +8,9 @@
 #include "process_stage.h"
 #include "../malleability/malleabilityManager.h" //FIXME Refactor
 
+
+void get_byte_dist(int qty, int id, int numP, int *result);
+
 /*
  * Calcula el tiempo por operacion o total de bytes a enviar
  * de cada fase de iteración para despues realizar correctamente
@@ -23,6 +26,7 @@
  * la bandera.
  *
  * TODO Que el trabajo se divida entre los procesos.
+ * TODO No tiene en cuenta cambios entre maquinas heterogeneas.
  */
 void init_stage(void *config_file_void, int stage, void *group_void, MPI_Comm comm, int compute) {
   double result, start_time, t_stage;
@@ -33,12 +37,11 @@ void init_stage(void *config_file_void, int stage, void *group_void, MPI_Comm co
   config_file.iter_stage[stage].operations = qty;
   t_stage = config_file.iter_stage[stage].t_stage * config_file.factors[group.grp];
 
-
   if(config_file.iter_stage[stage].bytes == 0) {
-    config_file.iter_stage[stage].bytes = (t_stage - config_file.latency_m) * config_file.bw_m;
-  } else {
-    //config_file.iter_stage[stage].bytes = config_file.iter_stage[stage].bytes;
+    config_file.iter_stage[stage].bytes = (config_file.iter_stage[stage].t_stage - config_file.latency_m) * config_file.bw_m;
   }
+
+  get_byte_dist(config_file.iter_stage[stage].bytes, group.myId, group.numP, &(config_file.iter_stage[stage].real_bytes) );
 
   start_time = MPI_Wtime();
   result = 0;
@@ -55,29 +58,30 @@ void init_stage(void *config_file_void, int stage, void *group_void, MPI_Comm co
     case COMP_POINT:
       if(config_file.iter_stage[stage].array != NULL)
         free(config_file.iter_stage[stage].array);
-      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes);
+      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].real_bytes);
       break;
     case COMP_BCAST:
       if(config_file.iter_stage[stage].array != NULL)
         free(config_file.iter_stage[stage].array);
-      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes);
+      config_file.iter_stage[stage].real_bytes = config_file.iter_stage[stage].bytes; // Caso especial al usar Bcast
+      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].real_bytes);
       break;
-    case COMP_ALLTOALL:
+    case COMP_ALLTOALL: //FIXME Utilizar version V
       if(config_file.iter_stage[stage].array != NULL)
         free(config_file.iter_stage[stage].array);
-      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes);
-      if(config_file.iter_stage[stage].full_array != NULL)
-        free(config_file.iter_stage[stage].full_array);
-      config_file.iter_stage[stage].full_array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes * group.numP);
-      break;
-    case COMP_REDUCE:
-      if(config_file.iter_stage[stage].array != NULL)
-        free(config_file.iter_stage[stage].array);
-      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes);
-      //Full array para el reduce necesita el mismo tamanyo
+      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].real_bytes);
       if(config_file.iter_stage[stage].full_array != NULL)
         free(config_file.iter_stage[stage].full_array);
       config_file.iter_stage[stage].full_array = malloc(sizeof(char) * config_file.iter_stage[stage].bytes);
+      break;
+    case COMP_REDUCE: //FIXME Utilizar version V
+      if(config_file.iter_stage[stage].array != NULL)
+        free(config_file.iter_stage[stage].array);
+      config_file.iter_stage[stage].array = malloc(sizeof(char) * config_file.iter_stage[stage].real_bytes);
+      //Full array para el reduce necesita el mismo tamanyo
+      if(config_file.iter_stage[stage].full_array != NULL)
+        free(config_file.iter_stage[stage].full_array);
+      config_file.iter_stage[stage].full_array = malloc(sizeof(char) * config_file.iter_stage[stage].real_bytes);
       break;
   }
   if(compute) {
@@ -113,16 +117,16 @@ double process_stage(void *config_file_void, int stage, void *group_void, MPI_Co
       break;
     //Comunicaciones
     case COMP_POINT:
-      point_to_point(group.myId, group.numP, ROOT, comm, stage_data.array, stage_data.bytes);
+      point_to_point(group.myId, group.numP, ROOT, comm, stage_data.array, stage_data.real_bytes);
       break;
     case COMP_BCAST:
-      MPI_Bcast(stage_data.array, stage_data.bytes, MPI_CHAR, ROOT, comm);
+      MPI_Bcast(stage_data.array, stage_data.real_bytes, MPI_CHAR, ROOT, comm);
       break;
     case COMP_ALLTOALL:
-      MPI_Alltoall(stage_data.array, stage_data.bytes, MPI_CHAR, stage_data.full_array, stage_data.bytes, MPI_CHAR, comm);
+      MPI_Alltoall(stage_data.array, stage_data.real_bytes, MPI_CHAR, stage_data.full_array, stage_data.real_bytes, MPI_CHAR, comm);
       break;
     case COMP_REDUCE:
-      MPI_Reduce(stage_data.array, stage_data.full_array, stage_data.bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+      MPI_Reduce(stage_data.array, stage_data.full_array, stage_data.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
       break;
   }
   return result;
@@ -212,4 +216,37 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
   MPI_Allreduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
   bw = ((double)n_bytes * 2) / max_time;
   return bw;
+}
+
+
+
+/* 
+ * Obatains for "Id" and "numP", how many
+ * bytes will have process "Id" and returns
+ * that quantity.
+ *
+ * TODO Refactor: Ya existe esta funcion en malleability/CommDist.c
+ */
+void get_byte_dist(int qty, int id, int numP, int *result) {
+  int rem, ini, fin, tamBl;
+
+  tamBl = qty / numP;
+  rem = qty % numP;
+
+  if(id < rem) { // First subgroup
+    ini = id * tamBl + id;
+    fin = (id+1) * tamBl + (id+1);
+  } else { // Second subgroup
+    ini = id * tamBl + rem;
+    fin = (id+1) * tamBl + rem;
+  }
+  
+  if(fin > qty) {
+    fin = qty;
+  }
+  if(ini > fin) {
+    ini = fin;
+  }
+
+  *result= fin - ini;
 }

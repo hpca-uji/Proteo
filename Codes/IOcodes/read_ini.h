@@ -10,7 +10,7 @@ typedef struct
 
   double t_op;
   int operations;
-  int bytes, bytes_real;
+  int bytes, real_bytes;
 
   char* array, *full_array;
   double* double_array;
@@ -20,7 +20,7 @@ typedef struct
 {
     int resizes, iter_stages;
     int actual_resize, actual_iter;
-    int matrix_tam, comm_tam, sdr, adr;
+    int matrix_tam, sdr, adr;
     int css, cst;
     int aib;
     double latency_m, bw_m;

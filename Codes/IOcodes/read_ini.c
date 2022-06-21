@@ -11,7 +11,7 @@ void malloc_config_resizes(configuration *user_config, int resizes);
 void init_config_stages(configuration *user_config, int stages);
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
 void def_struct_config_file_array(configuration *config_file, MPI_Datatype *config_type);
-void def_struct_iter_stage(iter_stage_t *iter_stage, MPI_Datatype *config_type);
+void def_struct_iter_stage(iter_stage_t *iter_stage, int stages, MPI_Datatype *config_type);
 
 /*
  * Funcion utilizada para leer el fichero de configuracion
@@ -42,8 +42,6 @@ static int handler(void* user, const char* section, const char* name,
         init_config_stages(pconfig, pconfig->iter_stages);
     } else if (MATCH("general", "matrix_tam")) {
         pconfig->matrix_tam = atoi(value);
-    } else if (MATCH("general", "comm_tam")) {
-        pconfig->comm_tam = atoi(value);
     } else if (MATCH("general", "SDR")) {
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) {
@@ -154,6 +152,7 @@ void init_config_stages(configuration *user_config, int stages) {
         user_config->iter_stage[i].array = NULL;
         user_config->iter_stage[i].full_array = NULL;
         user_config->iter_stage[i].double_array = NULL;
+        user_config->iter_stage[i].real_bytes = 0;
       }
     }
 }
@@ -168,19 +167,23 @@ void free_config(configuration *user_config) {
       free(user_config->procs);
       free(user_config->factors);
       free(user_config->phy_dist);
-
+      
       for(i=0; i < user_config->iter_stages; i++) {
-        if(user_config->iter_stage[i].array != NULL)
+        if(user_config->iter_stage[i].array != NULL) {
           free(user_config->iter_stage[i].array);
           user_config->iter_stage[i].array = NULL;
-        if(user_config->iter_stage[i].full_array != NULL)
+	}
+        if(user_config->iter_stage[i].full_array != NULL) {
           free(user_config->iter_stage[i].full_array);
           user_config->iter_stage[i].full_array = NULL;
-        if(user_config->iter_stage[i].double_array != NULL)
+	}
+        if(user_config->iter_stage[i].double_array != NULL) {
           free(user_config->iter_stage[i].double_array);
           user_config->iter_stage[i].double_array = NULL;
+	}
       }
-      free(user_config->iter_stage);
+      
+      //free(user_config->iter_stage); //FIXME ERROR de memoria relacionado con la carpeta malleability
       
       free(user_config);
     }
@@ -193,11 +196,11 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, stages=%d, matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d || grp=%d\n",
-        user_config->resizes, user_config->iter_stages, user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, grp);
+    printf("Config loaded: resizes=%d, stages=%d, matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d || grp=%d\n",
+        user_config->resizes, user_config->iter_stages, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, grp);
     for(i=0; i<user_config->iter_stages; i++) {
       printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
-        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].bytes);
+        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].real_bytes);
     }
     for(i=0; i<user_config->resizes; i++) {
       printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
@@ -223,11 +226,11 @@ void print_config_group(configuration *user_config, int grp) {
       sons = user_config->procs[grp+1];
     }
 
-    printf("Config: matrix=%d, comm_tam=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d\n",
-        user_config->matrix_tam, user_config->comm_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst);
+    printf("Config: matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d\n",
+        user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst);
     for(i=0; i<user_config->iter_stages; i++) {
       printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
-        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].bytes);
+        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].real_bytes);
     }
     printf("Config Group: iters=%d, factor=%f, phy=%d, procs=%d, parents=%d, sons=%d\n",
         user_config->iters[grp], user_config->factors[grp], user_config->phy_dist[grp], user_config->procs[grp], parents, sons);
@@ -263,7 +266,7 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
 
   // Obtener un tipo derivado para enviar las estructuras de fases de iteracion
   // con una sola comunicacion
-  def_struct_iter_stage(&(config_file->iter_stage[0]), &iter_stage_type);
+  def_struct_iter_stage(&(config_file->iter_stage[0]), config_file->iter_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
@@ -306,7 +309,7 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   // Obtener un tipo derivado para enviar los tres vectores
   // de enteros con una sola comunicacion
   def_struct_config_file_array(config_file, &config_type_array);
-  def_struct_iter_stage(&(config_file->iter_stage[0]), &iter_stage_type);
+  def_struct_iter_stage(&(config_file->iter_stage[0]), config_file->iter_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
   MPI_Bcast(config_file->factors, config_file->resizes, MPI_FLOAT, root, intercomm);
@@ -322,18 +325,18 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
 }
 
 /*
- * Tipo derivado para enviar 12 elementos especificos
+ * Tipo derivado para enviar 11 elementos especificos
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
-  int i, counts = 12;
-  int blocklengths[12] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 11;
+  int blocklengths[11] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = types[7] = types[8] = types[9] = MPI_INT;
-  types[10] = types[11] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = types[7] = types[8] = MPI_INT;
+  types[9] = types[10] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -342,14 +345,13 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Get_address(&(config_file->iter_stages), &displs[1]);
   MPI_Get_address(&(config_file->actual_resize), &displs[2]);
   MPI_Get_address(&(config_file->matrix_tam), &displs[3]);
-  MPI_Get_address(&(config_file->comm_tam), &displs[4]);
-  MPI_Get_address(&(config_file->sdr), &displs[5]);
-  MPI_Get_address(&(config_file->adr), &displs[6]);
-  MPI_Get_address(&(config_file->aib), &displs[7]);
-  MPI_Get_address(&(config_file->css), &displs[8]);
-  MPI_Get_address(&(config_file->cst), &displs[9]);
-  MPI_Get_address(&(config_file->latency_m), &displs[10]);
-  MPI_Get_address(&(config_file->bw_m), &displs[11]);
+  MPI_Get_address(&(config_file->sdr), &displs[4]);
+  MPI_Get_address(&(config_file->adr), &displs[5]);
+  MPI_Get_address(&(config_file->aib), &displs[6]);
+  MPI_Get_address(&(config_file->css), &displs[7]);
+  MPI_Get_address(&(config_file->cst), &displs[8]);
+  MPI_Get_address(&(config_file->latency_m), &displs[9]);
+  MPI_Get_address(&(config_file->bw_m), &displs[10]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -394,16 +396,16 @@ void def_struct_config_file_array(configuration *config_file, MPI_Datatype *conf
  * Tipo derivado para enviar elementos especificos
  * de la estructuras de fases de iteracion en una sola comunicacion.
  */
-void def_struct_iter_stage(iter_stage_t *iter_stage, MPI_Datatype *config_type) {
+void def_struct_iter_stage(iter_stage_t *iter_stage, int stages, MPI_Datatype *config_type) {
   int i, counts = 4;
   int blocklengths[4] = {1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
-  MPI_Datatype types[counts];
+  MPI_Datatype aux, types[counts];
 
   // Rellenar vector types
-  types[0] = MPI_INT;
+  types[0] = types[3] = MPI_INT;
   types[1] = MPI_FLOAT;
-  types[2] = types[3] = MPI_DOUBLE;
+  types[2] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(iter_stage, &dir);
@@ -415,6 +417,12 @@ void def_struct_iter_stage(iter_stage_t *iter_stage, MPI_Datatype *config_type) 
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
+  if (stages == 1) {
+    MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
+  } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
+    MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
+    // Tipo derivado para enviar N elementos de la estructura
+    MPI_Type_create_resized(aux, 0, 1*sizeof(iter_stage_t), config_type); 
+  }
   MPI_Type_commit(config_type);
 }

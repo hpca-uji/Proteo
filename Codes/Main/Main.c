@@ -111,6 +111,7 @@ int main(int argc, char *argv[]) {
 
       group->grp = group->grp + 1;
       obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+    print_config(config_file, group->grp);
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));

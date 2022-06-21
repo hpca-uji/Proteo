@@ -217,7 +217,6 @@ void init_results_data(results_data *results, int resizes, int iters_size) {
 
 void realloc_results_iters(results_data *results, int needed) {
   double *time_aux;
-
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
 
   if(time_aux == NULL) {
