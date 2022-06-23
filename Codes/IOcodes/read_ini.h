@@ -11,9 +11,17 @@ typedef struct
   double t_op;
   int operations;
   int bytes, real_bytes;
+  
+  // Variables to represent linear regresion
+  // for collective calls.
+  double slope, intercept;
 
+  // Arrays to communicate data;
   char* array, *full_array;
   double* double_array;
+  // Arrays to indicate how many bytes are received from each rank
+  int *counts, *displs;
+
 } iter_stage_t;
 
 typedef struct

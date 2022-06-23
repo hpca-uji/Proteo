@@ -111,7 +111,6 @@ int main(int argc, char *argv[]) {
 
       group->grp = group->grp + 1;
       obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
-    print_config(config_file, group->grp);
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));
@@ -378,6 +377,9 @@ void init_application() {
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
   obtain_op_times(1);
+
+  linear_regression_stage( (void*)&(config_file->iter_stage[0]), (void*)group, comm);
+  printf("TEST P%d -- slope=%lf intercept=%lf\n", group->myId, config_file->iter_stage[0].slope, config_file->iter_stage[0].intercept);
 }
 
 /*

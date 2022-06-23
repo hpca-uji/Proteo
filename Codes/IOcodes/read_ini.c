@@ -152,6 +152,8 @@ void init_config_stages(configuration *user_config, int stages) {
         user_config->iter_stage[i].array = NULL;
         user_config->iter_stage[i].full_array = NULL;
         user_config->iter_stage[i].double_array = NULL;
+        user_config->iter_stage[i].counts = NULL;
+        user_config->iter_stage[i].displs = NULL;
         user_config->iter_stage[i].real_bytes = 0;
       }
     }
@@ -169,6 +171,7 @@ void free_config(configuration *user_config) {
       free(user_config->phy_dist);
       
       for(i=0; i < user_config->iter_stages; i++) {
+	
         if(user_config->iter_stage[i].array != NULL) {
           free(user_config->iter_stage[i].array);
           user_config->iter_stage[i].array = NULL;
@@ -181,6 +184,16 @@ void free_config(configuration *user_config) {
           free(user_config->iter_stage[i].double_array);
           user_config->iter_stage[i].double_array = NULL;
 	}
+	
+        if(user_config->iter_stage[i].counts != NULL) {
+          free(user_config->iter_stage[i].counts);
+          user_config->iter_stage[i].counts = NULL;
+	}
+        if(user_config->iter_stage[i].displs != NULL) {
+          free(user_config->iter_stage[i].displs);
+          user_config->iter_stage[i].displs = NULL;
+	}
+	
       }
       
       //free(user_config->iter_stage); //FIXME ERROR de memoria relacionado con la carpeta malleability
@@ -226,8 +239,8 @@ void print_config_group(configuration *user_config, int grp) {
       sons = user_config->procs[grp+1];
     }
 
-    printf("Config: matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d\n",
-        user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst);
+    printf("Config: matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d, latency=%lf, bw=%lf\n",
+        user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, user_config->latency_m, user_config->bw_m);
     for(i=0; i<user_config->iter_stages; i++) {
       printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
         i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].real_bytes);
