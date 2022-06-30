@@ -60,13 +60,13 @@ void recv_results(results_data *results, int root, int resizes, MPI_Comm interco
  * En concreto son tres escalares y dos vectores de tamaño "resizes"
  */
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
-  int i, counts = 5;
-  int blocklengths[] = {1, 1, 1, 1, 1};
+  int i, counts = 6;
+  int blocklengths[] = {1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
   blocklengths[3] = blocklengths[4] = resizes;
 
   // Rellenar vector displs
@@ -75,8 +75,9 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(&(results->sync_start), &displs[0]);
   MPI_Get_address(&(results->async_start), &displs[1]);
   MPI_Get_address(&(results->exec_start), &displs[2]);
-  MPI_Get_address(&(results->spawn_real_time[0]), &displs[3]);
-  MPI_Get_address(&(results->spawn_time[0]), &displs[4]); //TODO Revisar si se puede simplificar //FIXME Si hay mas de un spawn error?
+  MPI_Get_address(&(results->wasted_time), &displs[3]);
+  MPI_Get_address(&(results->spawn_real_time[0]), &displs[4]);
+  MPI_Get_address(&(results->spawn_time[0]), &displs[5]); //TODO Revisar si se puede simplificar //FIXME Si hay mas de un spawn error?
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -201,12 +202,12 @@ void print_global_results(results_data results, int resizes) {
  * de los vectores de resultados.
  */
 void init_results_data(results_data *results, int resizes, int iters_size) {
-  //*results = malloc(1 * sizeof(results_data)); FIXME Borrar
 
   results->spawn_time = calloc(resizes, sizeof(double));
   results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
+  results->wasted_time = 0;
 
   results->iters_size = iters_size + 100;
   results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
@@ -229,7 +230,6 @@ void realloc_results_iters(results_data *results, int needed) {
 
 /*
  * Libera toda la memoria asociada con una estructura de resultados.
- * TODO Asegurar que ha sido inicializado?
  */
 void free_results_data(results_data *results) {
     if(results != NULL) {
@@ -240,5 +240,4 @@ void free_results_data(results_data *results) {
 
       free(results->iters_time);
       }
-      //free(*results); FIXME Borrar
 }

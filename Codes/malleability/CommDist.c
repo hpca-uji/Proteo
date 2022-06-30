@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <string.h>
+#include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
+/*
 struct Dist_data {
   int ini; //Primer elemento a enviar
   int fin; //Ultimo elemento a enviar
@@ -21,6 +23,7 @@ struct Counts {
   int *displs;
   int *zero_arr;
 };
+*/
 
 void send_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_child, int idI,  int idE, struct Counts counts);
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts);
@@ -35,10 +38,11 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
 void get_dist(int qty, int id, int numP, struct Dist_data *dist_data);
 void set_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts);
 void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS);
+/*
 void mallocCounts(struct Counts *counts, int numP);
 void freeCounts(struct Counts *counts);
-
 void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, const char* name);
+*/
 
 /*
  * Reserva memoria para un vector de hasta "qty" elementos.
@@ -506,52 +510,4 @@ void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS) {
     *idS = malloc(2 * sizeof(int));
     (*idS)[0] = idI;
     (*idS)[1] = idE;
-}
-
-/*
- * Reserva memoria para los vectores de counts/displs de la funcion
- * MPI_Alltoallv. Todos los vectores tienen un tamaño de numP, que es la
- * cantidad de procesos en el otro grupo de procesos.
- *
- * El vector counts indica cuantos elementos se comunican desde este proceso
- * al proceso "i" del otro grupo.
- *
- * El vector displs indica los desplazamientos necesarios para cada comunicacion
- * con el proceso "i" del otro grupo.
- *
- * El vector zero_arr se utiliza cuando se quiere indicar un vector incializado
- * a 0 en todos sus elementos. Sirve para indicar que no hay comunicacion.
- */
-void mallocCounts(struct Counts *counts, int numP) {
-    counts->counts = calloc(numP, sizeof(int)); 
-    if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
-
-    counts->displs = calloc(numP, sizeof(int));
-    if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
-
-    counts->zero_arr = calloc(numP, sizeof(int));
-    if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
-}
-
-/*
- * Libera la memoria interna de una estructura Counts.
- *
- * No libera la memoria de la estructura counts si se ha alojado
- * de forma dinamica.
- */
-void freeCounts(struct Counts *counts) {
-    free(counts->counts);
-    free(counts->displs);
-    free(counts->zero_arr);
-}
-
-
-void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, const char* name) {
-  int i;
-
-  for(i=0; i < size; i++) {
-    //if(xcounts[i] != 0) {
-      printf("P%d of %d | %scounts[%d]=%d disp=%d\n", data_dist.myId, data_dist.numP, name, i, xcounts[i], xdispls[i]);
-    //}
-  }
 }

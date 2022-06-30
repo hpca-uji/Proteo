@@ -1,7 +1,11 @@
+#ifndef READ_INI_H
+#define READ_INI_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
+#include "../malleability/distribution_methods/block_distribution.h"
 
 typedef struct
 {
@@ -10,7 +14,7 @@ typedef struct
 
   double t_op;
   int operations;
-  int bytes, real_bytes;
+  int bytes, real_bytes, my_bytes;
   
   // Variables to represent linear regresion
   // for collective calls.
@@ -20,7 +24,8 @@ typedef struct
   char* array, *full_array;
   double* double_array;
   // Arrays to indicate how many bytes are received from each rank
-  int *counts, *displs;
+  //int *counts, *displs;
+  struct Counts counts;
 
 } iter_stage_t;
 
@@ -48,3 +53,5 @@ void print_config_group(configuration *user_config, int grp);
 // MPI Intercomm functions
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm);
 void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_out);
+
+#endif

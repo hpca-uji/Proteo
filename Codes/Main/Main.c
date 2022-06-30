@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
     do {
 
       group->grp = group->grp + 1;
-      obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+      if(group->grp != 0) obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
       set_benchmark_grp(group->grp);
       get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
 
     if(res==1) { // Se ha llegado al final de la aplicacion
       MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
-      results->exec_time = MPI_Wtime() - results->exec_start;
+      results->exec_time = MPI_Wtime() - results->exec_start - result->wasted_time;
     }
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
@@ -230,7 +230,7 @@ double iterate(double *matrix, int n, int async_comm, int iter) {
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->iter_stages; i++) {
-    aux+= process_stage((void*)config_file, i, (void*)group, comm);
+    aux+= process_stage(*config_file, config_file->iter_stage[i], *group, comm);
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
@@ -377,19 +377,26 @@ void init_application() {
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
   obtain_op_times(1);
-
-  linear_regression_stage( (void*)&(config_file->iter_stage[0]), (void*)group, comm);
-  printf("TEST P%d -- slope=%lf intercept=%lf\n", group->myId, config_file->iter_stage[0].slope, config_file->iter_stage[0].intercept);
 }
 
 /*
  * Obtiene cuanto tiempo es necesario para realizar una operacion de PI
+ *
+ * Si compute esta a 1 se considera que se esta inicializando el entorno
+ * y realizará trabajo extra.
+ *
+ * Si compute esta a 0 se considera un entorno inicializado y solo hay que
+ * realizar algunos cambios de reserva de memoria. Si es necesario recalcular
+ * algo se obtiene el total de tiempo utilizado en dichas tareas y se resta
+ * al tiempo total de ejecucion.
  */
 void obtain_op_times(int compute) {
   int i;
+  double time = 0;
   for(i=0; i<config_file->iter_stages; i++) {
-    init_stage((void*)config_file, i, (void*)group, comm, compute);
+    time+=init_stage(config_file, i, *group, comm, compute);
   }
+  if(!compute) results->wasted_time += time;
 }
 
 /*

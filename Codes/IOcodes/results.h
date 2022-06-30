@@ -1,3 +1,6 @@
+#ifndef RESULTS_H
+#define RESULTS_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -14,7 +17,7 @@ typedef struct {
   double sync_start, sync_end,  *sync_time;
   double async_start, async_end, *async_time;
   double exec_start, exec_time;
-  //Overcharge time is time spent in malleability that is from IO modules 
+  double wasted_time; // Time spent recalculating iter stages
 } results_data;
 
 void send_results(results_data *results, int root, int resizes, MPI_Comm intercomm);
@@ -30,3 +33,5 @@ void print_global_results(results_data results, int resizes);
 void init_results_data(results_data *results, int resizes, int iters_size);
 void realloc_results_iters(results_data *results, int needed);
 void free_results_data(results_data *results);
+
+#endif

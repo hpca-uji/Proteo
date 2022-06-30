@@ -1,3 +1,6 @@
+#ifndef MAIN_DATATYPES_H
+#define MAIN_DATATYPES_H
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
@@ -20,9 +23,4 @@ typedef struct {
   char *sync_array, *async_array;
 } group_data;
 
-
-/*----------LINEAR REGRESSION TYPES--------------*/
-#define LR_ARRAY_TAM 7
-// Array for linear regression computation
-// Cantidades               10b 100b 1Kb   100Kb   1Mb      10Mb      100Mb
-double LR_bytes_array[LR_ARRAY_TAM] = {10, 100, 1000, 100000, 1000000, 10000000, 100000000};
+#endif

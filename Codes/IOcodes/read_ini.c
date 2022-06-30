@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include "read_ini.h"
 #include "../malleability/ProcessDist.h"
+#include "../malleability/distribution_methods/block_distribution.h"
 #include "ini.h"
 
 
@@ -40,7 +41,7 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->iter_stages = atoi(value);
         pconfig->iter_stage = malloc(sizeof(iter_stage_t) * pconfig->iter_stages);
         init_config_stages(pconfig, pconfig->iter_stages);
-    } else if (MATCH("general", "matrix_tam")) {
+    } else if (MATCH("general", "matrix_tam")) { //TODO Refactor cambiar nombre
         pconfig->matrix_tam = atoi(value);
     } else if (MATCH("general", "SDR")) {
         pconfig->sdr = atoi(value);
@@ -55,32 +56,38 @@ static int handler(void* user, const char* section, const char* name,
 
     // Iter stage
     } else if (MATCH(iter_name, "PT")) {
-        pconfig->iter_stage[act_iter].pt = atoi(value);
+	if(pconfig->actual_iter < pconfig->iter_stages)
+          pconfig->iter_stage[act_iter].pt = atoi(value);
     } else if (MATCH(iter_name, "bytes")) {
-        pconfig->iter_stage[act_iter].bytes = atoi(value);
+	if(pconfig->actual_iter < pconfig->iter_stages)
+          pconfig->iter_stage[act_iter].bytes = atoi(value);
     } else if (MATCH(iter_name, "t_stage")) {
-        pconfig->iter_stage[act_iter].t_stage = atof(value);
-
-        pconfig->actual_iter = pconfig->actual_iter+1; // Ultimo elemento del grupo
+	if(pconfig->actual_iter < pconfig->iter_stages) {
+          pconfig->iter_stage[act_iter].t_stage = atof(value);
+          pconfig->actual_iter = pconfig->actual_iter+1; // Ultimo elemento del grupo
+	}
 
     // Resize stage
     } else if (MATCH(resize_name, "iters")) {
-        pconfig->iters[act_resize] = atoi(value);
+	if(pconfig->actual_resize < pconfig->resizes)
+          pconfig->iters[act_resize] = atoi(value);
     } else if (MATCH(resize_name, "procs")) {
-        pconfig->procs[act_resize] = atoi(value);
+	if(pconfig->actual_resize < pconfig->resizes)
+          pconfig->procs[act_resize] = atoi(value);
     } else if (MATCH(resize_name, "factor")) {
-        pconfig->factors[act_resize] = atof(value);
+	if(pconfig->actual_resize < pconfig->resizes)
+          pconfig->factors[act_resize] = atof(value);
     } else if (MATCH(resize_name, "physical_dist")) {
-
-	char *aux = strdup(value);
-        if (strcmp(aux, "node") == 0) {
-          pconfig->phy_dist[act_resize] = COMM_PHY_NODES;
-	} else {
-          pconfig->phy_dist[act_resize] = COMM_PHY_CPU;
+	if(pconfig->actual_resize < pconfig->resizes) {
+  	  char *aux = strdup(value);
+          if (strcmp(aux, "node") == 0) {
+            pconfig->phy_dist[act_resize] = COMM_PHY_NODES;
+  	  } else {
+            pconfig->phy_dist[act_resize] = COMM_PHY_CPU;
+	  }
+	  free(aux);
+          pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
 	}
-
-	free(aux);
-        pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
 
     } else {
         return 0;  /* unknown section or name, error */
@@ -152,8 +159,7 @@ void init_config_stages(configuration *user_config, int stages) {
         user_config->iter_stage[i].array = NULL;
         user_config->iter_stage[i].full_array = NULL;
         user_config->iter_stage[i].double_array = NULL;
-        user_config->iter_stage[i].counts = NULL;
-        user_config->iter_stage[i].displs = NULL;
+        user_config->iter_stage[i].counts.counts = NULL;
         user_config->iter_stage[i].real_bytes = 0;
       }
     }
@@ -184,20 +190,13 @@ void free_config(configuration *user_config) {
           free(user_config->iter_stage[i].double_array);
           user_config->iter_stage[i].double_array = NULL;
 	}
-	
-        if(user_config->iter_stage[i].counts != NULL) {
-          free(user_config->iter_stage[i].counts);
-          user_config->iter_stage[i].counts = NULL;
-	}
-        if(user_config->iter_stage[i].displs != NULL) {
-          free(user_config->iter_stage[i].displs);
-          user_config->iter_stage[i].displs = NULL;
+        if(user_config->iter_stage[i].counts.counts != NULL) {
+	  freeCounts(&(user_config->iter_stage[i].counts));
 	}
 	
       }
       
       //free(user_config->iter_stage); //FIXME ERROR de memoria relacionado con la carpeta malleability
-      
       free(user_config);
     }
 }

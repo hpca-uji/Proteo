@@ -18,8 +18,7 @@ echo "MPICH"
 
 numP=$(bash recordMachinefile.sh $configFile)
 
-#mpirun -print-all-exitcodes -f hostfile.o$SLURM_JOB_ID $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
-#mpirun -np 2 /home/martini/Instalaciones/valgrind-mpich-3.4.1-noucx/bin/valgrind --leak-check=full --show-leak-kinds=all --log-file=nc.vg.%p $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
+#mpirun -np 4 /home/martini/Instalaciones/valgrind-mpich-3.4.1-noucx/bin/valgrind --leak-check=full --show-leak-kinds=all --log-file=nc.vg.%p $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
 mpirun -np $numP $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
 rm hostfile.o$SLURM_JOB_ID
 
