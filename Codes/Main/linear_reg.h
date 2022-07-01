@@ -14,5 +14,8 @@ void lr_calc_Y(double slope, double intercept, double x_value, int *y_result);
 void lr_compute(int loop_iters, double *bytes, double *times, double *slope, double *intercept);
 
 void lr_times_bcast(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times);
+void lr_times_allgatherv(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times);
+void lr_times_reduce(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times);
+void lr_times_allreduce(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times);
 
 #endif

@@ -225,10 +225,13 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
       lr_times_bcast(group.myId, group.numP, ROOT, comm, loop_iters, times);
       break;
     case COMP_ALLGATHER:
+      lr_times_allgatherv(group.myId, group.numP, ROOT, comm, loop_iters, times);
       break;
     case COMP_REDUCE:
+      lr_times_reduce(group.myId, group.numP, ROOT, comm, loop_iters, times);
       break;
     case COMP_ALLREDUCE:
+      lr_times_allreduce(group.myId, group.numP, ROOT, comm, loop_iters, times);
       break;
     default:
       return;

@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
 
     if(res==1) { // Se ha llegado al final de la aplicacion
       MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
-      results->exec_time = MPI_Wtime() - results->exec_start - result->wasted_time;
+      results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
     }
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 

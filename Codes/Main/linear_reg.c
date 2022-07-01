@@ -3,6 +3,7 @@
 #include <math.h>
 #include <mpi.h>
 #include "Main_datatypes.h"
+#include "../malleability/distribution_methods/block_distribution.h"
 #include "linear_reg.h"
 
 
@@ -113,35 +114,91 @@ void lr_times_bcast(int myId, int numP, int root, MPI_Comm comm, int loop_iters,
  * Obtains an array of times to perform an "Allgatherv"
  * operation depending on a predifined set of number of bytes.
  */
-/*
 void lr_times_allgatherv(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times) {
   int i, j, n;
-  int *counts, *displs;
   double start_time;
-  char *aux = NULL;
-
-  counts = calloc(numP,sizeof(int));
-  displs = calloc(numP,sizeof(int));
+  char *aux = NULL, *aux_full = NULL;
+  struct Dist_data dist_data;
+  struct Counts counts;
 
   for(i=0; i<LR_ARRAY_TAM; i++) {
     n = LR_bytes_array[i];
-    aux = malloc( * sizeof(char));
+
+    prepare_comm_allgatherv(numP, n, &counts);    
+    get_block_dist(n, myId, numP, &dist_data);
+
+    aux = malloc(dist_data.tamBl * sizeof(char));
     aux_full = malloc(n * sizeof(char));
 
     for(j=0; j<loop_iters; j++) {
       MPI_Barrier(comm);
       start_time = MPI_Wtime();
-      MPI_Allgatherv(aux, stage_data.my_bytes, MPI_CHAR, aux_full, counts, displs, MPI_CHAR, comm);
+      MPI_Allgatherv(aux, dist_data.tamBl, MPI_CHAR, aux_full, counts.counts, counts.displs, MPI_CHAR, comm);
       times[i*loop_iters+j] = MPI_Wtime() - start_time;
     }
     
-
+    freeCounts(&counts);
     free(aux);
     free(aux_full);
     aux_full = NULL;
     aux = NULL;
   }
-  free(counts);
-  free(displs);
 }
-*/
+
+/*
+ * Obtains an array of times to perform an "Reduce"
+ * operation depending on a predifined set of number of bytes.
+ */
+void lr_times_reduce(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times) {
+  int i, j, n;
+  double start_time;
+  char *aux = NULL, *aux_full = NULL;
+
+  for(i=0; i<LR_ARRAY_TAM; i++) {
+    n = LR_bytes_array[i];
+
+    aux = malloc(n * sizeof(char));
+    aux_full = malloc(n * sizeof(char));
+
+    for(j=0; j<loop_iters; j++) {
+      MPI_Barrier(comm);
+      start_time = MPI_Wtime();
+      MPI_Reduce(aux, aux_full, n, MPI_CHAR, MPI_MAX, root, comm);
+      times[i*loop_iters+j] = MPI_Wtime() - start_time;
+    }
+    
+    free(aux);
+    free(aux_full);
+    aux_full = NULL;
+    aux = NULL;
+  }
+}
+
+/*
+ * Obtains an array of times to perform an "Allreduce"
+ * operation depending on a predifined set of number of bytes.
+ */
+void lr_times_allreduce(int myId, int numP, int root, MPI_Comm comm, int loop_iters, double *times) {
+  int i, j, n;
+  double start_time;
+  char *aux = NULL, *aux_full = NULL;
+
+  for(i=0; i<LR_ARRAY_TAM; i++) {
+    n = LR_bytes_array[i];
+
+    aux = malloc(n * sizeof(char));
+    aux_full = malloc(n * sizeof(char));
+
+    for(j=0; j<loop_iters; j++) {
+      MPI_Barrier(comm);
+      start_time = MPI_Wtime();
+      MPI_Allreduce(aux, aux_full, n, MPI_CHAR, MPI_MAX, comm);
+      times[i*loop_iters+j] = MPI_Wtime() - start_time;
+    }
+    
+    free(aux);
+    free(aux_full);
+    aux_full = NULL;
+    aux = NULL;
+  }
+}
