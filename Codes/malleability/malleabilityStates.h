@@ -28,8 +28,8 @@
 #define MAL_APP_ENDED 1
 
 // TODO Refactor
-#define COMM_PHY_NODES 1
-#define COMM_PHY_CPU 2
+#define COMM_PHY_SPREAD 1
+#define COMM_PHY_COMPACT 2
 
 // SPAWN METHODS
 #define COMM_SPAWN_SERIAL 0

@@ -41,7 +41,7 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
   double result = 0;
   int qty = 20000;
 
-  iter_stage_t *stage = &(config_file->iter_stage[stage_i]);
+  iter_stage_t *stage = &(config_file->stages[stage_i]);
   stage->operations = qty;
 
   switch(stage->pt) {
@@ -83,12 +83,12 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     //Computo
     case COMP_PI:
       for(i=0; i < stage.operations; i++) {
-        result += computePiSerial(config_file.matrix_tam);
+        result += computePiSerial(config_file.granularity);
       }
       break;
     case COMP_MATRIX:
       for(i=0; i < stage.operations; i++) {
-        result += computeMatrix(stage.double_array, config_file.matrix_tam); //FIXME No da tiempos repetibles
+        result += computeMatrix(stage.double_array, config_file.granularity); //FIXME No da tiempos repetibles
       } 
       break;
     //Comunicaciones
@@ -128,29 +128,29 @@ double latency(int myId, int numP, MPI_Comm comm) {
   aux = '0';
   elapsed_time = 0;
 
-  if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
+  //if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
     MPI_Barrier(comm);
     start_time = MPI_Wtime();
-    if(myId % 2 == 0){
+    //if(myId % 2 == 0){
+    if(myId == 0) {
       for(i=0; i<loop_count; i++){
-        MPI_Ssend(&aux, 0, MPI_CHAR, myId+1, 99, comm);
+        MPI_Ssend(&aux, 0, MPI_CHAR, numP-1, 99, comm);
       }
-      MPI_Recv(&aux, 0, MPI_CHAR, myId+1, 99, comm, MPI_STATUS_IGNORE);
-    } else {
+      MPI_Recv(&aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
+    } else if(myId+1 == numP) {
       for(i=0; i<loop_count; i++){
-        MPI_Recv(&aux, 0, MPI_CHAR, myId-1, 99, comm, MPI_STATUS_IGNORE);
+        MPI_Recv(&aux, 0, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
       }
-      MPI_Ssend(&aux, 0, MPI_CHAR, myId-1, 99, comm);
+      MPI_Ssend(&aux, 0, MPI_CHAR, 0, 99, comm);
     }
+
     MPI_Barrier(comm);
     stop_time = MPI_Wtime();
-    elapsed_time = (stop_time - start_time) / loop_count;
-  }
+    max_time = (stop_time - start_time) / loop_count;
+  //}
 
-  if(myId %2 != 0) {
-    elapsed_time=0;
-  }
-  MPI_Allreduce(&elapsed_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
+  //MPI_Allreduce(&elapsed_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
+  MPI_Bcast(&max_time, 1, MPI_DOUBLE, ROOT, comm);
   return max_time;
 }
 
@@ -171,31 +171,33 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
   elapsed_time = 0;
   time = 0;
 
-  if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
+//  if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
 
     MPI_Barrier(comm);
     start_time = MPI_Wtime();
-    if(myId % 2 == 0){
+    //if(myId % 2 == 0){
+    if(myId == 0) {
       for(i=0; i<loop_count; i++){
-        MPI_Ssend(aux, n, MPI_CHAR, myId+1, 99, comm);
+        MPI_Ssend(aux, n, MPI_CHAR, numP-1, 99, comm);
       }
-      MPI_Recv(aux, 0, MPI_CHAR, myId+1, 99, comm, MPI_STATUS_IGNORE);
-    } else {
+      MPI_Recv(aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
+    } else if(myId+1 == numP) {
       for(i=0; i<loop_count; i++){
-        MPI_Recv(aux, n, MPI_CHAR, myId-1, 99, comm, MPI_STATUS_IGNORE);
+        MPI_Recv(aux, n, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
       }
-      MPI_Ssend(aux, 0, MPI_CHAR, myId-1, 99, comm);
+      MPI_Ssend(aux, 0, MPI_CHAR, 0, 99, comm);
     }
     MPI_Barrier(comm);
     stop_time = MPI_Wtime();
     elapsed_time = (stop_time - start_time) / loop_count;
-  }
+  //}
 
   if(myId %2 == 0) {
     time = elapsed_time - latency;
   }
 
   MPI_Allreduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
+  //TODO Cambiar a Bcast si solo se realiza por Root
   bw = ((double)n_bytes) / max_time;
   free(aux);
   return bw;
@@ -240,6 +242,18 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
 
   if(group.myId == ROOT) {
     MPI_Reduce(MPI_IN_PLACE, times, LR_ARRAY_TAM * loop_iters, MPI_DOUBLE, MPI_MAX, ROOT, comm);
+    /*
+    printf("PT=%d ", stage->pt);
+    for(i=0; i<tam; i++) {
+      printf("%lf, ", times[i]);
+    }
+    printf("\n");
+    printf("BYTES ");
+    for(i=0; i<tam; i++) {
+      printf("%lf, ", bytes[i]);
+    }
+    printf("\n");
+    */
     lr_compute(tam, bytes, times, &(stage->slope), &(stage->intercept));
   } else {
     MPI_Reduce(times, NULL, LR_ARRAY_TAM * loop_iters, MPI_DOUBLE, MPI_MAX, ROOT, comm);
@@ -266,7 +280,7 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
 
   result = 0;
   t_stage = stage->t_stage * config_file->factors[group.grp];
-  initMatrix(&(stage->double_array), config_file->matrix_tam);
+  initMatrix(&(stage->double_array), config_file->granularity);
 
   double start_time = MPI_Wtime();
   if(group.myId == ROOT && compute) {

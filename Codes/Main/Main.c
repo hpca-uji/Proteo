@@ -116,8 +116,8 @@ int main(int argc, char *argv[]) {
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
 
-      if(config_file->resizes != group->grp + 1) { 
-        set_malleability_configuration(config_file->cst, config_file->css, config_file->phy_dist[group->grp+1], -1, config_file->aib, -1);
+      if(config_file->n_resizes != group->grp + 1) { 
+        set_malleability_configuration(config_file->sm, config_file->ss, config_file->phy_dist[group->grp+1], -1, config_file->at, -1);
         set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
 
         if(group->grp == 0) {
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
 
       print_local_results();
       reset_results_index(results);
-    } while((config_file->resizes > group->grp + 1) && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD));
+    } while((config_file->n_resizes > group->grp + 1) && (config_file->sm == COMM_SPAWN_MERGE || config_file->sm == COMM_SPAWN_MERGE_PTHREAD));
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -153,7 +153,7 @@ int main(int argc, char *argv[]) {
       MPI_Comm_free(&comm);
     }
 
-    if(group->myId == ROOT && (config_file->cst == COMM_SPAWN_MERGE || config_file->cst == COMM_SPAWN_MERGE_PTHREAD)) {
+    if(group->myId == ROOT && (config_file->sm == COMM_SPAWN_MERGE || config_file->sm == COMM_SPAWN_MERGE_PTHREAD)) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
     free_application_data();
@@ -183,21 +183,20 @@ int work() {
   double *matrix = NULL;
 
   maxiter = config_file->iters[group->grp];
-  //initMatrix(&matrix, config_file->matrix_tam);
   state = MAL_NOT_STARTED;
   
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
-    iterate(matrix, config_file->matrix_tam, state, iter);
+    iterate(matrix, config_file->granularity, state, iter);
   }
 
-  if(config_file->resizes != group->grp + 1)
+  if(config_file->n_resizes != group->grp + 1)
     state = malleability_checkpoint();
 
   iter = 0;
   while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) {
     if(iter < config_file->iters[group->grp+1]) {
-      iterate(matrix, config_file->matrix_tam, state, iter);
+      iterate(matrix, config_file->granularity, state, iter);
       iter++;
       group->iter_start = iter;
     }
@@ -205,7 +204,7 @@ int work() {
   }
 
   
-  if(config_file->resizes - 1 == group->grp) res=1;
+  if(config_file->n_resizes - 1 == group->grp) res=1;
   if(state == MAL_ZOMBIE) res=state;
   return res;
 }
@@ -229,8 +228,8 @@ double iterate(double *matrix, int n, int async_comm, int iter) {
 
   start_time = MPI_Wtime();
 
-  for(i=0; i < config_file->iter_stages; i++) {
-    aux+= process_stage(*config_file, config_file->iter_stage[i], *group, comm);
+  for(i=0; i < config_file->n_stages; i++) {
+    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
@@ -311,7 +310,7 @@ int print_final_results() {
 
   if(group->myId == ROOT) {
 
-    if(group->grp == config_file->resizes -1) {
+    if(group->grp == config_file->n_resizes -1) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
       if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
@@ -321,7 +320,7 @@ int print_final_results() {
       ptr_out = dup(1);
       create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
-      print_global_results(*results, config_file->resizes);
+      print_global_results(*results, config_file->n_resizes);
       fflush(stdout);
       free(file_name);
 
@@ -365,7 +364,7 @@ void init_application() {
 
   config_file = read_ini_file(group->argv[1]);
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->resizes, config_file->iters[group->grp]);
+  init_results_data(results, config_file->n_resizes, config_file->iters[group->grp]);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
@@ -374,6 +373,7 @@ void init_application() {
   }
 
   int message_tam = 100000000;
+  message_tam =     10240000;
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
   obtain_op_times(1);
@@ -393,7 +393,7 @@ void init_application() {
 void obtain_op_times(int compute) {
   int i;
   double time = 0;
-  for(i=0; i<config_file->iter_stages; i++) {
+  for(i=0; i<config_file->n_stages; i++) {
     time+=init_stage(config_file, i, *group, comm, compute);
   }
   if(!compute) results->wasted_time += time;

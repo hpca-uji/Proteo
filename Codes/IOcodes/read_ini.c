@@ -12,7 +12,7 @@ void malloc_config_resizes(configuration *user_config, int resizes);
 void init_config_stages(configuration *user_config, int stages);
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
 void def_struct_config_file_array(configuration *config_file, MPI_Datatype *config_type);
-void def_struct_iter_stage(iter_stage_t *iter_stage, int stages, MPI_Datatype *config_type);
+void def_struct_iter_stage(iter_stage_t *stages, int n_stages, MPI_Datatype *config_type);
 
 /*
  * Funcion utilizada para leer el fichero de configuracion
@@ -26,64 +26,62 @@ static int handler(void* user, const char* section, const char* name,
     configuration* pconfig = (configuration*)user;
 
     char *resize_name = malloc(10 * sizeof(char));
-    int act_resize = pconfig->actual_resize;
-    snprintf(resize_name, 10, "resize%d", act_resize);
+    snprintf(resize_name, 10, "resize%d", pconfig->actual_resize);
 
-    char *iter_name = malloc(10 * sizeof(char));
-    int act_iter = pconfig->actual_iter;
-    snprintf(iter_name, 10, "stage%d", act_iter);
+    char *stage_name = malloc(10 * sizeof(char));
+    snprintf(stage_name, 10, "stage%d", pconfig->actual_stage);
 
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
-    if (MATCH("general", "resizes")) {
-        pconfig->resizes = atoi(value) + 1;
-        malloc_config_resizes(pconfig, pconfig->resizes);
-    } else if (MATCH("general", "iter_stages")) {
-        pconfig->iter_stages = atoi(value);
-        pconfig->iter_stage = malloc(sizeof(iter_stage_t) * pconfig->iter_stages);
-        init_config_stages(pconfig, pconfig->iter_stages);
-    } else if (MATCH("general", "matrix_tam")) { //TODO Refactor cambiar nombre
-        pconfig->matrix_tam = atoi(value);
+    if (MATCH("general", "R")) {
+        pconfig->n_resizes = atoi(value) + 1;
+        malloc_config_resizes(pconfig, pconfig->n_resizes);
+    } else if (MATCH("general", "S")) {
+        pconfig->n_stages = atoi(value);
+        pconfig->stages = malloc(sizeof(iter_stage_t) * pconfig->n_stages);
+        init_config_stages(pconfig, pconfig->n_stages);
+    } else if (MATCH("general", "Granularity")) {
+        pconfig->granularity = atoi(value);
     } else if (MATCH("general", "SDR")) {
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) {
         pconfig->adr = atoi(value);
-    } else if (MATCH("general", "AIB")) { //TODO Refactor cambiar nombre
-        pconfig->aib = atoi(value);
-    } else if (MATCH("general", "CST")) {
-        pconfig->cst = atoi(value);
-    } else if (MATCH("general", "CSS")) {
-        pconfig->css = atoi(value);
+    } else if (MATCH("general", "AT")) {
+        pconfig->at = atoi(value);
+    } else if (MATCH("general", "SM")) {
+        pconfig->sm = atoi(value);
+    } else if (MATCH("general", "SS")) {
+        pconfig->ss = atoi(value);
 
     // Iter stage
-    } else if (MATCH(iter_name, "PT")) {
-	if(pconfig->actual_iter < pconfig->iter_stages)
-          pconfig->iter_stage[act_iter].pt = atoi(value);
-    } else if (MATCH(iter_name, "bytes")) {
-	if(pconfig->actual_iter < pconfig->iter_stages)
-          pconfig->iter_stage[act_iter].bytes = atoi(value);
-    } else if (MATCH(iter_name, "t_stage")) {
-	if(pconfig->actual_iter < pconfig->iter_stages) {
-          pconfig->iter_stage[act_iter].t_stage = atof(value);
-          pconfig->actual_iter = pconfig->actual_iter+1; // Ultimo elemento del grupo
+    } else if (MATCH(stage_name, "PT")) {
+	if(pconfig->actual_stage < pconfig->n_stages)
+          pconfig->stages[pconfig->actual_stage].pt = atoi(value);
+    } else if (MATCH(stage_name, "bytes")) {
+	if(pconfig->actual_stage < pconfig->n_stages)
+          pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
+    } else if (MATCH(stage_name, "t_stage")) {
+	if(pconfig->actual_stage < pconfig->n_stages) {
+          pconfig->stages[pconfig->actual_stage].t_stage = atof(value);
+          pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
 	}
 
     // Resize stage
-    } else if (MATCH(resize_name, "iters")) {
-	if(pconfig->actual_resize < pconfig->resizes)
-          pconfig->iters[act_resize] = atoi(value);
-    } else if (MATCH(resize_name, "procs")) {
-	if(pconfig->actual_resize < pconfig->resizes)
-          pconfig->procs[act_resize] = atoi(value);
-    } else if (MATCH(resize_name, "factor")) {
-	if(pconfig->actual_resize < pconfig->resizes)
-          pconfig->factors[act_resize] = atof(value);
-    } else if (MATCH(resize_name, "physical_dist")) {
-	if(pconfig->actual_resize < pconfig->resizes) {
+    } else if (MATCH(resize_name, "Iters")) {
+	if(pconfig->actual_resize < pconfig->n_resizes)
+          pconfig->iters[pconfig->actual_resize] = atoi(value);
+    } else if (MATCH(resize_name, "Procs")) {
+	if(pconfig->actual_resize < pconfig->n_resizes)
+          pconfig->procs[pconfig->actual_resize] = atoi(value);
+    } else if (MATCH(resize_name, "FactorS")) {
+	if(pconfig->actual_resize < pconfig->n_resizes)
+          pconfig->factors[pconfig->actual_resize] = atof(value);
+    } else if (MATCH(resize_name, "Dist")) {
+	if(pconfig->actual_resize < pconfig->n_resizes) {
   	  char *aux = strdup(value);
-          if (strcmp(aux, "node") == 0) {
-            pconfig->phy_dist[act_resize] = COMM_PHY_NODES;
+          if (strcmp(aux, "spread") == 0) {
+            pconfig->phy_dist[pconfig->actual_resize] = COMM_PHY_SPREAD;
   	  } else {
-            pconfig->phy_dist[act_resize] = COMM_PHY_CPU;
+            pconfig->phy_dist[pconfig->actual_resize] = COMM_PHY_COMPACT;
 	  }
 	  free(aux);
           pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
@@ -94,7 +92,7 @@ static int handler(void* user, const char* section, const char* name,
     }
  
     free(resize_name);
-    free(iter_name);
+    free(stage_name);
     return 1;
 }
 
@@ -114,7 +112,7 @@ configuration *read_ini_file(char *file_name) {
 	return NULL;
     }
     config->actual_resize=0;
-    config->actual_iter=0;
+    config->actual_stage=0;
 
     if(ini_parse(file_name, handler, config) < 0) { // Obtener configuracion
         printf("Can't load '%s'\n", file_name);
@@ -155,12 +153,12 @@ void malloc_config_resizes(configuration *user_config, int resizes) {
 void init_config_stages(configuration *user_config, int stages) {
     int i;
     if(user_config != NULL) {
-       for(i=0; i<user_config->iter_stages; i++) {
-        user_config->iter_stage[i].array = NULL;
-        user_config->iter_stage[i].full_array = NULL;
-        user_config->iter_stage[i].double_array = NULL;
-        user_config->iter_stage[i].counts.counts = NULL;
-        user_config->iter_stage[i].real_bytes = 0;
+       for(i=0; i<user_config->n_stages; i++) {
+        user_config->stages[i].array = NULL;
+        user_config->stages[i].full_array = NULL;
+        user_config->stages[i].double_array = NULL;
+        user_config->stages[i].counts.counts = NULL;
+        user_config->stages[i].real_bytes = 0;
       }
     }
 }
@@ -176,27 +174,27 @@ void free_config(configuration *user_config) {
       free(user_config->factors);
       free(user_config->phy_dist);
       
-      for(i=0; i < user_config->iter_stages; i++) {
+      for(i=0; i < user_config->n_stages; i++) {
 	
-        if(user_config->iter_stage[i].array != NULL) {
-          free(user_config->iter_stage[i].array);
-          user_config->iter_stage[i].array = NULL;
+        if(user_config->stages[i].array != NULL) {
+          free(user_config->stages[i].array);
+          user_config->stages[i].array = NULL;
 	}
-        if(user_config->iter_stage[i].full_array != NULL) {
-          free(user_config->iter_stage[i].full_array);
-          user_config->iter_stage[i].full_array = NULL;
+        if(user_config->stages[i].full_array != NULL) {
+          free(user_config->stages[i].full_array);
+          user_config->stages[i].full_array = NULL;
 	}
-        if(user_config->iter_stage[i].double_array != NULL) {
-          free(user_config->iter_stage[i].double_array);
-          user_config->iter_stage[i].double_array = NULL;
+        if(user_config->stages[i].double_array != NULL) {
+          free(user_config->stages[i].double_array);
+          user_config->stages[i].double_array = NULL;
 	}
-        if(user_config->iter_stage[i].counts.counts != NULL) {
-	  freeCounts(&(user_config->iter_stage[i].counts));
+        if(user_config->stages[i].counts.counts != NULL) {
+	  freeCounts(&(user_config->stages[i].counts));
 	}
 	
       }
       
-      //free(user_config->iter_stage); //FIXME ERROR de memoria relacionado con la carpeta malleability
+      //free(user_config->stages); //FIXME ERROR de memoria relacionado con la carpeta malleability
       free(user_config);
     }
 }
@@ -208,14 +206,15 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, stages=%d, matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d || grp=%d\n",
-        user_config->resizes, user_config->iter_stages, user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, grp);
-    for(i=0; i<user_config->iter_stages; i++) {
-      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
-        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].real_bytes);
+    printf("Config loaded: resizes=%d, stages=%d, granularity=%d, sdr=%d, adr=%d, at=%d, sm=%d, ss=%d, latency=%lf, bw=%lf || grp=%d\n",
+        user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr, 
+	user_config->at, user_config->sm, user_config->ss, user_config->latency_m, user_config->bw_m, grp);
+    for(i=0; i<user_config->n_stages; i++) {
+      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d, Intercept=%lf, Slope=%lf\n",
+        i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].intercept, user_config->stages[i].slope);
     }
-    for(i=0; i<user_config->resizes; i++) {
-      printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Phy=%d\n",
+    for(i=0; i<user_config->n_resizes; i++) {
+      printf("Resize %d: Iters=%d, Procs=%d, Factors=%f, Dist=%d\n",
         i, user_config->iters[i], user_config->procs[i], user_config->factors[i], user_config->phy_dist[i]);
     }
   }
@@ -234,15 +233,15 @@ void print_config_group(configuration *user_config, int grp) {
     if(grp > 0) {
       parents = user_config->procs[grp-1];
     }
-    if(grp < user_config->resizes - 1) {
+    if(grp < user_config->n_resizes - 1) {
       sons = user_config->procs[grp+1];
     }
 
-    printf("Config: matrix=%d, sdr=%d, adr=%d, aib=%d, css=%d, cst=%d, latency=%lf, bw=%lf\n",
-        user_config->matrix_tam, user_config->sdr, user_config->adr, user_config->aib, user_config->css, user_config->cst, user_config->latency_m, user_config->bw_m);
-    for(i=0; i<user_config->iter_stages; i++) {
-      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
-        i, user_config->iter_stage[i].pt, user_config->iter_stage[i].t_stage, user_config->iter_stage[i].real_bytes);
+    printf("Config: granularity=%d, sdr=%d, adr=%d, at=%d, sm=%d, ss=%d, latency=%lf, bw=%lf\n",
+        user_config->granularity, user_config->sdr, user_config->adr, user_config->at, user_config->sm, user_config->ss, user_config->latency_m, user_config->bw_m);
+    for(i=0; i<user_config->n_stages; i++) {
+      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d, Intercept=%lf, Slope=%lf\n",
+        i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].intercept, user_config->stages[i].slope);
     }
     printf("Config Group: iters=%d, factor=%f, phy=%d, procs=%d, parents=%d, sons=%d\n",
         user_config->iters[grp], user_config->factors[grp], user_config->phy_dist[grp], user_config->procs[grp], parents, sons);
@@ -278,12 +277,12 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
 
   // Obtener un tipo derivado para enviar las estructuras de fases de iteracion
   // con una sola comunicacion
-  def_struct_iter_stage(&(config_file->iter_stage[0]), config_file->iter_stages, &iter_stage_type);
+  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
-  MPI_Bcast(config_file->factors, config_file->resizes, MPI_FLOAT, root, intercomm);
-  MPI_Bcast(config_file->iter_stage, config_file->iter_stages, iter_stage_type, root, intercomm);
+  MPI_Bcast(config_file->factors, config_file->n_resizes, MPI_FLOAT, root, intercomm);
+  MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
 
   //Liberar tipos derivados
   MPI_Type_free(&config_type);
@@ -315,24 +314,24 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
 
   //Inicializado de estructuras internas
-  malloc_config_resizes(config_file, config_file->resizes); // Reserva de memoria de los vectores
-  config_file->iter_stage = malloc(sizeof(iter_stage_t) * config_file->iter_stages);
+  malloc_config_resizes(config_file, config_file->n_resizes); // Reserva de memoria de los vectores
+  config_file->stages = malloc(sizeof(iter_stage_t) * config_file->n_stages);
 
   // Obtener un tipo derivado para enviar los tres vectores
   // de enteros con una sola comunicacion
   def_struct_config_file_array(config_file, &config_type_array);
-  def_struct_iter_stage(&(config_file->iter_stage[0]), config_file->iter_stages, &iter_stage_type);
+  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type_array, root, intercomm);
-  MPI_Bcast(config_file->factors, config_file->resizes, MPI_FLOAT, root, intercomm);
-  MPI_Bcast(config_file->iter_stage, config_file->iter_stages, iter_stage_type, root, intercomm);
+  MPI_Bcast(config_file->factors, config_file->n_resizes, MPI_FLOAT, root, intercomm);
+  MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
 
   //Liberar tipos derivados
   MPI_Type_free(&config_type);
   MPI_Type_free(&config_type_array);
   MPI_Type_free(&iter_stage_type);
 
-  init_config_stages(config_file, config_file->iter_stages); // Inicializar a NULL vectores
+  init_config_stages(config_file, config_file->n_stages); // Inicializar a NULL vectores
   *config_file_out = config_file;
 }
 
@@ -353,15 +352,15 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
 
-  MPI_Get_address(&(config_file->resizes), &displs[0]);
-  MPI_Get_address(&(config_file->iter_stages), &displs[1]);
-  MPI_Get_address(&(config_file->actual_resize), &displs[2]);
-  MPI_Get_address(&(config_file->matrix_tam), &displs[3]);
+  MPI_Get_address(&(config_file->n_resizes), &displs[0]);
+  MPI_Get_address(&(config_file->n_stages), &displs[1]);
+  MPI_Get_address(&(config_file->actual_resize), &displs[2]); // TODO Refactor Es necesario enviarlo?
+  MPI_Get_address(&(config_file->granularity), &displs[3]);
   MPI_Get_address(&(config_file->sdr), &displs[4]);
   MPI_Get_address(&(config_file->adr), &displs[5]);
-  MPI_Get_address(&(config_file->aib), &displs[6]);
-  MPI_Get_address(&(config_file->css), &displs[7]);
-  MPI_Get_address(&(config_file->cst), &displs[8]);
+  MPI_Get_address(&(config_file->at), &displs[6]);
+  MPI_Get_address(&(config_file->ss), &displs[7]);
+  MPI_Get_address(&(config_file->sm), &displs[8]);
   MPI_Get_address(&(config_file->latency_m), &displs[9]);
   MPI_Get_address(&(config_file->bw_m), &displs[10]);
 
@@ -385,7 +384,7 @@ void def_struct_config_file_array(configuration *config_file, MPI_Datatype *conf
   types[0] = types[1] = types[2] = MPI_INT;
 
   // Modificar blocklengths al valor adecuado
-  blocklengths[0] = blocklengths[1] = blocklengths[2] = config_file->resizes;
+  blocklengths[0] = blocklengths[1] = blocklengths[2] = config_file->n_resizes;
 
   //Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -408,7 +407,7 @@ void def_struct_config_file_array(configuration *config_file, MPI_Datatype *conf
  * Tipo derivado para enviar elementos especificos
  * de la estructuras de fases de iteracion en una sola comunicacion.
  */
-void def_struct_iter_stage(iter_stage_t *iter_stage, int stages, MPI_Datatype *config_type) {
+void def_struct_iter_stage(iter_stage_t *stages, int n_stages, MPI_Datatype *config_type) {
   int i, counts = 4;
   int blocklengths[4] = {1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
@@ -420,21 +419,21 @@ void def_struct_iter_stage(iter_stage_t *iter_stage, int stages, MPI_Datatype *c
   types[2] = MPI_DOUBLE;
 
   // Rellenar vector displs
-  MPI_Get_address(iter_stage, &dir);
+  MPI_Get_address(stages, &dir);
 
-  MPI_Get_address(&(iter_stage->pt), &displs[0]);
-  MPI_Get_address(&(iter_stage->t_stage), &displs[1]);
-  MPI_Get_address(&(iter_stage->t_op), &displs[2]);
-  MPI_Get_address(&(iter_stage->bytes), &displs[3]);
+  MPI_Get_address(&(stages->pt), &displs[0]);
+  MPI_Get_address(&(stages->t_stage), &displs[1]);
+  MPI_Get_address(&(stages->t_op), &displs[2]);
+  MPI_Get_address(&(stages->bytes), &displs[3]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  if (stages == 1) {
+  if (n_stages == 1) {
     MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
   } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
     MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
     // Tipo derivado para enviar N elementos de la estructura
-    MPI_Type_create_resized(aux, 0, 1*sizeof(iter_stage_t), config_type); 
+    MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), config_type); 
   }
   MPI_Type_commit(config_type);
 }

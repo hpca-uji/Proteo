@@ -31,17 +31,17 @@ typedef struct
 
 typedef struct
 {
-    int resizes, iter_stages;
-    int actual_resize, actual_iter;
-    int matrix_tam, sdr, adr;
-    int css, cst;
-    int aib;
+    int n_resizes, n_stages;
+    int actual_resize, actual_stage;
+    int granularity, sdr, adr;
+    int sm, ss;
+    int at;
     double latency_m, bw_m;
 
     int *iters, *procs, *phy_dist;
     float *factors;
 
-    iter_stage_t *iter_stage;
+    iter_stage_t *stages;
 } configuration;
 
 
