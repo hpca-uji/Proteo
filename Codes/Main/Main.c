@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include "process_stage.h"
 #include "Main_datatypes.h"
+#include "../IOcodes/read_ini.h"
+#include "../IOcodes/results.h"
 #include "../malleability/CommDist.h"
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
@@ -374,8 +376,11 @@ void init_application() {
 
   int message_tam = 100000000;
   message_tam =     10240000;
+  //for(int i=0; i<10; i++) {
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
+  //if(group->myId == ROOT) printf("numP=%d Lat=%lf Bw=%lf\n", group->numP, config_file->latency_m, config_file->bw_m);
+  //}
   obtain_op_times(1);
 }
 

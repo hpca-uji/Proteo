@@ -122,36 +122,30 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
 // Devuelve la latencia del sistema.
 double latency(int myId, int numP, MPI_Comm comm) {
   int i, loop_count = 100;
-  double start_time, stop_time, elapsed_time, max_time;
+  double start_time, stop_time, time;
   char aux;
 
   aux = '0';
-  elapsed_time = 0;
 
-  //if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
-    MPI_Barrier(comm);
-    start_time = MPI_Wtime();
-    //if(myId % 2 == 0){
-    if(myId == 0) {
-      for(i=0; i<loop_count; i++){
-        MPI_Ssend(&aux, 0, MPI_CHAR, numP-1, 99, comm);
-      }
-      MPI_Recv(&aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
-    } else if(myId+1 == numP) {
-      for(i=0; i<loop_count; i++){
-        MPI_Recv(&aux, 0, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
-      }
-      MPI_Ssend(&aux, 0, MPI_CHAR, 0, 99, comm);
+  MPI_Barrier(comm);
+  start_time = MPI_Wtime();
+  if(myId == 0) {
+    for(i=0; i<loop_count; i++){
+      MPI_Send(&aux, 0, MPI_CHAR, numP-1, 99, comm);
     }
+    MPI_Recv(&aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
+  } else if(myId+1 == numP) {
+    for(i=0; i<loop_count; i++){
+      MPI_Recv(&aux, 0, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
+    }
+    MPI_Send(&aux, 0, MPI_CHAR, 0, 99, comm);
+  }
+  MPI_Barrier(comm);
+  stop_time = MPI_Wtime();
+  time = (stop_time - start_time) / loop_count;
 
-    MPI_Barrier(comm);
-    stop_time = MPI_Wtime();
-    max_time = (stop_time - start_time) / loop_count;
-  //}
-
-  //MPI_Allreduce(&elapsed_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
-  MPI_Bcast(&max_time, 1, MPI_DOUBLE, ROOT, comm);
-  return max_time;
+  MPI_Bcast(&time, 1, MPI_DOUBLE, ROOT, comm);
+  return time;
 }
 
 
@@ -163,42 +157,33 @@ double latency(int myId, int numP, MPI_Comm comm) {
 // Devuelve el tiempo necesario para realizar las pruebas
 double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
   int i, loop_count = 100, n_bytes;
-  double start_time, stop_time, elapsed_time, bw, time, max_time;
+  double start_time, stop_time, bw, time;
   char *aux;
 
   n_bytes = n * sizeof(char);
   aux = malloc(n_bytes);
-  elapsed_time = 0;
   time = 0;
 
-//  if(myId+1 != numP || (myId+1 == numP && numP % 2 == 0)) {
 
-    MPI_Barrier(comm);
-    start_time = MPI_Wtime();
-    //if(myId % 2 == 0){
-    if(myId == 0) {
-      for(i=0; i<loop_count; i++){
-        MPI_Ssend(aux, n, MPI_CHAR, numP-1, 99, comm);
-      }
-      MPI_Recv(aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
-    } else if(myId+1 == numP) {
-      for(i=0; i<loop_count; i++){
-        MPI_Recv(aux, n, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
-      }
-      MPI_Ssend(aux, 0, MPI_CHAR, 0, 99, comm);
+  MPI_Barrier(comm);
+  start_time = MPI_Wtime();
+  if(myId == 0) {
+    for(i=0; i<loop_count; i++){
+      MPI_Send(aux, n, MPI_CHAR, numP-1, 99, comm);
     }
-    MPI_Barrier(comm);
-    stop_time = MPI_Wtime();
-    elapsed_time = (stop_time - start_time) / loop_count;
-  //}
-
-  if(myId %2 == 0) {
-    time = elapsed_time - latency;
+    MPI_Recv(aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
+  } else if(myId+1 == numP) {
+    for(i=0; i<loop_count; i++){
+      MPI_Recv(aux, n, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
+    }
+    MPI_Send(aux, 0, MPI_CHAR, 0, 99, comm);
   }
+  MPI_Barrier(comm);
+  stop_time = MPI_Wtime();
+  time = (stop_time - start_time) / loop_count;
+  bw = ((double)n_bytes) / (time - latency);
 
-  MPI_Allreduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, comm);
-  //TODO Cambiar a Bcast si solo se realiza por Root
-  bw = ((double)n_bytes) / max_time;
+  MPI_Bcast(&bw, 1, MPI_DOUBLE, ROOT, comm);
   free(aux);
   return bw;
 }
