@@ -1,3 +1,6 @@
+#ifndef MALLEABILITY_MANAGER_H
+#define MALLEABILITY_MANAGER_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -26,3 +29,5 @@ void set_benchmark_configuration(configuration *config_file);
 void get_benchmark_configuration(configuration **config_file);
 void set_benchmark_results(results_data *results);
 void get_benchmark_results(results_data **results);
+
+#endif

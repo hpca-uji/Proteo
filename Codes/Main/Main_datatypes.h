@@ -1,3 +1,6 @@
+#ifndef MAIN_DATATYPES_H
+#define MAIN_DATATYPES_H
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
@@ -19,3 +22,5 @@ typedef struct {
   char **argv;
   char *sync_array, *async_array;
 } group_data;
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef PROCESS_DIST_H
+#define PROCESS_DIST_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -13,3 +16,5 @@ void malleability_establish_connection(int myId, int root, MPI_Comm *intercomm);
 
 void proc_adapt_expand(int *numP, int numC, MPI_Comm intercomm, MPI_Comm *comm, int is_children_group);
 void proc_adapt_shrink(int numC, MPI_Comm *comm, int myId);
+
+#endif

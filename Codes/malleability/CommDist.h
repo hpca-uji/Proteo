@@ -1,3 +1,6 @@
+#ifndef COMMDIST_H
+#define COMMDIST_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -22,3 +25,4 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
 
 
 void malloc_comm_array(char **array, int qty, int myId, int numP);
+#endif
