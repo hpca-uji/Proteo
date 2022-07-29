@@ -9,6 +9,7 @@
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
 #include "../IOcodes/results.h"
+#include "../Main/Main_datatypes.h"
 #include "malleabilityStates.h"
 
 int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes);

@@ -9,7 +9,7 @@
 
 
 void malloc_config_resizes(configuration *user_config, int resizes);
-void init_config_stages(configuration *user_config, int stages);
+void init_config_stages(configuration *user_config);
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
 void def_struct_config_file_array(configuration *config_file, MPI_Datatype *config_type);
 void def_struct_iter_stage(iter_stage_t *stages, int n_stages, MPI_Datatype *config_type);
@@ -38,7 +38,7 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH("general", "S")) {
         pconfig->n_stages = atoi(value);
         pconfig->stages = malloc(sizeof(iter_stage_t) * pconfig->n_stages);
-        init_config_stages(pconfig, pconfig->n_stages);
+        init_config_stages(pconfig);
     } else if (MATCH("general", "Granularity")) {
         pconfig->granularity = atoi(value);
     } else if (MATCH("general", "SDR")) {
@@ -150,7 +150,7 @@ void malloc_config_resizes(configuration *user_config, int resizes) {
  *  - read_ini_file
  *  - recv_config_file
  */
-void init_config_stages(configuration *user_config, int stages) {
+void init_config_stages(configuration *user_config) {
     int i;
     if(user_config != NULL) {
        for(i=0; i<user_config->n_stages; i++) {
@@ -159,6 +159,8 @@ void init_config_stages(configuration *user_config, int stages) {
         user_config->stages[i].double_array = NULL;
         user_config->stages[i].counts.counts = NULL;
         user_config->stages[i].real_bytes = 0;
+        user_config->stages[i].intercept = 0;
+        user_config->stages[i].slope = 0;
       }
     }
 }
@@ -206,7 +208,7 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config, int grp) {
   if(user_config != NULL) {
     int i;
-    printf("Config loaded: resizes=%d, stages=%d, granularity=%d, sdr=%d, adr=%d, at=%d, sm=%d, ss=%d, latency=%lf, bw=%lf || grp=%d\n",
+    printf("Config loaded: R=%d, S=%d, granularity=%d, SDR=%d, ADR=%d, AT=%d, SM=%d, SS=%d, latency=%2.8f, bw=%lf || grp=%d\n",
         user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr, 
 	user_config->at, user_config->sm, user_config->ss, user_config->latency_m, user_config->bw_m, grp);
     for(i=0; i<user_config->n_stages; i++) {
@@ -237,7 +239,7 @@ void print_config_group(configuration *user_config, int grp) {
       sons = user_config->procs[grp+1];
     }
 
-    printf("Config: granularity=%d, sdr=%d, adr=%d, at=%d, sm=%d, ss=%d, latency=%lf, bw=%lf\n",
+    printf("Config: granularity=%d, SDR=%d, ADR=%d, AT=%d, SM=%d, SS=%d, latency=%2.8f, bw=%lf\n",
         user_config->granularity, user_config->sdr, user_config->adr, user_config->at, user_config->sm, user_config->ss, user_config->latency_m, user_config->bw_m);
     for(i=0; i<user_config->n_stages; i++) {
       printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d, Intercept=%lf, Slope=%lf\n",
@@ -331,7 +333,7 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   MPI_Type_free(&config_type_array);
   MPI_Type_free(&iter_stage_type);
 
-  init_config_stages(config_file, config_file->n_stages); // Inicializar a NULL vectores
+  init_config_stages(config_file); // Inicializar a NULL vectores
   *config_file_out = config_file;
 }
 

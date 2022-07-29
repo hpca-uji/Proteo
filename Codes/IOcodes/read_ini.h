@@ -5,45 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
-#include "../malleability/distribution_methods/block_distribution.h"
-
-typedef struct
-{
-  int pt; // Procedure type
-  float t_stage; // Time to complete the stage
-
-  double t_op;
-  int operations;
-  int bytes, real_bytes, my_bytes;
-  
-  // Variables to represent linear regresion
-  // for collective calls.
-  double slope, intercept;
-
-  // Arrays to communicate data;
-  char* array, *full_array;
-  double* double_array;
-  // Arrays to indicate how many bytes are received from each rank
-  //int *counts, *displs;
-  struct Counts counts;
-
-} iter_stage_t;
-
-typedef struct
-{
-    int n_resizes, n_stages;
-    int actual_resize, actual_stage;
-    int granularity, sdr, adr;
-    int sm, ss;
-    int at;
-    double latency_m, bw_m;
-
-    int *iters, *procs, *phy_dist;
-    float *factors;
-
-    iter_stage_t *stages;
-} configuration;
-
+#include "../Main/Main_datatypes.h"
 
 configuration *read_ini_file(char *file_name);
 void free_config(configuration *user_config);

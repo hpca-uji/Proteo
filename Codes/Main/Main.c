@@ -224,14 +224,17 @@ int work() {
  * que dura al menos un tiempo de "time" segundos.
  */
 double iterate(double *matrix, int n, int async_comm, int iter) {
-  double start_time, actual_time;
+  double start_time, start_time_stage, actual_time, *times_stages;
   int i, cnt_async = 0;
   double aux = 0;
 
+  times_stages = malloc(config_file->n_stages * sizeof(double));
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
+    start_time_stage = MPI_Wtime();
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
+    times_stages[i] = MPI_Wtime() - start_time_stage;
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
@@ -241,11 +244,16 @@ double iterate(double *matrix, int n, int async_comm, int iter) {
   }
 
   if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
-    realloc_results_iters(results, results->iters_size + 100);
+    realloc_results_iters(results, config_file->n_stages, results->iters_size + 100);
   }
   results->iters_time[results->iter_index] = actual_time - start_time;
+  for(i=0; i < config_file->n_stages; i++) {
+    results->stage_times[i][results->iter_index] = times_stages[i];
+  }
   results->iters_async += cnt_async;
   results->iter_index = results->iter_index + 1;
+
+  free(times_stages);
 
   return aux;
 }
@@ -292,7 +300,8 @@ int print_local_results() {
     create_out_file(file_name, &ptr_local, 1);
   
     print_config_group(config_file, group->grp);
-    print_iter_results(*results, config_file->iters[group->grp] - 1);
+    print_iter_results(*results);
+    print_stage_results(*results, config_file->n_stages);
     free(file_name);
 
     fflush(stdout);
@@ -366,7 +375,7 @@ void init_application() {
 
   config_file = read_ini_file(group->argv[1]);
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->iters[group->grp]);
+  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->iters[group->grp]);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
@@ -375,12 +384,11 @@ void init_application() {
   }
 
   int message_tam = 100000000;
-  message_tam =     10240000;
-  //for(int i=0; i<10; i++) {
-  config_file->latency_m = latency(group->myId, group->numP, comm);
-  config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
+  for(int i=0; i<3; i++) {
+    config_file->latency_m = latency(group->myId, group->numP, comm);
+    config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
   //if(group->myId == ROOT) printf("numP=%d Lat=%lf Bw=%lf\n", group->numP, config_file->latency_m, config_file->bw_m);
-  //}
+  }
   obtain_op_times(1);
 }
 
@@ -416,12 +424,12 @@ void free_application_data() {
   }
   
   free_malleability();
-  free_config(config_file);
 
   if(group->grp == 0) { //FIXME Revisar porque cuando es diferente a 0 no funciona
-    free_results_data(results);
+    free_results_data(results, config_file->n_stages);
     free(results);
   }
+  free_config(config_file);
   free(group);
 }
 

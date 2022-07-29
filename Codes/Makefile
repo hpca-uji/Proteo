@@ -1,16 +1,19 @@
 export TOP := $(dir $(CURDIR)/$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
 BUILD := build
+EXEC := exec
+
+EXECDIR := $(addprefix $(TOP),$(EXEC))
 export BUILDDIR = $(addprefix $(TOP),$(BUILD))
 SUBDIRS := IOcodes Main malleability
 
-.PHONY: subdirs $(SUBDIRS) build all
+.PHONY: subdirs $(SUBDIRS) build all clean clear
 #
 #
 #
 #
 CC := gcc
 MCC := mpicc
-CFLAGS := -Wall
+CFLAGS := -Wall -Wextra
 LIBFLAGS := -lm -lslurm -pthread
 #
 #
@@ -18,19 +21,25 @@ LIBFLAGS := -lm -lslurm -pthread
 #
 
 all: subdirs exec
+install: 
+	#runTests
 
 exec: subdirs
-	$(MCC) $(CFLAGS) -o test.out $(wildcard $(BUILDDIR)/*.o) $(LIBFLAGS)
+	mkdir -p $(EXECDIR) all
+	$(MCC) $(CFLAGS) -o $(EXECDIR)/a.out $(wildcard $(BUILDDIR)/*.o) $(LIBFLAGS)
 
 subdirs: $(SUBDIRS)
 $(SUBDIRS): | $(BUILD)
 	$(MAKE) -C $@
 
-# Orden de compilacion para las carpetas
 
-# Carpeta en la que almacenar los compilados
+# Carpeta en la que almacenar los compilados y los ejecutables
 $(BUILD):
-	mkdir -p $(BUILD)
+	mkdir -p $(BUILDDIR)
 
 clean:
-	-rm -rf $(BUILD)
+	-rm $(BUILDDIR)/*.o
+clear:
+	-rm -rf $(BUILDDIR)
+	-rm -rf $(EXECDIR)
+

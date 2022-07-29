@@ -23,7 +23,7 @@ int shrink_redistribution();
 
 int thread_creation();
 int thread_check();
-void* thread_async_work(void* void_arg);
+void* thread_async_work();
 
 typedef struct {
   int spawn_type;
@@ -424,7 +424,7 @@ void Children_init() {
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
-  init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, RESULTS_INIT_DATA_QTY);
+  init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -780,7 +780,7 @@ int thread_check() {
  * Cuando termina la comunicación la hebra maestra puede comprobarlo
  * por el valor "commAsync".
  */
-void* thread_async_work(void* void_arg) {
+void* thread_async_work() {
   send_data(mall->numC, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
   state = MAL_DIST_COMPLETED;
   pthread_exit(NULL);

@@ -1,12 +1,20 @@
-objects1 := ini
-objects2 := results read_ini
+objects := ini.o read_ini.o results.o
+DISTRI_LOC = $(TOP)/malleability/distribution_methods/block_distribution.h
 CC := gcc
 MCC := mpicc
-CFLAGS := -Wall
+CFLAGS := -Wall -Wextra
 
-all: $(objects1) $(objects2)
+all: $(objects)
 
-$(objects1): %: %.c %.h
-	$(CC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
-$(objects2): %: %.c %.h $(objects1).h $(TOP)/malleability/distribution_methods/block_distribution.h
-	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+ini.o: ini.c ini.h
+	echo $(BUILDDIR)
+	$(CC) $(CFLAGS) -c -o $(BUILDDIR)/$@ $<
+
+read_ini.o: read_ini.c read_ini.h ini.h $(DISTRI_LOC)
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@ $<
+
+results.o: results.c results.h
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@ $<
+
+#$@ --> Objeto
+#$< --> Source

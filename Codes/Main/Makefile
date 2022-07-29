@@ -1,19 +1,22 @@
 objects1 := computing_func comunication_func linear_reg
 objects2 := process_stage
 objects3 := Main
-depends := Main_datatypes
+
+#Pasar nombre a level -- Los objects/headers/source añadir sufijo
+
+DISTRI_LOC = $(TOP)/malleability/distribution_methods/block_distribution.h
+MALLEABILITY_DEPENDS = $(TOP)/malleability/CommDist.h $(TOP)/malleability/malleabilityStates.h $(TOP)/malleability/malleabilityManager.h
+DEPENDS := Main_datatypes.h
 CC := gcc
 MCC := mpicc
-CFLAGS := -Wall
+CFLAGS := -Wall -Wextra
 
 all: $(objects1) $(objects2) $(objects3)
 
-$(objects1): %: %.c %.h $(depends).h
+$(objects1): %: %.c %.h $(DEPENDS)
 	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
-$(objects2): %: %.c %.h $(objects1).h $(depends).h $(TOP)/IOcodes/read_ini.h \
-				$(TOP)/malleability/distribution_methods/block_distribution.h
+$(objects2): %: %.c %.h $(objects1).h $(DEPENDS) $(DISTRI_LOC)
 	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
-$(objects3): %: %.c $(objects2).h $(depends).h $(TOP)/IOcodes/read_ini.h $(TOP)/IOcodes/results.h \
-	                        $(TOP)/malleability/CommDist.h $(TOP)/malleability/malleabilityStates.h \
-				$(TOP)/malleability/malleabilityManager.h
+$(objects3): %: %.c $(objects2).h $(DEPENDS) $(TOP)/IOcodes/read_ini.h $(TOP)/IOcodes/results.h $(MALLEABILITY_DEPENDS)
 	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+

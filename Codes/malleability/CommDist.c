@@ -5,26 +5,6 @@
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
-/*
-struct Dist_data {
-  int ini; //Primer elemento a enviar
-  int fin; //Ultimo elemento a enviar
-
-  int tamBl; // Total de elementos
-  int qty; // Total number of rows of the full disperse matrix
-
-  int myId;
-  int numP;
-  MPI_Comm intercomm;
-};
-
-struct Counts {
-  int *counts;
-  int *displs;
-  int *zero_arr;
-};
-*/
-
 void send_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_child, int idI,  int idE, struct Counts counts);
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts);
 
@@ -34,16 +14,7 @@ void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int nu
 void send_async_point_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request *comm_req);
 void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts, MPI_Request *comm_req);
 
-// DIST FUNCTIONS
-void get_dist(int qty, int id, int numP, struct Dist_data *dist_data);
-void set_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts);
 void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS);
-/*
-void mallocCounts(struct Counts *counts, int numP);
-void freeCounts(struct Counts *counts);
-void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, const char* name);
-*/
-
 /*
  * Reserva memoria para un vector de hasta "qty" elementos.
  * Los "qty" elementos se disitribuyen entre los "numP" procesos
@@ -52,7 +23,7 @@ void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int si
 void malloc_comm_array(char **array, int qty, int myId, int numP) {
     struct Dist_data dist_data;
 
-    get_dist(qty, myId, numP, &dist_data);
+    get_block_dist(qty, myId, numP, &dist_data);
     if( (*array = malloc(dist_data.tamBl * sizeof(char))) == NULL) {
       printf("Memory Error (Malloc Arrays(%d))\n", dist_data.tamBl); 
       exit(1); 
@@ -88,7 +59,7 @@ int send_sync(char *array, int qty, int myId, int numP, int root, MPI_Comm inter
 
     if(myId == root) rootBcast = MPI_ROOT;
 
-    get_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
+    get_block_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
     dist_data.intercomm = intercomm;
 
     // Create arrays which contains info about how many elements will be send to each created process
@@ -118,7 +89,7 @@ void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm int
     struct Dist_data dist_data;
 
     // Obtener distribución para este hijo
-    get_dist(qty, myId, numP, &dist_data);
+    get_block_dist(qty, myId, numP, &dist_data);
     *array = malloc(dist_data.tamBl * sizeof(char));
     //(*array)[dist_data.tamBl] = '\0';
     dist_data.intercomm = intercomm;
@@ -142,7 +113,8 @@ void recv_sync(char **array, int qty, int myId, int numP, int root, MPI_Comm int
  */
 void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts) {
 
-    int i;
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
+    /*int i;
     // PREPARAR ENVIO DEL VECTOR
     if(idI == 0) {
       set_counts(0, numP_child, dist_data, counts.counts);
@@ -151,7 +123,8 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_child, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-    }
+    }*/
+
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
     /* COMUNICACION DE DATOS */
     MPI_Alltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm);
@@ -164,10 +137,11 @@ void send_sync_arrays(struct Dist_data dist_data, char *array, int rootBcast, in
  */
 void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts) {
 	
-    int i;
     char aux;
 
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
     // Ajustar los valores de recepcion
+    /*
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, counts.counts);
       idI++;
@@ -175,7 +149,7 @@ void recv_sync_arrays(struct Dist_data dist_data, char *array, int root, int num
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-    }
+    }*/
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
@@ -206,7 +180,7 @@ int send_async(char *array, int qty, int myId, int numP, int root, MPI_Comm inte
 
     if(myId == root) rootBcast = MPI_ROOT;
 
-    get_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
+    get_block_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
     dist_data.intercomm = intercomm;
 
     // Create arrays which contains info about how many elements will be send to each created process
@@ -259,7 +233,7 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
     MPI_Request *comm_req, aux;
 
     // Obtener distribución para este hijo
-    get_dist(qty, myId, numP, &dist_data);
+    get_block_dist(qty, myId, numP, &dist_data);
     *array = malloc(dist_data.tamBl * sizeof(char));
     dist_data.intercomm = intercomm;
 
@@ -308,8 +282,9 @@ void recv_async(char **array, int qty, int myId, int numP, int root, MPI_Comm in
  * El envio se realiza a partir de una comunicación colectiva.
  */
 void send_async_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request *comm_req) {
-    int i;
 
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
+    /*
     // PREPARAR ENVIO DEL VECTOR
     if(idI == 0) {
       set_counts(0, numP_child, dist_data, counts.counts);
@@ -319,6 +294,7 @@ void send_async_arrays(struct Dist_data dist_data, char *array, int rootBcast, i
       set_counts(i, numP_child, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
     }
+    */
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
 
     /* COMUNICACION DE DATOS */
@@ -334,8 +310,9 @@ void send_async_arrays(struct Dist_data dist_data, char *array, int rootBcast, i
  */
 void send_async_point_arrays(struct Dist_data dist_data, char *array, int rootBcast, int numP_child, int idI,  int idE, struct Counts counts, MPI_Request *comm_req) {
     int i;
-
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
     // PREPARAR ENVIO DEL VECTOR
+    /*
     if(idI == 0) {
       set_counts(0, numP_child, dist_data, counts.counts);
       idI++;
@@ -345,6 +322,11 @@ void send_async_point_arrays(struct Dist_data dist_data, char *array, int rootBc
       set_counts(i, numP_child, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
       MPI_Isend(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
+    }*/
+    for(i=0; i<numP_child; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
+      if(counts.counts[0] != 0) {
+        MPI_Isend(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
+      }
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
 }
@@ -357,10 +339,11 @@ void send_async_point_arrays(struct Dist_data dist_data, char *array, int rootBc
  * La recepcion se realiza a partir de una comunicacion colectiva.
  */
 void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int numP_parents, int idI, int idE, struct Counts counts, MPI_Request *comm_req) {
-    int i;
     char *aux = malloc(1);
 
     // Ajustar los valores de recepcion
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
+    /*
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, counts.counts);
       idI++;
@@ -368,7 +351,7 @@ void recv_async_arrays(struct Dist_data dist_data, char *array, int root, int nu
     for(i=idI; i<idE; i++) {
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-    }
+    }*/
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 
     /* COMUNICACION DE DATOS */
@@ -387,6 +370,8 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
     int i;
 
     // Ajustar los valores de recepcion
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
+    /*
     if(idI == 0) {
       set_counts(0, numP_parents, dist_data, counts.counts);
       idI++;
@@ -396,6 +381,11 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
       set_counts(i, numP_parents, dist_data, counts.counts);
       counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
       MPI_Irecv(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
+    }*/
+    for(i=0; i<numP_parents; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
+      if(counts.counts[0] != 0) {
+        MPI_Irecv(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
+      }
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 }
@@ -407,71 +397,6 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int root, 
  * ========================================================================================
  * ========================================================================================
 */
-
-/* 
- * Obatains for "Id" and "numP", how many
- * rows and elements per row will have process "Id"
- * and fills the results in a Dist_data struct
- */
-void get_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
-  int rem;
-
-  dist_data->myId = id;
-  dist_data->numP = numP;
-  dist_data->qty = qty;
-  dist_data->tamBl = qty / numP;
-  rem = qty % numP;
-
-  if(id < rem) { // First subgroup
-    dist_data->ini = id * dist_data->tamBl + id;
-    dist_data->fin = (id+1) * dist_data->tamBl + (id+1);
-  } else { // Second subgroup
-    dist_data->ini = id * dist_data->tamBl + rem;
-    dist_data->fin = (id+1) * dist_data->tamBl + rem;
-  }
-  
-  if(dist_data->fin > qty) {
-    dist_data->fin = qty;
-  }
-  if(dist_data->ini > dist_data->fin) {
-    dist_data->ini = dist_data->fin;
-  }
-
-  dist_data->tamBl = dist_data->fin - dist_data->ini;
-}
-
-
-/*
- * Obtiene para el Id de un proceso dado, cuantos elementos
- * enviara o recibira desde el proceso indicado en Dist_data.
- */
-void set_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts) {
-  struct Dist_data other;
-  int biggest_ini, smallest_end;
-
-  get_dist(data_dist.qty, id, numP, &other);
-
-  // Si el rango de valores no coincide, se pasa al siguiente proceso
-  if(data_dist.ini >= other.fin || data_dist.fin <= other.ini) {
-    return;
-  }
-
-  // Obtiene el proceso con mayor ini entre los dos procesos
-  if(data_dist.ini > other.ini) { 
-    biggest_ini = data_dist.ini;
-  } else {
-    biggest_ini = other.ini;
-  }
-
-  // Obtiene el proceso con menor fin entre los dos procesos
-  if(data_dist.fin < other.fin) {
-    smallest_end = data_dist.fin;
-  } else {
-    smallest_end = other.fin;
-  }
-  sendcounts[id] = smallest_end - biggest_ini; // Numero de elementos a enviar/recibir del proceso Id
-}
-
 
 /*
  * Obtiene para un proceso de un grupo a que rango procesos de 

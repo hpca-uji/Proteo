@@ -7,7 +7,6 @@
 #include "linear_reg.h"
 #include "Main_datatypes.h"
 #include "process_stage.h"
-//#include "../malleability/malleabilityManager.h" //FIXME Refactor
 #include "../malleability/distribution_methods/block_distribution.h"
 
 void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm comm);
@@ -129,16 +128,16 @@ double latency(int myId, int numP, MPI_Comm comm) {
 
   MPI_Barrier(comm);
   start_time = MPI_Wtime();
-  if(myId == 0) {
+  if(myId == ROOT) {
     for(i=0; i<loop_count; i++){
       MPI_Send(&aux, 0, MPI_CHAR, numP-1, 99, comm);
     }
     MPI_Recv(&aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
   } else if(myId+1 == numP) {
     for(i=0; i<loop_count; i++){
-      MPI_Recv(&aux, 0, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
+      MPI_Recv(&aux, 0, MPI_CHAR, ROOT, 99, comm, MPI_STATUS_IGNORE);
     }
-    MPI_Send(&aux, 0, MPI_CHAR, 0, 99, comm);
+    MPI_Send(&aux, 0, MPI_CHAR, ROOT, 99, comm);
   }
   MPI_Barrier(comm);
   stop_time = MPI_Wtime();
@@ -167,16 +166,16 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
 
   MPI_Barrier(comm);
   start_time = MPI_Wtime();
-  if(myId == 0) {
+  if(myId == ROOT) {
     for(i=0; i<loop_count; i++){
       MPI_Send(aux, n, MPI_CHAR, numP-1, 99, comm);
     }
     MPI_Recv(aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
   } else if(myId+1 == numP) {
     for(i=0; i<loop_count; i++){
-      MPI_Recv(aux, n, MPI_CHAR, 0, 99, comm, MPI_STATUS_IGNORE);
+      MPI_Recv(aux, n, MPI_CHAR, ROOT, 99, comm, MPI_STATUS_IGNORE);
     }
-    MPI_Send(aux, 0, MPI_CHAR, 0, 99, comm);
+    MPI_Send(aux, 0, MPI_CHAR, ROOT, 99, comm);
   }
   MPI_Barrier(comm);
   stop_time = MPI_Wtime();
@@ -205,6 +204,9 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
       bytes[i*loop_iters + j] = LR_bytes_array[i];
     }
   }
+
+  // TODO Calcular solo si no se ha calculado para otra fase.
+  // Si se ha calculado antes, copiar esos valores
 
   switch(stage->pt) {
     //Comunicaciones
@@ -239,7 +241,11 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
     }
     printf("\n");
     */
+    //if(stage->t_stage < 0.1) {
+    //lr_compute(8*loop_iters, bytes, times, &(stage->slope), &(stage->intercept));
+    //} else {
     lr_compute(tam, bytes, times, &(stage->slope), &(stage->intercept));
+    //}
   } else {
     MPI_Reduce(times, NULL, LR_ARRAY_TAM * loop_iters, MPI_DOUBLE, MPI_MAX, ROOT, comm);
   }

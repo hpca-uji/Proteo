@@ -1,7 +1,7 @@
 objects1 := block_distribution
 CC := gcc
 MCC := mpicc
-CFLAGS := -Wall
+CFLAGS := -Wall -Wextra
 
 all: $(objects1)
 

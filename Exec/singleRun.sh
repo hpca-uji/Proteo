@@ -28,7 +28,7 @@ for ((i=0; i<qty; i++))
 do
   echo "Iter $i"
   numP=$(bash $dir$codeDir/recordMachinefile.sh $1)
-  mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/bench.out $1 $2 $nodelist $nodes
+  mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/exec/a.out $1 $2 $nodelist $nodes
   rm hostfile.o$SLURM_JOB_ID
 done
 

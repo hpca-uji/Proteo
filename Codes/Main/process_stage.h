@@ -5,8 +5,6 @@
 #include <stdio.h>
 #include <mpi.h>
 #include "Main_datatypes.h"
-//#include "../malleability/malleabilityManager.h" //FIXME Refactor
-#include "../IOcodes/read_ini.h"
 
 enum compute_methods{COMP_PI, COMP_MATRIX, COMP_POINT, COMP_BCAST, COMP_ALLGATHER, COMP_REDUCE, COMP_ALLREDUCE};
 

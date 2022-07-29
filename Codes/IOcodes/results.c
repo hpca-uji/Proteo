@@ -136,6 +136,28 @@ void compute_results_iter(results_data *results, int myId, int root, MPI_Comm co
     MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
 }
 
+
+/*
+ * Obtiene para cada stage de cada iteracion, el tiempo maximo entre todos los procesos
+ * que han participado.
+ *
+ * Es necesario obtener el maximo, pues es el que representa el tiempo real
+ * que se ha utilizado.
+ */
+void compute_results_stages(results_data *results, int myId, int root, int stages, MPI_Comm comm) {
+  int i;
+  if(myId == root) {
+    for(i=0; i<stages; i++) {
+      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+    }
+  }
+  else {
+    for(i=0; i<stages; i++) {
+      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+    }
+  }
+}
+
 //======================================================||
 //======================================================||
 //===============PRINT RESULTS FUNCTIONS================||
@@ -147,15 +169,30 @@ void compute_results_iter(results_data *results, int myId, int root, MPI_Comm co
  * Estos son los relacionados con las iteraciones, que son el tiempo
  * por iteracion, el tipo (Normal o durante communicacion asincrona).
  */
-void print_iter_results(results_data results, int last_normal_iter_index) {
+void print_iter_results(results_data results) {
   int i;
 
-  printf("Titer: ");
+  printf("T_iter: ");
   for(i=0; i< results.iter_index; i++) {
     printf("%lf ", results.iters_time[i]);
   }
 
-  printf("\nTtype: %d\n", results.iters_async);
+  printf("\nAsync_Iters: %d\n", results.iters_async);
+}
+
+/*
+ * Imprime por pantalla los resultados locales de un stage.
+ */
+void print_stage_results(results_data results, int n_stages) {
+  int i, j;
+
+  for(i=0; i<n_stages; i++) {
+    printf("T_stage %d: ", i);
+    for(j=0; j< results.iter_index; j++) {
+      printf("%lf ", results.stage_times[i][j]);
+    }
+    printf("\n");
+  }
 }
 
 /*
@@ -166,27 +203,27 @@ void print_iter_results(results_data results, int last_normal_iter_index) {
 void print_global_results(results_data results, int resizes) {
   int i;
 
-  printf("Tspawn: ");  // FIXME REFACTOR Cambiar nombre a T_resize_real
+  printf("T_spawn: ");  // FIXME REFACTOR Cambiar nombre a T_resize_real
   for(i=0; i< resizes - 1; i++) {
     printf("%lf ", results.spawn_time[i]);
   }
 
-  printf("\nTspawn_real: "); // FIXME REFACTOR Cambiar nombre a T_resize
+  printf("\nT_spawn_real: "); // FIXME REFACTOR Cambiar nombre a T_resize
   for(i=0; i< resizes - 1; i++) {
     printf("%lf ", results.spawn_real_time[i]);
   }
 
-  printf("\nTsync: ");
+  printf("\nT_SR: ");
   for(i=1; i < resizes; i++) {
     printf("%lf ", results.sync_time[i]);
   }
 
-  printf("\nTasync: ");
+  printf("\nT_AR: ");
   for(i=1; i < resizes; i++) {
     printf("%lf ", results.async_time[i]);
   }
 
-  printf("\nTex: %lf\n", results.exec_time);
+  printf("\nT_total: %lf\n", results.exec_time);
 }
 
 //======================================================||
@@ -201,7 +238,8 @@ void print_global_results(results_data results, int resizes) {
  * Los argumentos "resizes" y "iters_size" se necesitan para obtener el tamaño
  * de los vectores de resultados.
  */
-void init_results_data(results_data *results, int resizes, int iters_size) {
+void init_results_data(results_data *results, int resizes, int stages, int iters_size) {
+  int i;
 
   results->spawn_time = calloc(resizes, sizeof(double));
   results->spawn_real_time = calloc(resizes, sizeof(double));
@@ -211,14 +249,24 @@ void init_results_data(results_data *results, int resizes, int iters_size) {
 
   results->iters_size = iters_size + 100;
   results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
+  results->stage_times = malloc(stages * sizeof(double*)); //FIXME Numero magico
+  for(i=0; i<stages; i++) {
+    results->stage_times[i] = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
+  }
+
   results->iters_async = 0;
   results->iter_index = 0;
 
 }
 
-void realloc_results_iters(results_data *results, int needed) {
+void realloc_results_iters(results_data *results, int stages, int needed) {
+  int i;
   double *time_aux;
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
+
+  for(i=0; i<stages; i++) { //TODO Comprobar que no da error el realloc
+    results->stage_times[i] = (double *) realloc(results->stage_times[i], needed * sizeof(double)); 
+  }
 
   if(time_aux == NULL) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
@@ -231,7 +279,8 @@ void realloc_results_iters(results_data *results, int needed) {
 /*
  * Libera toda la memoria asociada con una estructura de resultados.
  */
-void free_results_data(results_data *results) {
+void free_results_data(results_data *results, int stages) {
+    int i;
     if(results != NULL) {
       free(results->spawn_time);
       free(results->spawn_real_time);
@@ -239,5 +288,9 @@ void free_results_data(results_data *results) {
       free(results->async_time);
 
       free(results->iters_time);
+      for(i=0; i<stages; i++) {
+        free(results->stage_times[i]);
       }
+      free(results->stage_times);
+    }
 }
