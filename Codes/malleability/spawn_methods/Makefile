@@ -1,19 +1,25 @@
-objects1 := Baseline
-objects2 := Merge ProcessDist
-objects3 := GenericSpawn
+objects1 := ProcessDist
+objects2 := Spawn_state
+objects3 := Baseline
+objects4 := Merge
+objects5 := GenericSpawn
 CC := gcc
 MCC := mpicc
-CFLAGS := -Wall -Wextra
+CFLAGS := -Wall
 
-all: $(objects1) $(objects2) $(objects3)
+all: $(objects1) $(objects2) $(objects3) $(objects4) $(objects5)
 
-$(objects1): %: %.c 
-	$(MCC) $(CFLAGS) -c -o $@.o $<
-$(objects2): %: %.c $(objects1).o
-	echo $@
-	$(MCC) $(CFLAGS) -c -o $@.o $<
-$(objects3): %: %.c $(objects2).o
-	echo $@
-	$(MCC) $(CFLAGS) -c -o $@.o $<
-clean:
-	rm *.o
+$(objects1): %: %.c %.h
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+
+$(objects2): %: %.c %.h
+	$(CC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+
+$(objects3): %: %.c %.h $(objects2).h
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+
+$(objects4): %: %.c %.h $(objects3).h
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<
+
+$(objects5): %: %.c %.h $(objects1).h $(objects2).h $(objects3).h $(objects4).h
+	$(MCC) $(CFLAGS) -c -o $(BUILDDIR)/$@.o $<

@@ -10,15 +10,13 @@
 #include "GenericSpawn.h"
 #include "Baseline.h"
 #include "Merge.h"
+#include "Spawn_state.h"
 
 // This code is a Singleton object -- Only one instance can be used at a given time and
 // no multiple calls to perform diferent resizes can be performed at the same time.
 
-int commState = MALL_NOT_STARTED;
-Spawn_data *spawn_data;
+Spawn_data *spawn_data = NULL;
 pthread_t spawn_thread;
-//pthread_mutex_t spawn_mutex; FIXME BORRAR
-//pthread_cond_t cond_adapt_rdy; FIXME BORRAR
 MPI_Comm *returned_comm;
 
 double end_time; //FIXME REFACTOR
@@ -63,7 +61,7 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
   set_spawn_configuration(argv, num_cpus, num_nodes, nodelist, myId, root, initial_qty, target_qty, type_dist, spawn_method, spawn_strategies, comm);
 
   if(!spawn_data->spawn_is_async) {
-    generic_spawn(child, NOT_STARTED);
+    generic_spawn(child, MALL_NOT_STARTED);
     local_state = get_spawn_state(spawn_data->spawn_is_async);
     if (local_state == MALL_SPAWN_COMPLETED)
       deallocate_spawn_data();
@@ -77,7 +75,7 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
     }
   }
     
-  return commState;
+  return local_state;
 }
 
 /*
@@ -88,16 +86,16 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, d
   int local_state;
   int global_state=MALL_NOT_STARTED;
 
-  if(spawn_data->spawn_is_async) {
+  if(spawn_data->spawn_is_async) { // Async
     local_state = get_spawn_state(spawn_data->spawn_is_async);
 
-    if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) {	    
+    if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
       global_state = check_single_state(comm, local_state);
 
-    } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE && data_dist_completed) {
+    } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE && data_dist_completed) { // Start Merge Shrink Async
       global_state = check_merge_shrink_state();
 
-    } else if(local_state == MALL_SPAWN_PENDING) {
+    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_DIST_ADAPTED) { // Baseline
       global_state = check_generic_state(comm, child, local_state, real_time);
 
     } else {
@@ -105,12 +103,12 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, d
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -10;
     }
-  } else if(spawn_data->spawn_method == MALL_SPAWN_MERGE){
+  } else if(spawn_data->spawn_method == MALL_SPAWN_MERGE){ // Start Merge shrink Sync
     generic_spawn(child, MALL_DIST_COMPLETED);
     global_state = get_spawn_state(spawn_data->spawn_is_async);
-    if(global_state == MALL_SPAWN_COMPLETED)
-      deallocate_spawn_data();
   }
+  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_DIST_ADAPTED)
+    deallocate_spawn_data();
   return global_state;
 }
 
@@ -122,7 +120,7 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, d
  * para el paso de redistribucion de datos (Numeros de procesos y Id del Root).
  *
  */
-void malleability_connect_children(int myId, int numP, int root, int *numP_parents, int *root_parents, MPI_Comm *parents) {
+void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, int *numP_parents, int *root_parents, MPI_Comm *parents) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
   spawn_data->root = root;
   spawn_data->myId = myId;
@@ -133,19 +131,34 @@ void malleability_connect_children(int myId, int numP, int root, int *numP_paren
   set_basic_spawn_dtype();
   MPI_Bcast(spawn_data, 1, spawn_data->dtype, MALLEABILITY_ROOT, *parents);
 
-  
   switch(spawn_data->spawn_method) {
     case MALL_SPAWN_BASELINE:
-      local_state = baseline(*spawn_data, parents);
+      baseline(*spawn_data, parents);
       break;
     case MALL_SPAWN_MERGE:
-      spawn_data->target_qty += numP_parents;
-      local_state = merge(*spawn_data, parents, NOT_STARTED);
+      spawn_data->target_qty += *numP_parents;
+      merge(*spawn_data, parents, MALL_NOT_STARTED);
       break;
   }
 
+  *root_parents = spawn_data->root_parents;
+  *numP_parents = spawn_data->initial_qty;
+
   MPI_Type_free(&(spawn_data->dtype));
   free(spawn_data);
+}
+
+/*
+ * Función para obtener si entre las estrategias elegidas, se utiliza
+ * la estrategia pasada como segundo argumento.
+ *
+ * Devuelve en "result" 1(Verdadero) si utiliza la estrategia, 0(Falso) en caso
+ * contrario.
+ */
+int malleability_spawn_contains_strat(int spawn_strategies, int strategy, int *result) {
+  int value = spawn_strategies % strategy ? 0 : 1;
+  if(result != NULL) *result = value;
+  return value;
 }
 
 //--------------PRIVATE CONFIGURATION FUNCTIONS---------------//
@@ -162,8 +175,8 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
   spawn_data->initial_qty = initial_qty;
   spawn_data->target_qty = target_qty;
   spawn_data->spawn_method = spawn_method;
-  spawn_data->spawn_is_single = spawn_strategies % MALL_SPAWN_SINGLE ? 0 : 1;
-  spawn_data->spawn_is_async = spawn_strategies % MALL_SPAWN_PTHREAD ? 0 : 1;
+  malleability_spawn_contains_strat(spawn_strategies, MALL_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
+  malleability_spawn_contains_strat(spawn_strategies, MALL_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   spawn_data->comm = comm;
 
   set_basic_spawn_dtype();
@@ -172,15 +185,15 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
     case MALL_SPAWN_BASELINE:
       spawn_data->spawn_qty = spawn_data->target_qty;
       spawn_data->already_created = 0;
+      break;
     case MALL_SPAWN_MERGE:
       spawn_data->spawn_qty = spawn_data->target_qty - spawn_data->initial_qty;
       spawn_data->already_created = spawn_data->initial_qty;
+      break;
   }
 
   if(spawn_data->spawn_is_async) {
-    pthread_mutex_init(&(spawn_data->spawn_mutex),NULL);
-    pthread_cond_init(&(spawn_data->cond_adapt_rdy),NULL);
-    spawn_thread = pthread_self();
+    init_spawn_state();
   }
 
   if(spawn_data->myId == spawn_data->root) {
@@ -229,19 +242,22 @@ void set_basic_spawn_dtype() {
  * junto a la destrucion de aquellas estructuras que utiliza.
  */
 void deallocate_spawn_data() {
-  free(spawn_data->cmd);
- 
-  MPI_Type_free(&(spawn_data->dtype));
+  if(spawn_data == NULL) return;
+
+  if(spawn_data->cmd != NULL) {
+    free(spawn_data->cmd);
+  }
+  if(spawn_data->dtype != MPI_DATATYPE_NULL) {
+    MPI_Type_free(&(spawn_data->dtype));
+  }
   if(spawn_data->mapping != MPI_INFO_NULL) {
     MPI_Info_free(&(spawn_data->mapping));
   }
-
   if(spawn_data->spawn_is_async) {
-    pthread_cond_destroy(&(spawn_data->cond_adapt_rdy));
-    pthread_mutex_destroy(&(spawn_data->spawn_mutex));
-    spawn_thread = pthread_self();
+    free_spawn_state();
   }
   free(spawn_data); 
+  spawn_data = NULL;
 }
 
 
@@ -270,7 +286,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
   }
   // END WORK
 
-  local_state = get_spawn_state(spawn_data->spawn_is_async);
+  set_spawn_state(local_state, spawn_data->spawn_is_async);
   end_time = MPI_Wtime();
 }
 
@@ -304,16 +320,19 @@ int allocate_thread_spawn() {
  * se avisa al hilo maestro.
  */
 void* thread_work(void* arg) {
+  int local_state, repeat = 0;
   returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  
-  generic_spawn(returned_comm, NOT_STARTED);
-  while(commState == MALL_SPAWN_ADAPT_POSTPONE) {
-    // El grupo de procesos se terminara de juntar tras la redistribucion de datos
-    pthread_cond_wait(&(spawn_data->cond_adapt_rdy), &(spawn_data->spawn_mutex));
-    generic_spawn(returned_comm, MALL_DIST_COMPLETED);
-  }
+  generic_spawn(returned_comm, MALL_NOT_STARTED);
 
-  deallocate_spawn_data();
+  local_state = get_spawn_state(MALL_SPAWN_PTHREAD);
+  if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
+    // El grupo de procesos se terminara de juntar tras la redistribucion de datos
+    repeat = 1;
+    local_state = wait_wakeup();
+  }
+  if (repeat) generic_spawn(returned_comm, MALL_DIST_COMPLETED);
+
   pthread_exit(NULL);
 }
 
@@ -334,14 +353,10 @@ int check_single_state(MPI_Comm comm, int global_state) {
   // They also must join if the application has ended its work
   if(global_state == MALL_SPAWN_SINGLE_COMPLETED) { 
     global_state = MALL_SPAWN_PENDING;
-    pthread_mutex_lock(&(spawn_data->spawn_mutex));
-    commState = global_state;
-    pthread_mutex_unlock(&(spawn_data->spawn_mutex));
+    set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
 
-    // TODO Refactor - No debería ser necesario
-    int threads_not_spawned = pthread_equal(pthread_self(), spawn_thread);
-
-    if(spawn_data->myId != spawn_data->root && threads_not_spawned) {
+    //int threads_not_spawned = pthread_equal(pthread_self(), spawn_thread);
+    if(spawn_data->myId != spawn_data->root) { //&& threads_not_spawned) {
       allocate_thread_spawn(spawn_data);
     }
   }
@@ -361,7 +376,8 @@ int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double 
   int global_state;
 
   MPI_Allreduce(&local_state, &global_state, 1, MPI_INT, MPI_MIN, comm);
-  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED) {
+  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_DIST_ADAPTED) {
+    set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
     *child = *returned_comm;
     deallocate_spawn_data(spawn_data);
     *real_time=end_time;
@@ -376,10 +392,7 @@ int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double 
  */
 int check_merge_shrink_state() {
   // FIXME Pasar como caso especial para evitar iteracion no necesaria
-  int global_state = MALL_SPAWN_ADAPT_PENDING;
-  pthread_mutex_lock(&(spawn_data->spawn_mutex));
-  commState = global_state;
-  pthread_mutex_unlock(&(spawn_data->spawn_mutex));
-  pthread_cond_signal(&(spawn_data->cond_adapt_rdy));
-  return global_state
+  int global_state = MALL_SPAWN_PENDING;
+  set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
+  return global_state;
 }

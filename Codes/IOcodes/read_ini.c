@@ -3,7 +3,7 @@
 #include <string.h>
 #include <mpi.h>
 #include "read_ini.h"
-#include "../malleability/ProcessDist.h"
+#include "../malleability/spawn_methods/ProcessDist.h"
 #include "../malleability/distribution_methods/block_distribution.h"
 #include "ini.h"
 
@@ -79,9 +79,9 @@ static int handler(void* user, const char* section, const char* name,
 	if(pconfig->actual_resize < pconfig->n_resizes) {
   	  char *aux = strdup(value);
           if (strcmp(aux, "spread") == 0) {
-            pconfig->phy_dist[pconfig->actual_resize] = COMM_PHY_SPREAD;
+            pconfig->phy_dist[pconfig->actual_resize] = MALL_DIST_SPREAD;
   	  } else {
-            pconfig->phy_dist[pconfig->actual_resize] = COMM_PHY_COMPACT;
+            pconfig->phy_dist[pconfig->actual_resize] = MALL_DIST_COMPACT;
 	  }
 	  free(aux);
           pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo

@@ -11,24 +11,24 @@ void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId);
 
 //--------------PUBLIC FUNCTIONS---------------//
 int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
-  MPI_Comm new_comm = MPI_COMM_NULL;
+  MPI_Comm intercomm;
   int local_state;
-  int numRanks, is_children_group = 1;
+  int is_children_group = 1;
 
   if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
-    if(data_state == MALL_DIST_COMPLETED)
-      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, spawn_data.myId)
-      local_state = MALL_SPAWN_ADAPTED;
-    else {
+    if(data_state == MALL_DIST_COMPLETED) {
+      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, spawn_data.myId);
+      local_state = MALL_DIST_ADAPTED;
+    } else {
       local_state = MALL_SPAWN_ADAPT_POSTPONE;
     }
   } else { //Expand
-    MPI_Comm_size(spawn_data.comm, &numRanks);
-    is_children_group = spawn_data.initial_qty == numRanks ? 0:1;
+    MPI_Comm_get_parent(&intercomm);
+    is_children_group = intercomm == MPI_COMM_NULL ? 0:1;
 
     baseline(spawn_data, child);
     merge_adapt_expand(child, is_children_group);
-    local_state = MALL_SPAWN_ADAPTED;
+    local_state = MALL_SPAWN_COMPLETED;
   }
 
   return local_state;
@@ -48,7 +48,7 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
 void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
   MPI_Comm new_comm = MPI_COMM_NULL;
 
-  MPI_Intercomm_merge(child, is_children_group, new_comm); //El que pone 0 va primero
+  MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
 
   MPI_Comm_free(child); //POSIBLE ERROR?
   *child = new_comm;

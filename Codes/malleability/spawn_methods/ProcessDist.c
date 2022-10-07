@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <mpi.h>
+#include <unistd.h>
 #include <string.h>
+#include <mpi.h>
+#include <slurm/slurm.h>
 #include "ProcessDist.h"
 
 
@@ -33,7 +35,7 @@ int write_hostfile_node(int ptr, int qty, char *node_name);
  * IN parameters -->
  * target_qty: Numero de procesos tras la reconfiguracion
  * alreadyCreated: Numero de procesos padre a considerar
- *   La resta de numC-alreadyCreated es el numero de hijos a crear
+ *   La resta de target_qty-alreadyCreated es el numero de hijos a crear
  * num_cpus: Numero de cpus totales (En uso o no)
  * num_nodes: Numero de nodos disponibles por esta aplicacion
  * info_type: Indica como realizar el mappeado, si indicarlo
@@ -45,15 +47,12 @@ int write_hostfile_node(int ptr, int qty, char *node_name);
  *   (NODES/WORST/SPREAD)
  */
 int physical_struct_create(int target_qty, int already_created, int num_cpus, int num_nodes, char *nodelist, int dist_type, int info_type, struct physical_dist *dist) {
-  if(*dist == NULL) {
-    return 0;
-  }
 
   dist->target_qty = target_qty;
   dist->already_created = already_created;
   dist->num_cpus = num_cpus;
-  dist->num_cpus = num_nodes;
-  dist->nodelist = nodelist
+  dist->num_nodes = num_nodes;
+  dist->nodelist = nodelist;
   dist->dist_type = dist_type;
   dist->info_type = info_type;
 
@@ -77,10 +76,10 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
   node_dist(dist, &procs_array, &used_nodes);
   switch(dist.info_type) {
     case MALL_DIST_STRING:
-      generate_info_string(nodelist, procs_array, used_nodes, info_spawn);
+      generate_info_string(dist.nodelist, procs_array, used_nodes, info_spawn);
       break;
     case MALL_DIST_HOSTFILE:
-      generate_info_hostfile(nodelist, procs_array, used_nodes, info_spawn);
+      generate_info_hostfile(dist.nodelist, procs_array, used_nodes, info_spawn);
       break;
   }
   free(procs_array);
@@ -133,8 +132,8 @@ void spread_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   int i, tamBl, remainder;
 
   *used_nodes = dist.num_nodes;
-  tamBl = dist.numC / dist.num_nodes;
-  remainder = dist.numC % dist.num_nodes;
+  tamBl = dist.target_qty / dist.num_nodes;
+  remainder = dist.target_qty % dist.num_nodes;
   for(i=0; i<remainder; i++) {
     procs[i] = tamBl + 1; 
   }
@@ -170,7 +169,7 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   }
 
   //Assing tamBl to each node
-  while(asigCores+tamBl <= dist.numC) {
+  while(asigCores+tamBl <= dist.target_qty) {
     asigCores += tamBl;
     procs[i] += tamBl;
     i = (i+1) % dist.num_nodes;
@@ -178,8 +177,8 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   }
 
   //Last node could have less procs than tamBl
-  if(asigCores < dist.numC) { 
-    procs[i] += dist.numC - asigCores;
+  if(asigCores < dist.target_qty) { 
+    procs[i] += dist.target_qty - asigCores;
     (*used_nodes)++;
   }
   if(*used_nodes > dist.num_nodes) *used_nodes = dist.num_nodes;  //FIXME Si ocurre esto no es un error?
