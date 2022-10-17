@@ -267,19 +267,18 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
 */
 
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
-  double result, t_stage;
+  double result, t_stage, start_time;
 
   result = 0;
   t_stage = stage->t_stage * config_file->factors[group.grp];
   initMatrix(&(stage->double_array), config_file->granularity);
 
-  double start_time = MPI_Wtime();
-  if(group.myId == ROOT && compute) {
-    result+= process_stage(*config_file, *stage, group, comm);
-  }
-
   if(compute) {
-    stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+    start_time = MPI_Wtime();
+    if(group.myId == ROOT) {
+      result+= process_stage(*config_file, *stage, group, comm);
+      stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+    }
     MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
   }
   stage->operations = t_stage / stage->t_op;
@@ -292,13 +291,12 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
 
   result = 0;
   t_stage = stage->t_stage * config_file->factors[group.grp];	 
-  start_time = MPI_Wtime();
-  if(group.myId == ROOT && compute) {
-    result+= process_stage(*config_file, *stage, group, comm);
-  }
-
   if(compute) {
-    stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+    start_time = MPI_Wtime();
+    if(group.myId == ROOT) {
+      result+= process_stage(*config_file, *stage, group, comm);
+      stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+    }
     MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
   }
   stage->operations = t_stage / stage->t_op;
@@ -360,13 +358,13 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
       MPI_Reduce(&time, NULL, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
     }
   }
-
   if(stage->counts.counts != NULL)
     freeCounts(&(stage->counts));
   prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
       
   get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
   stage->my_bytes = dist_data.tamBl;
+
   if(stage->array != NULL)
     free(stage->array);
   stage->array = malloc(sizeof(char) * stage->my_bytes);

@@ -18,13 +18,14 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
   if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
     if(data_state == MALL_DIST_COMPLETED) {
       merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, spawn_data.myId);
-      local_state = MALL_DIST_ADAPTED;
+      local_state = MALL_SPAWN_ADAPTED;
     } else {
       local_state = MALL_SPAWN_ADAPT_POSTPONE;
     }
   } else { //Expand
     MPI_Comm_get_parent(&intercomm);
     is_children_group = intercomm == MPI_COMM_NULL ? 0:1;
+
 
     baseline(spawn_data, child);
     merge_adapt_expand(child, is_children_group);

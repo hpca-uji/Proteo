@@ -265,7 +265,6 @@ void print_config_group(configuration *user_config, int grp) {
  * configuracion al otro grupo.
  */
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) {
-
   MPI_Datatype config_type, config_type_array, iter_stage_type;
 
   // Obtener un tipo derivado para enviar todos los
@@ -304,10 +303,7 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
  * la funcion "free_config".
  */
 void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_out) {
-
   MPI_Datatype config_type, config_type_array, iter_stage_type;
-
-
   configuration *config_file = malloc(sizeof(configuration) * 1);
 
   // Obtener un tipo derivado para recibir todos los

@@ -7,10 +7,11 @@
 #include "../malleabilityDataStructures.h"
 
 int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId, int initial_qty, int target_qty, int root, int type_dist, int spawn_method, int spawn_strategies, MPI_Comm comm, MPI_Comm *child);
-int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, double *real_time);
+int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time);
 void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, int *numP_parents, int *root_parents, MPI_Comm *parents);
 
 
+void unset_spawn_postpone_flag(int outside_state);
 int malleability_spawn_contains_strat(int spawn_strategies, int strategy, int *result);
 
 #endif

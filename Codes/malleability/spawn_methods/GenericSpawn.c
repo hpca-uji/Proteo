@@ -31,7 +31,6 @@ void generic_spawn(MPI_Comm *child, int data_stage);
 
 int check_single_state(MPI_Comm comm, int global_state);
 int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double *real_time);
-int check_merge_shrink_state();
 
 //--------------PRIVATE THREADS DECLARATIONS---------------//
 int allocate_thread_spawn();
@@ -68,7 +67,10 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
 
 
   } else {
-    local_state = spawn_data->spawn_is_single ? MALL_SPAWN_SINGLE_PENDING : MALL_SPAWN_PENDING;
+    local_state = spawn_data->spawn_is_single ? 
+	    MALL_SPAWN_SINGLE_PENDING : MALL_SPAWN_PENDING;
+    local_state = spawn_data->spawn_method == MALL_SPAWN_MERGE && spawn_data->initial_qty > spawn_data->target_qty ?
+	    MALL_SPAWN_ADAPT_POSTPONE : local_state;
     set_spawn_state(local_state, 0);
     if((spawn_data->spawn_is_single && myId == root) || !spawn_data->spawn_is_single) {
       allocate_thread_spawn();
@@ -82,24 +84,25 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
  * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
  * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
-int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, double *real_time) { 
+int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) { 
   int local_state;
   int global_state=MALL_NOT_STARTED;
 
   if(spawn_data->spawn_is_async) { // Async
     local_state = get_spawn_state(spawn_data->spawn_is_async);
+    printf("Test 3.5 local=%d\n",local_state);
 
     if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
       global_state = check_single_state(comm, local_state);
 
-    } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE && data_dist_completed) { // Start Merge Shrink Async
-      global_state = check_merge_shrink_state();
-
-    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_DIST_ADAPTED) { // Baseline
+    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED) { // Baseline
       global_state = check_generic_state(comm, child, local_state, real_time);
 
-    } else {
-      printf("Error Check spawn: Configuracion invalida\n");
+    } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
+      global_state = local_state;
+      
+    } else { //FIXMENOW Error con Merge Shrink + Pthreads -- Parece algo con updte de estados en TODOS los procesos
+      printf("Error Check spawn: Configuracion invalida State = %d\n", local_state);
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -10;
     }
@@ -107,9 +110,26 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int data_dist_completed, d
     generic_spawn(child, MALL_DIST_COMPLETED);
     global_state = get_spawn_state(spawn_data->spawn_is_async);
   }
-  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_DIST_ADAPTED)
+  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED)
     deallocate_spawn_data();
+
   return global_state;
+}
+
+/*
+ * Elimina la bandera bloqueante MALL_SPAWN_ADAPT_POSTPONE para los hilos 
+ * auxiliares. Esta bandera los bloquea para que el metodo Merge shrink no 
+ * avance hasta que se complete la redistribucion de datos. Por tanto,
+ * al modificar la bandera los hilos pueden continuar.
+ *
+ * Por seguridad se comprueba que no se realice el cambio a la bandera a 
+ * no ser que se cumplan las 3 condiciones.
+ */
+void unset_spawn_postpone_flag(int outside_state) {
+  int local_state = get_spawn_state(spawn_data->spawn_is_async);
+  if(local_state == MALL_SPAWN_ADAPT_POSTPONE && outside_state == MALL_SPAWN_ADAPT_PENDING && spawn_data->spawn_is_async) { 
+    set_spawn_state(MALL_SPAWN_PENDING, MALL_SPAWN_PTHREAD);
+  }
 }
 
 /*
@@ -136,7 +156,7 @@ void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, 
       baseline(*spawn_data, parents);
       break;
     case MALL_SPAWN_MERGE:
-      spawn_data->target_qty += *numP_parents;
+      spawn_data->target_qty += spawn_data->initial_qty;
       merge(*spawn_data, parents, MALL_NOT_STARTED);
       break;
   }
@@ -285,9 +305,8 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
       break;
   }
   // END WORK
-
-  set_spawn_state(local_state, spawn_data->spawn_is_async);
   end_time = MPI_Wtime();
+  set_spawn_state(local_state, spawn_data->spawn_is_async);
 }
 
 
@@ -330,6 +349,7 @@ void* thread_work(void* arg) {
     // El grupo de procesos se terminara de juntar tras la redistribucion de datos
     repeat = 1;
     local_state = wait_wakeup();
+    printf("Hilos despiertan\n");
   }
   if (repeat) generic_spawn(returned_comm, MALL_DIST_COMPLETED);
 
@@ -355,8 +375,7 @@ int check_single_state(MPI_Comm comm, int global_state) {
     global_state = MALL_SPAWN_PENDING;
     set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
 
-    //int threads_not_spawned = pthread_equal(pthread_self(), spawn_thread);
-    if(spawn_data->myId != spawn_data->root) { //&& threads_not_spawned) {
+    if(spawn_data->myId != spawn_data->root) {
       allocate_thread_spawn(spawn_data);
     }
   }
@@ -376,23 +395,11 @@ int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double 
   int global_state;
 
   MPI_Allreduce(&local_state, &global_state, 1, MPI_INT, MPI_MIN, comm);
-  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_DIST_ADAPTED) {
+  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED) {
     set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
     *child = *returned_comm;
     deallocate_spawn_data(spawn_data);
     *real_time=end_time;
   }
-  return global_state;
-}
-
-/*
- * Permite a una reduccion merge asincrona
- * de procesos que estaba a la espera de que la
- * distribucion de los datos se completase continue.
- */
-int check_merge_shrink_state() {
-  // FIXME Pasar como caso especial para evitar iteracion no necesaria
-  int global_state = MALL_SPAWN_PENDING;
-  set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
   return global_state;
 }

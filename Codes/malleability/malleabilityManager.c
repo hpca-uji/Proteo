@@ -140,7 +140,8 @@ void free_malleability() {
   state = MALL_UNRESERVED;
 }
 
-/*
+/* 
+ * TODO Reescribir
  * Se realiza el redimensionado de procesos por parte de los padres.
  *
  * Se crean los nuevos procesos con la distribucion fisica elegida y
@@ -156,48 +157,68 @@ void free_malleability() {
  * y finalmente se desconectan los dos grupos de procesos.
  */
 int malleability_checkpoint() {
-  
-  if(state == MALL_UNRESERVED) return MALL_UNRESERVED;
+  double end_real_time;
 
-  if(state == MALL_NOT_STARTED) {
-    // Comprobar si se tiene que realizar un redimensionado
-    //if(CHECK_RMS()) {return MALL_DENIED;}
-    
-    state = spawn_step();
+  //printf("P%d -- Estado %d\n", mall->myId, state);
+  switch(state) {
+    case MALL_UNRESERVED:
+      break;
+    case MALL_NOT_STARTED:
+      // Comprobar si se tiene que realizar un redimensionado
+      //if(CHECK_RMS()) {return MALL_DENIED;}
+      state = spawn_step();
 
-    if (state == MALL_SPAWN_COMPLETED){
-      state = start_redistribution();
-    }
-
-  } else if(state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING) { // Comprueba si el spawn ha terminado y comienza la redistribucion
-    double end_real_time;
-
-    /*if(mall_conf->spawn_type == MALL_SPAWN_MERGE && mall_conf->spawn_type == MALL_SPAWN_PTHREAD && mall->numP > mall->numC) {
-      state = shrink_redistribution(); //TODO REFACTOR
-
-    } else {
-    */
-      //state = check_slurm_comm(mall->myId, mall->root, mall->numP, &(mall->intercomm), mall->comm, mall->thread_comm, &end_real_time); //FIXMENOW
-      state = check_spawn_state(&(mall->intercomm), mall->comm, MALL_DIST_PENDING, &end_real_time); //FIXME 3 argumento depende de la distribucion
-      if (state == MALL_SPAWN_COMPLETED || state == MALL_DIST_ADAPTED) {  //FIXME MALL_DIST_ADAPTED tiene que recoger los tiempos
-        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-
-        if(malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
-          mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
-        }
-        //TODO Si es MERGE, metodo diferente de redistribucion de datos
-        state = start_redistribution();
+      if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
+        malleability_checkpoint();
       }
-    //}
+      break;
 
-  } else if(state == MALL_DIST_PENDING) {
-    if(mall_conf->comm_type == MAL_USE_THREAD) {
-      state = thread_check();
-    } else {
-      state = check_redistribution();
-    }
+    case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado y comienza la redistribucion
+    case MALL_SPAWN_SINGLE_PENDING:
+      state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
+      if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
+        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+        mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
+
+        malleability_checkpoint();
+      }
+      break;
+
+    case MALL_SPAWN_ADAPT_POSTPONE:
+    case MALL_SPAWN_COMPLETED:
+      state = start_redistribution();
+      malleability_checkpoint();
+      break;
+
+    case MALL_DIST_PENDING:
+      if(mall_conf->comm_type == MAL_USE_THREAD) {
+        state = thread_check();
+      } else {
+        state = check_redistribution();
+      }
+      if(state != MALL_DIST_PENDING) {
+        malleability_checkpoint();
+      }
+      break;
+
+    case MALL_SPAWN_ADAPT_PENDING:
+      mall_conf->results->spawn_start = MPI_Wtime();
+      unset_spawn_postpone_flag(state);
+      state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
+      printf("TEST END state=%d\n", state);
+      if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
+        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      }
+      break;
+
+    case MALL_SPAWN_ADAPTED:
+      shrink_redistribution();
+      break;
+
+    case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
+      state = MALL_COMPLETED;
+      break;
   }
-
   return state;
 }
 
@@ -410,19 +431,10 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 void Children_init() {
   int numP_parents, root_parents, i;
   int is_intercomm;
-  //MPI_Comm aux;
 
   malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
-  /*MPI_Bcast(&spawn_is_single, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
-  if(spawn_is_single) {
-    malleability_establish_connection(mall->myId, MALLEABILITY_ROOT, &(mall->intercomm)); //FIXMENOW
-  }
-  MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
-  MPI_Bcast(&root_parents, 1, MPI_INT, MALLEABILITY_ROOT, mall->intercomm); 
-  MPI_Bcast(&numP_parents, 1, MPI_INT, root_parents, mall->intercomm);
-  */
-  // TODO A partir de este punto tener en cuenta si es BASELINE o MERGE
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  // TODO A partir de este punto tener en cuenta si es BASELINE o MERGE
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
 
@@ -460,21 +472,18 @@ void Children_init() {
     } 
   }
 
-  /*
-  if(mall_conf->spawn_type == MALL_SPAWN_MERGE || mall_conf->spawn_type == MALL_SPAWN_MERGE_PTHREAD) {
-    proc_adapt_expand(&(mall->numP), mall->numP+numP_parents, mall->intercomm, &(mall->comm), MALLEABILITY_CHILDREN); //FIXMENOW
-
-    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-
-    MPI_Comm_dup(mall->comm, &aux);
-    mall->thread_comm = aux;
-    MPI_Comm_dup(mall->comm, &aux);
-    mall->user_comm = aux;
-  } 
-  */
-
   // Guardar los resultados de esta transmision
   recv_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
+  if(!is_intercomm) {
+    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+    if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+    if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
+
+    MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
+    MPI_Comm_dup(mall->intercomm, &(mall->comm));
+    MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
+    
+  }
   MPI_Comm_disconnect(&(mall->intercomm));
 }
 
@@ -490,22 +499,11 @@ void Children_init() {
  */
 int spawn_step(){
   mall_conf->results->spawn_start = MPI_Wtime();
-
-  /* FIXME Mantener funcion de shrink_redistribuition
-  if((mall_conf->spawn_type == MALL_SPAWN_MERGE) && mall->numP > mall->numC) {
-    state = shrink_redistribution();
-    return state; 
-  }
-  */
  
-  //state = init_slurm_comm(mall->name_exec, mall->num_cpus, mall->num_nodes, mall->nodelist, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_type, mall_conf->spawn_is_single, mall->thread_comm, &(mall->intercomm)); //FIXMENOW
   state = init_spawn(mall->name_exec, mall->num_cpus, mall->num_nodes, mall->nodelist, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_method, mall_conf->spawn_strategies, mall->thread_comm, &(mall->intercomm));
 
   if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
       mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-  } else {
-      //mall_conf->results->spawn_thread_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-      //mall_conf->results->spawn_start = MPI_Wtime();
   }
   return state;
 }
@@ -526,18 +524,27 @@ int spawn_step(){
  * grupos de procesos.
  */
 int start_redistribution() {
-  int rootBcast = MPI_PROC_NULL;
-  if(mall->myId == mall->root) rootBcast = MPI_ROOT;
+  int rootBcast, is_intercomm;
 
-  /*
-  MPI_Bcast(&(mall_conf->spawn_type), 1, MPI_INT, rootBcast, mall->intercomm);
-  MPI_Bcast(&(mall->root), 1, MPI_INT, rootBcast, mall->intercomm);
-  MPI_Bcast(&(mall->numP), 1, MPI_INT, rootBcast, mall->intercomm);
-  */
+  is_intercomm = 0;
+  if(mall->intercomm != MPI_COMM_NULL) {
+    MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  } else { 
+    // Si no tiene comunicador creado, se debe a que se ha pospuesto el Spawn
+    //   y se trata del spawn Merge Shrink
+    mall->intercomm = mall->comm;
+    if(mall->comm == MPI_COMM_NULL) { printf("COMM nulo?\n");}
+  }
+
+  if(is_intercomm) {
+    rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
+  } else {
+    rootBcast = mall->root;
+  }
 
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
 
-  if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
+  if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
     mall_conf->results->async_start = MPI_Wtime();
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
     if(mall_conf->comm_type == MAL_USE_THREAD) {
@@ -609,9 +616,22 @@ int check_redistribution() {
  * Finalmente termina enviando los datos temporales a los hijos.
  */ 
 int end_redistribution() {
-  int result, i, rootBcast = MPI_PROC_NULL;
-  //MPI_Comm aux;
-  if(mall->myId == mall->root) rootBcast = MPI_ROOT;
+  int i, is_intercomm, rootBcast, local_state;
+
+  is_intercomm = 0;
+  if(mall->intercomm != MPI_COMM_NULL) {
+    MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  } else { 
+    // Si no tiene comunicador creado, se debe a que se ha pospuesto el Spawn
+    //   y se trata del spawn Merge Shrink
+    mall->intercomm = mall->comm;
+  }
+  if(is_intercomm) {
+    rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
+  } else {
+    rootBcast = mall->root;
+  }
+  
 
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
@@ -629,117 +649,65 @@ int end_redistribution() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
     } 
   }
-   
- /* 
-  if(mall_conf->spawn_type == MALL_SPAWN_MERGE) {
-    double time_adapt = MPI_Wtime();
-
-    proc_adapt_expand(&(mall->numP), mall->numC, mall->intercomm, &(mall->comm), MALLEABILITY_NOT_CHILDREN); //FIXMENOW
-
-    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-
-    MPI_Comm_dup(mall->comm, &aux);
-    mall->thread_comm = aux;
-    MPI_Comm_dup(mall->comm, &aux);
-    mall->user_comm = aux;
-    mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_adapt;
-	
-    
-//    result = MAL_DIST_ADAPTED;
-  }
-  */
 
   send_results(mall_conf->results, rootBcast, mall_conf->config_file->n_resizes, mall->intercomm);
-  result = MALL_DIST_COMPLETED;
-
-  MPI_Comm_disconnect(&(mall->intercomm));
-  state = MALL_NOT_STARTED;
-  return result;
-}
 
 
-///=============================================
-///=============================================
-///=============================================
-double time_adapt, time_adapt_end;
-/*
-int state_shrink=0; //TODO Refactor
-pthread_t thread_shrink;
-MPI_Comm comm_shrink;
+  local_state = MALL_DIST_COMPLETED;
+  if(!is_intercomm) { // Merge Spawn
+    if(mall->numP < mall->numC) { // Expand
+      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+      if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+      if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
 
-int thread_shrink_creation();
-void *thread_shrink_work();
-
-
-int thread_shrink_creation() {
-  if(pthread_create(&thread_shrink, NULL, thread_shrink_work, NULL)) {
-    printf("Error al crear el hilo\n");
-    MPI_Abort(MPI_COMM_WORLD, -1);
-    return -1;
-  }
-  return MAL_SPAWN_PENDING;
-}
-void* thread_shrink_work() {
-  proc_adapt_shrink(mall->numC, &comm_shrink, mall->myId); //FIXMENOW
-  time_adapt_end = MPI_Wtime();
-  state_shrink=2;
-  pthread_exit(NULL);
-}
-*/
-///=============================================
-///=============================================
-///=============================================
-int shrink_redistribution() {
-    //int global_state;
-    double time_aux;
-    MPI_Comm aux_comm;
-
-    /*
-    if(mall_conf->spawn_type == MALL_SPAWN_MERGE && mall_conf->spawn_type == MALL_SPAWN_PTHREAD) {
-      if(state_shrink == 0) {
-        time_adapt = MPI_Wtime();
-	state_shrink = 1;
-        MPI_Comm_dup(mall->comm, &comm_shrink);
-        thread_shrink_creation();
-	return MAL_SPAWN_PENDING;
-      } else if(state_shrink>0) {
-        MPI_Allreduce(&state_shrink, &global_state, 1, MPI_INT, MPI_MIN, mall->comm);
-
-	if(global_state < 2) return MAL_SPAWN_PENDING;
-	time_aux = MPI_Wtime();
-        if(pthread_join(thread_shrink, NULL)) { 
-          printf("Error al esperar al hilo\n");
-          MPI_Abort(MPI_COMM_WORLD, -1);
-          return -10;
-        }
-        MPI_Comm_dup(mall->comm, &aux_comm);
-	mall->comm = comm_shrink;
-      }
-
-    } else {
-      time_adapt = MPI_Wtime();
-      MPI_Comm_dup(mall->comm, &aux_comm);
-      proc_adapt_shrink( mall->numC, &(mall->comm), mall->myId); //FIXMENOW
+      MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
+      MPI_Comm_dup(mall->intercomm, &(mall->comm));
+      MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
+    } else { // Shrink || Merge Shrink requiere de mas tareas
+      local_state = MALL_SPAWN_ADAPT_PENDING;
     }
-    */
-    MPI_Comm_dup(mall->comm, &aux_comm);
+  }
+  printf("TEST 1 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
+  MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
+  if(mall->intercomm != MPI_COMM_NULL) {
+    if(mall->intercomm == MPI_COMM_WORLD) {
+      printf("TEST 2 P%d Comm=%d intercomm=%d ES WORLD\n", mall->myId, mall->comm, mall->intercomm);
+    } //FIXMENOW Intercomm se borra, pero no es COMM WORLD ni COMM NULL
+    MPI_Comm_disconnect(&(mall->intercomm));
+    printf("TEST 3 P%d Borra intercomm = %d\n", mall->myId, mall->intercomm);
+  }
 
+  printf("TEST 4 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
+  MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
+  
+  return local_state;
+}
+
+
+///=============================================
+///=============================================
+///=============================================
+
+int shrink_redistribution() {
+    double time_extra = MPI_Wtime();
 
     //TODO REFACTOR -- Que solo la llamada de collect iters este fuera de los hilos
-    zombies_collect_suspended(aux_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->user_comm);
+    zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->intercomm);
     
     if(mall->myId < mall->numC) {
-      MPI_Comm_free(&aux_comm);
-      MPI_Comm_dup(mall->comm, &aux_comm); // FIXME Que pasa con los comunicadores Thread_comm y User_comm
-      mall->thread_comm = aux_comm;
-      MPI_Comm_dup(mall->comm, &aux_comm);
-      mall->user_comm = aux_comm;
+      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+      if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+      if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
 
-      mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - time_adapt; //FIXME Error
-      if(mall_conf->spawn_method == MALL_SPAWN_MERGE && malleability_spawn_contains_strat(mall_conf->spawn_strategies,MALL_SPAWN_PTHREAD, NULL)) {
-          mall_conf->results->spawn_real_time[mall_conf->grp] = time_adapt_end - time_adapt + MPI_Wtime() - time_aux; //FIXME Error
+      MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
+      MPI_Comm_dup(mall->intercomm, &(mall->comm));
+      MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
+
+      mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_extra;
+      if(malleability_spawn_contains_strat(mall_conf->spawn_strategies,MALL_SPAWN_PTHREAD, NULL)) {
+          mall_conf->results->spawn_real_time[mall_conf->grp] += MPI_Wtime() - time_extra;
       }
-      return MALL_DIST_COMPLETED; //FIXME Refactor Poner a SPAWN_COMPLETED
+      return MALL_DIST_COMPLETED;
     } else {
       return MALL_ZOMBIE;
     }
