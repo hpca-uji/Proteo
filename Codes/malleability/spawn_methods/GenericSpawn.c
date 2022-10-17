@@ -101,7 +101,7 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) {
     } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
       global_state = local_state;
       
-    } else { //FIXMENOW Error con Merge Shrink + Pthreads -- Parece algo con updte de estados en TODOS los procesos
+    } else {
       printf("Error Check spawn: Configuracion invalida State = %d\n", local_state);
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -10;

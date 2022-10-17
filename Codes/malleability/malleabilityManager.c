@@ -82,6 +82,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
 
   MPI_Comm_dup(comm, &dup_comm);
   MPI_Comm_dup(comm, &thread_comm);
+  MPI_Comm_set_name(dup_comm, "MPI_COMM_MALL");
+  MPI_Comm_set_name(thread_comm, "MPI_COMM_MALL_THREAD");
 
   mall->myId = myId;
   mall->numP = numP;
@@ -107,7 +109,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   if(mall->intercomm != MPI_COMM_NULL ) { 
     Children_init();
     return MALLEABILITY_CHILDREN;
-  }
+  } else {printf("P%d/%d MI comm padres es nulo (%d)\n", mall->myId, mall->numP, MPI_COMM_NULL);}
 
   zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;
@@ -663,21 +665,35 @@ int end_redistribution() {
       MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
       MPI_Comm_dup(mall->intercomm, &(mall->comm));
       MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
+
+      MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
+      MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
+      MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
     } else { // Shrink || Merge Shrink requiere de mas tareas
       local_state = MALL_SPAWN_ADAPT_PENDING;
     }
   }
-  printf("TEST 1 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
+
+
+  char * test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
+  int tester;
+      MPI_Comm_get_name(mall->thread_comm, test, &tester);
+  printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
+      MPI_Comm_get_name(mall->comm, test, &tester);
+  printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
+      MPI_Comm_get_name(mall->user_comm, test, &tester);
+  printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->user_comm, test);
+      MPI_Comm_get_name(mall->intercomm, test, &tester);
+  printf("TEST 4 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
+  /*FIXMENOW En algun momento P0 cambia tanto su comm como intercomm respecto al resto...*/
   MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
   if(mall->intercomm != MPI_COMM_NULL) {
-    if(mall->intercomm == MPI_COMM_WORLD) {
-      printf("TEST 2 P%d Comm=%d intercomm=%d ES WORLD\n", mall->myId, mall->comm, mall->intercomm);
-    } //FIXMENOW Intercomm se borra, pero no es COMM WORLD ni COMM NULL
-    MPI_Comm_disconnect(&(mall->intercomm));
-    printf("TEST 3 P%d Borra intercomm = %d\n", mall->myId, mall->intercomm);
+    //FIXMENOW Intercomm se borra, pero no es COMM WORLD ni COMM NULL
+    //MPI_Comm_disconnect(&(mall->intercomm));
   }
 
-  printf("TEST 4 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
+  MPI_Barrier(mall->intercomm); //FIXMENOW Por alguna razon da error en Comm
+  printf("TEST 5 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
   MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
   
   return local_state;
@@ -702,6 +718,10 @@ int shrink_redistribution() {
       MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
       MPI_Comm_dup(mall->intercomm, &(mall->comm));
       MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
+
+      MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
+      MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
+      MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
 
       mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_extra;
       if(malleability_spawn_contains_strat(mall_conf->spawn_strategies,MALL_SPAWN_PTHREAD, NULL)) {
