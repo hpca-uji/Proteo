@@ -161,6 +161,8 @@ void free_malleability() {
 int malleability_checkpoint() {
   double end_real_time;
 
+      char * test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
+      int tester;
   //printf("P%d -- Estado %d\n", mall->myId, state);
   switch(state) {
     case MALL_UNRESERVED:
@@ -168,7 +170,25 @@ int malleability_checkpoint() {
     case MALL_NOT_STARTED:
       // Comprobar si se tiene que realizar un redimensionado
       //if(CHECK_RMS()) {return MALL_DENIED;}
+      
+      MPI_Comm_get_name(mall->thread_comm, test, &tester);
+      printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
+      MPI_Comm_get_name(mall->comm, test, &tester);
+      printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
+      if(mall->intercomm != MPI_COMM_NULL) {
+      MPI_Comm_get_name(mall->intercomm, test, &tester);
+      printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
+      }
+
       state = spawn_step();
+      MPI_Comm_get_name(mall->thread_comm, test, &tester);
+      printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
+      MPI_Comm_get_name(mall->comm, test, &tester);
+      printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
+      if(mall->intercomm != MPI_COMM_NULL) {
+      MPI_Comm_get_name(mall->intercomm, test, &tester);
+      printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
+      }
 
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
         malleability_checkpoint();
@@ -654,7 +674,6 @@ int end_redistribution() {
 
   send_results(mall_conf->results, rootBcast, mall_conf->config_file->n_resizes, mall->intercomm);
 
-
   local_state = MALL_DIST_COMPLETED;
   if(!is_intercomm) { // Merge Spawn
     if(mall->numP < mall->numC) { // Expand
@@ -675,16 +694,6 @@ int end_redistribution() {
   }
 
 
-  char * test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
-  int tester;
-      MPI_Comm_get_name(mall->thread_comm, test, &tester);
-  printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
-      MPI_Comm_get_name(mall->comm, test, &tester);
-  printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
-      MPI_Comm_get_name(mall->user_comm, test, &tester);
-  printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->user_comm, test);
-      MPI_Comm_get_name(mall->intercomm, test, &tester);
-  printf("TEST 4 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
   /*FIXMENOW En algun momento P0 cambia tanto su comm como intercomm respecto al resto...*/
   MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
   if(mall->intercomm != MPI_COMM_NULL) {
