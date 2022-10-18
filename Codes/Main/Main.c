@@ -113,11 +113,9 @@ int main(int argc, char *argv[]) {
 
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
-      get_malleability_user_comm(&comm);
-      MPI_Comm_size(comm, &(group->numP));
-      MPI_Comm_rank(comm, &(group->myId));
-      if(group->grp != 0) 
+      if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+      }
 
       if(config_file->n_resizes != group->grp + 1) { //TODO Llevar a otra funcion
         set_malleability_configuration(config_file->sm, config_file->ss, config_file->phy_dist[group->grp+1], config_file->at, -1);
@@ -136,6 +134,10 @@ int main(int argc, char *argv[]) {
 
       res = work();
       if(res == MALL_ZOMBIE) break;
+
+      get_malleability_user_comm(&comm);
+      MPI_Comm_size(comm, &(group->numP));
+      MPI_Comm_rank(comm, &(group->myId));
 
       print_local_results();
       reset_results_index(results);

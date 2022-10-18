@@ -25,6 +25,8 @@ int thread_creation();
 int thread_check();
 void* thread_async_work();
 
+void print_comms_state();
+
 typedef struct {
   int spawn_method;
   int spawn_dist;
@@ -215,6 +217,7 @@ int malleability_checkpoint() {
 
     case MALL_SPAWN_ADAPTED:
       state = shrink_redistribution();
+      malleability_checkpoint();
       break;
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
@@ -692,9 +695,8 @@ int shrink_redistribution() {
     double time_extra = MPI_Wtime();
 
     //TODO REFACTOR -- Que solo la llamada de collect iters este fuera de los hilos
-    zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->intercomm);
+    zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results);
     
-    printf("HELLO THERE\n");
     if(mall->myId < mall->numC) {
       if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
       if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
@@ -708,13 +710,14 @@ int shrink_redistribution() {
       MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
       MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
 
+      MPI_Comm_free(&(mall->intercomm));
+
       mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_extra;
       if(malleability_spawn_contains_strat(mall_conf->spawn_strategies,MALL_SPAWN_PTHREAD, NULL)) {
           mall_conf->results->spawn_real_time[mall_conf->grp] += MPI_Wtime() - time_extra;
       }
       return MALL_DIST_COMPLETED;
     } else {
-      printf("P%d is a zombie\n", mall->myId);
       return MALL_ZOMBIE;
     }
 }
@@ -773,4 +776,24 @@ void* thread_async_work() {
   send_data(mall->numC, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
   state = MALL_DIST_COMPLETED;
   pthread_exit(NULL);
+}
+
+
+//==============================================================================
+/*
+ * Muestra por pantalla el estado actual de todos los comunicadores
+ */
+void print_comms_state() {
+  int tester;
+  char *test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
+
+  MPI_Comm_get_name(mall->comm, test, &tester);
+  printf("P%d Comm=%d Name=%s\n", mall->myId, mall->comm, test);
+  MPI_Comm_get_name(mall->user_comm, test, &tester);
+  printf("P%d Comm=%d Name=%s\n", mall->myId, mall->user_comm, test);
+  if(mall->intercomm != MPI_COMM_NULL) {
+    MPI_Comm_get_name(mall->intercomm, test, &tester);
+    printf("P%d Comm=%d Name=%s\n", mall->myId, mall->intercomm, test);
+  }
+  free(test);
 }
