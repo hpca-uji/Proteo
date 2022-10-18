@@ -75,8 +75,4 @@ void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId) {
       color = 1;  
   }
   MPI_Comm_split(comm, color, myId, child);
-
-  //TODO REFACTOR Llevar a otra parte -- Hacer solo si MALL_SPAWN_ADAPTED
-  //if(*comm != MPI_COMM_WORLD && *comm != MPI_COMM_NULL)
-  //  MPI_Comm_free(comm); //POSIBLE ERROR?
 }

@@ -109,7 +109,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   if(mall->intercomm != MPI_COMM_NULL ) { 
     Children_init();
     return MALLEABILITY_CHILDREN;
-  } else {printf("P%d/%d MI comm padres es nulo (%d)\n", mall->myId, mall->numP, MPI_COMM_NULL);}
+  }
 
   zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;
@@ -161,34 +161,14 @@ void free_malleability() {
 int malleability_checkpoint() {
   double end_real_time;
 
-      char * test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
-      int tester;
-  //printf("P%d -- Estado %d\n", mall->myId, state);
   switch(state) {
     case MALL_UNRESERVED:
       break;
     case MALL_NOT_STARTED:
       // Comprobar si se tiene que realizar un redimensionado
       //if(CHECK_RMS()) {return MALL_DENIED;}
-      
-      MPI_Comm_get_name(mall->thread_comm, test, &tester);
-      printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
-      MPI_Comm_get_name(mall->comm, test, &tester);
-      printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
-      if(mall->intercomm != MPI_COMM_NULL) {
-      MPI_Comm_get_name(mall->intercomm, test, &tester);
-      printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
-      }
 
       state = spawn_step();
-      MPI_Comm_get_name(mall->thread_comm, test, &tester);
-      printf("TEST 1 P%d Comm=%d name=%s\n", mall->myId, mall->thread_comm, test);
-      MPI_Comm_get_name(mall->comm, test, &tester);
-      printf("TEST 2 P%d Comm=%d name=%s\n", mall->myId, mall->comm, test);
-      if(mall->intercomm != MPI_COMM_NULL) {
-      MPI_Comm_get_name(mall->intercomm, test, &tester);
-      printf("TEST 3 P%d Comm=%d name=%s\n", mall->myId, mall->intercomm, test);
-      }
 
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
         malleability_checkpoint();
@@ -227,14 +207,14 @@ int malleability_checkpoint() {
       mall_conf->results->spawn_start = MPI_Wtime();
       unset_spawn_postpone_flag(state);
       state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
-      printf("TEST END state=%d\n", state);
+
       if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
         mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
       }
       break;
 
     case MALL_SPAWN_ADAPTED:
-      shrink_redistribution();
+      state = shrink_redistribution();
       break;
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
@@ -554,8 +534,7 @@ int start_redistribution() {
   } else { 
     // Si no tiene comunicador creado, se debe a que se ha pospuesto el Spawn
     //   y se trata del spawn Merge Shrink
-    mall->intercomm = mall->comm;
-    if(mall->comm == MPI_COMM_NULL) { printf("COMM nulo?\n");}
+    MPI_Comm_dup(mall->comm, &(mall->intercomm));
   }
 
   if(is_intercomm) {
@@ -696,15 +675,11 @@ int end_redistribution() {
 
   /*FIXMENOW En algun momento P0 cambia tanto su comm como intercomm respecto al resto...*/
   MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
-  if(mall->intercomm != MPI_COMM_NULL) {
+  if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
     //FIXMENOW Intercomm se borra, pero no es COMM WORLD ni COMM NULL
-    //MPI_Comm_disconnect(&(mall->intercomm));
+    MPI_Comm_disconnect(&(mall->intercomm));
   }
 
-  MPI_Barrier(mall->intercomm); //FIXMENOW Por alguna razon da error en Comm
-  printf("TEST 5 P%d Comm=%d intercomm=%d\n", mall->myId, mall->comm, mall->intercomm);
-  MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
-  
   return local_state;
 }
 
@@ -719,6 +694,7 @@ int shrink_redistribution() {
     //TODO REFACTOR -- Que solo la llamada de collect iters este fuera de los hilos
     zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall->intercomm);
     
+    printf("HELLO THERE\n");
     if(mall->myId < mall->numC) {
       if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
       if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
@@ -738,6 +714,7 @@ int shrink_redistribution() {
       }
       return MALL_DIST_COMPLETED;
     } else {
+      printf("P%d is a zombie\n", mall->myId);
       return MALL_ZOMBIE;
     }
 }

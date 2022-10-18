@@ -90,12 +90,12 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) {
 
   if(spawn_data->spawn_is_async) { // Async
     local_state = get_spawn_state(spawn_data->spawn_is_async);
-    printf("Test 3.5 local=%d\n",local_state);
+    //printf("Test 3.5 local=%d\n",local_state);
 
     if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
       global_state = check_single_state(comm, local_state);
 
-    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED) { // Baseline
+    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_SPAWN_ADAPTED) { // Baseline
       global_state = check_generic_state(comm, child, local_state, real_time);
 
     } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
@@ -129,6 +129,7 @@ void unset_spawn_postpone_flag(int outside_state) {
   int local_state = get_spawn_state(spawn_data->spawn_is_async);
   if(local_state == MALL_SPAWN_ADAPT_POSTPONE && outside_state == MALL_SPAWN_ADAPT_PENDING && spawn_data->spawn_is_async) { 
     set_spawn_state(MALL_SPAWN_PENDING, MALL_SPAWN_PTHREAD);
+    wakeup();
   }
 }
 
@@ -339,7 +340,7 @@ int allocate_thread_spawn() {
  * se avisa al hilo maestro.
  */
 void* thread_work(void* arg) {
-  int local_state, repeat = 0;
+  int local_state;
   returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  
   generic_spawn(returned_comm, MALL_NOT_STARTED);
@@ -347,11 +348,10 @@ void* thread_work(void* arg) {
   local_state = get_spawn_state(MALL_SPAWN_PTHREAD);
   if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
     // El grupo de procesos se terminara de juntar tras la redistribucion de datos
-    repeat = 1;
+
     local_state = wait_wakeup();
-    printf("Hilos despiertan\n");
+    generic_spawn(returned_comm, MALL_DIST_COMPLETED);
   }
-  if (repeat) generic_spawn(returned_comm, MALL_DIST_COMPLETED);
 
   pthread_exit(NULL);
 }

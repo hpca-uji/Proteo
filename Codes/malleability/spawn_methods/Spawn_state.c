@@ -39,10 +39,14 @@ void set_spawn_state(int value, int is_async) {
 }
 
 int wait_wakeup() {
+  pthread_mutex_lock(&spawn_mutex);
   pthread_cond_wait(&spawn_cond, &spawn_mutex);
+  pthread_mutex_unlock(&spawn_mutex);
   return get_spawn_state(1);
 }
 
 void wakeup() {
+  pthread_mutex_lock(&spawn_mutex);
   pthread_cond_signal(&spawn_cond);
+  pthread_mutex_unlock(&spawn_mutex);
 }
