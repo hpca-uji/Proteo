@@ -18,7 +18,7 @@ void indicate_ending_malleability(int new_outside_state);
 int malleability_checkpoint();
 void set_benchmark_grp(int grp);
 
-void set_malleability_configuration(int spawn_type, int spawn_is_single, int spawn_dist, int spawn_threaded, int comm_type, int comm_threaded);
+void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int comm_type, int comm_threaded);
 void set_children_number(int numC); // TODO TO BE DEPRECATED
 void get_malleability_user_comm(MPI_Comm *comm);
 

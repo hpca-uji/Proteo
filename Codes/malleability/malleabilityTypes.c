@@ -49,13 +49,15 @@ void add_data(void *data, int total_qty, int type, int request_qty, malleability
  * unicamente.
  */
 void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group, int myId, int root, MPI_Comm intercomm) {
-  int i, rootBcast = MPI_PROC_NULL;
+  int i, is_intercomm, rootBcast = MPI_PROC_NULL;
   MPI_Datatype entries_type, struct_type;
 
-  if(is_children_group) {
-    rootBcast = root;
+
+  MPI_Comm_test_inter(intercomm, &is_intercomm);
+  if(is_intercomm && !is_children_group) {
+    rootBcast = myId == root ? MPI_ROOT : MPI_PROC_NULL;
   } else {
-    if(myId == root) rootBcast = MPI_ROOT;
+    rootBcast = root;
   }
 
   // Mandar primero numero de entradas

@@ -112,14 +112,13 @@ int main(int argc, char *argv[]) {
     do {
 
       group->grp = group->grp + 1;
-      if(group->grp != 0) obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
       set_benchmark_grp(group->grp);
-      get_malleability_user_comm(&comm);
-      MPI_Comm_size(comm, &(group->numP));
-      MPI_Comm_rank(comm, &(group->myId));
+      if(group->grp != 0) {
+        obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+      }
 
-      if(config_file->n_resizes != group->grp + 1) { 
-        set_malleability_configuration(config_file->sm, config_file->ss, config_file->phy_dist[group->grp+1], -1, config_file->at, -1);
+      if(config_file->n_resizes != group->grp + 1) { //TODO Llevar a otra funcion
+        set_malleability_configuration(config_file->sm, config_file->ss, config_file->phy_dist[group->grp+1], config_file->at, -1);
         set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
 
         if(group->grp == 0) {
@@ -134,11 +133,15 @@ int main(int argc, char *argv[]) {
       }
 
       res = work();
-      if(res == MAL_ZOMBIE) break;
+      if(res == MALL_ZOMBIE) break;
+
+      get_malleability_user_comm(&comm);
+      MPI_Comm_size(comm, &(group->numP));
+      MPI_Comm_rank(comm, &(group->myId));
 
       print_local_results();
       reset_results_index(results);
-    } while((config_file->n_resizes > group->grp + 1) && (config_file->sm == COMM_SPAWN_MERGE || config_file->sm == COMM_SPAWN_MERGE_PTHREAD));
+    } while(config_file->n_resizes > group->grp + 1 && config_file->sm == MALL_SPAWN_MERGE);
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -155,7 +158,7 @@ int main(int argc, char *argv[]) {
       MPI_Comm_free(&comm);
     }
 
-    if(group->myId == ROOT && (config_file->sm == COMM_SPAWN_MERGE || config_file->sm == COMM_SPAWN_MERGE_PTHREAD)) {
+    if(group->myId == ROOT && config_file->sm == MALL_SPAWN_MERGE) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
     free_application_data();
@@ -185,8 +188,8 @@ int work() {
   double *matrix = NULL;
 
   maxiter = config_file->iters[group->grp];
-  state = MAL_NOT_STARTED;
-  
+  state = MALL_NOT_STARTED;
+
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(matrix, config_file->granularity, state, iter);
@@ -196,7 +199,7 @@ int work() {
     state = malleability_checkpoint();
 
   iter = 0;
-  while(state == MAL_DIST_PENDING || state == MAL_SPAWN_PENDING || state == MAL_SPAWN_SINGLE_PENDING) {
+  while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE) {
     if(iter < config_file->iters[group->grp+1]) {
       iterate(matrix, config_file->granularity, state, iter);
       iter++;
@@ -207,7 +210,7 @@ int work() {
 
   
   if(config_file->n_resizes - 1 == group->grp) res=1;
-  if(state == MAL_ZOMBIE) res=state;
+  if(state == MALL_ZOMBIE) res=state;
   return res;
 }
 
@@ -239,7 +242,7 @@ double iterate(double *matrix, int n, int async_comm, int iter) {
 
   actual_time = MPI_Wtime(); // Guardar tiempos
   // TODO Que diferencie entre ambas en el IO
-  if(async_comm == MAL_DIST_PENDING || async_comm == MAL_SPAWN_PENDING || async_comm == MAL_SPAWN_SINGLE_PENDING) { // Se esta realizando una redistribucion de datos asincrona
+  if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { // Se esta realizando una redistribucion de datos asincrona
     cnt_async=1;
   }
 
@@ -409,7 +412,7 @@ void obtain_op_times(int compute) {
   for(i=0; i<config_file->n_stages; i++) {
     time+=init_stage(config_file, i, *group, comm, compute);
   }
-  if(!compute) results->wasted_time += time;
+  if(!compute) {results->wasted_time += time;}
 }
 
 /*

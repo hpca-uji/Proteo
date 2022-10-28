@@ -11,7 +11,7 @@ struct physical_dist {
   int num_cpus, num_nodes;
   char *nodelist;
   int target_qty, already_created;
-  int dist_type;
+  int dist_type, info_type;
 };
 
 typedef struct {
@@ -25,10 +25,6 @@ typedef struct {
   struct physical_dist dist; // Used to create mapping var
 
   MPI_Comm comm, returned_comm;
-
-  // To control the spawn state
-  pthread_mutex_t spawn_mutex;
-  pthread_cond_t cond_adapt_rdy;
 } Spawn_data;
 
 #endif

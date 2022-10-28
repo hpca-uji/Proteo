@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include "../malleabilityStates.h"
 #include "Baseline.h"
+#include "Spawn_state.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
 int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child);
@@ -24,10 +25,10 @@ void baseline_establish_connection(int myId, int root, MPI_Comm *parents);
  * nada los hijos.
  */
 int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de errores
-  int numRanks;
-  MPI_Comm_size(spawn_data.comm, &numRanks);
+  MPI_Comm intercomm;
+  MPI_Comm_get_parent(&intercomm);
 
-  if (spawn_data.initial_qty == numRanks) { // Parents path
+  if (intercomm == MPI_COMM_NULL) { // Parents path
     if(spawn_data.spawn_is_single) {  
       baseline_single_spawn(spawn_data, child);
     } else {
@@ -78,11 +79,8 @@ int baseline_single_spawn(Spawn_data spawn_data, MPI_Comm *child) {
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, spawn_data.root, 130, *child, MPI_STATUS_IGNORE);
 
-    if(spawn_data.spawn_is_async) {
-      pthread_mutex_lock(&(spawn_data.spawn_mutex));
-      commState = MALL_SPAWN_SINGLE_COMPLETED; // Indicate other processes to join root to end spawn procedure
-      pthread_mutex_unlock(&(spawn_data.spawn_mutex));
-    }
+    set_spawn_state(MALL_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
+
   } else {
     port_name = malloc(1);
   }
