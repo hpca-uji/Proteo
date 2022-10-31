@@ -15,9 +15,9 @@ void node_dist( struct physical_dist dist, int **qty, int *used_nodes);
 void spread_dist(struct physical_dist dist, int *used_nodes, int *procs);
 void compact_dist(struct physical_dist dist, int *used_nodes, int *procs);
 
-void generate_info_string(char *nodelist, int *procs_array, int nodes, MPI_Info *info);
-void fill_str_hostfile(char *nodelist, int *qty, int used_nodes, char **hostfile_str);
-int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name);
+void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info);
+void fill_str_hostfile(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str);
+int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name);
 
 //@deprecated functions
 void generate_info_hostfile(char *nodelist, int *procs_array, int nodes, MPI_Info *info);
@@ -76,7 +76,7 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
   node_dist(dist, &procs_array, &used_nodes);
   switch(dist.info_type) {
     case MALL_DIST_STRING:
-      generate_info_string(dist.nodelist, procs_array, used_nodes, info_spawn);
+      generate_info_string(dist.nodelist, procs_array, (size_t) used_nodes, info_spawn);
       break;
     case MALL_DIST_HOSTFILE:
       generate_info_hostfile(dist.nodelist, procs_array, used_nodes, info_spawn);
@@ -101,7 +101,7 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
 void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
   int i, *procs;
 
-  procs = calloc(dist.num_nodes, sizeof(int)); // Numero de procesos por nodo
+  procs = calloc((size_t)dist.num_nodes, sizeof(int)); // Numero de procesos por nodo
 
   /* GET NEW DISTRIBUTION  */
   switch(dist.dist_type) {
@@ -114,7 +114,7 @@ void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
   }
 
   //Copy results to output vector qty
-  *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
+  *qty = calloc((size_t)*used_nodes, sizeof(int)); // Numero de procesos por nodo
   for(i=0; i< *used_nodes; i++) {
     (*qty)[i] = procs[i];
   }
@@ -189,7 +189,7 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
  * en el que se indica el mappeado a utilizar en los nuevos
  * procesos.
  */
-void generate_info_string(char *nodelist, int *procs_array, int nodes, MPI_Info *info){
+void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info){
   // CREATE AND SET STRING HOSTS
   char *hoststring;
   fill_str_hostfile(nodelist, procs_array, nodes, &hoststring);
@@ -203,15 +203,15 @@ void generate_info_string(char *nodelist, int *procs_array, int nodes, MPI_Info 
  * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
  * al crear procesos e indicar donde tienen que ser creados.
  */
-void fill_str_hostfile(char *nodelist, int *qty, int used_nodes, char **hostfile_str) {
-  int i=0, len=0;
+void fill_str_hostfile(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str) {
   char *host;
+  size_t i=0,len=0;
   hostlist_t hostlist;
   
   hostlist = slurm_hostlist_create(nodelist);
   while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
     if(qty[i] != 0) {
-      len = write_str_node(hostfile_str, len, qty[i], host);
+      len = (size_t) write_str_node(hostfile_str, len, (size_t)qty[i], host);
     }
     i++;
     free(host);
@@ -223,24 +223,25 @@ void fill_str_hostfile(char *nodelist, int *qty, int used_nodes, char **hostfile
  * Añade en una cadena "qty" entradas de "node_name".
  * Realiza la reserva de memoria y la realoja si es necesario.
  */
-int write_str_node(char **hostfile_str, int len_og, int qty, char *node_name) {
-  int err, len_node, len, i;
+int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name) {
+  int err;
   char *ocurrence;
+  size_t i, len, len_node;
 
   len_node = strlen(node_name);
   len = qty * (len_node + 1);
 
   if(len_og == 0) { // Memoria no reservada
-    *hostfile_str = (char *) malloc(len * sizeof(char) - (1 * sizeof(char)));
+    *hostfile_str = (char *) malloc(len * sizeof(char) - sizeof(char));
   } else { // Cadena ya tiene datos
-    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - (1 * sizeof(char)));
+    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - sizeof(char));
   }
   if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
 
   ocurrence = (char *) malloc((len_node+1) * sizeof(char));
-  if(ocurrence == NULL) return -1; // No ha sido posible alojar la memoria
+  if(ocurrence == NULL) return -2; // No ha sido posible alojar la memoria
   err = sprintf(ocurrence, ",%s", node_name);
-  if(err < 0) return -2; // No ha sido posible escribir sobre la variable auxiliar
+  if(err < 0) return -3; // No ha sido posible escribir sobre la variable auxiliar
 
   i=0;
   if(len_og == 0) { // Si se inicializa, la primera es una copia
@@ -294,10 +295,11 @@ void generate_info_hostfile(char *nodelist, int *procs_array, int nodes, MPI_Inf
  * modificar el fichero.
  */
 int create_hostfile(char **file_name) {
-  int ptr, err, len = 11;
+  int ptr, err;
+  size_t len = 11; //FIXME Numero mágico
 
   *file_name = NULL;
-  *file_name = malloc( len * sizeof(char));
+  *file_name = malloc(len * sizeof(char));
   if(*file_name == NULL) return -1; // No ha sido posible alojar la memoria
   err = snprintf(*file_name, len, "hostfile.o");
   if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
@@ -336,18 +338,21 @@ void fill_hostfile(char *nodelist, int ptr, int *qty, int nodes) {
  * alojar en ese nodo.
  */
 int write_hostfile_node(int ptr, int qty, char *node_name) {
-  int err, len_node, len_int, len;
+  int err;
   char *line;
+  size_t len, len_node, len_int;
 
   len_node = strlen(node_name);
-  len_int = snprintf(NULL, 0, "%d", qty);
+  err = snprintf(NULL, 0, "%d", qty);
+  if(err < 0) return -1;
+  len_int = (size_t) err;
 
   len = len_node + len_int + 3;
   line = malloc(len * sizeof(char));
-  if(line == NULL) return -1; // No ha sido posible alojar la memoria
+  if(line == NULL) return -2; // No ha sido posible alojar la memoria
   err = snprintf(line, len, "%s:%d\n", node_name, qty);
 
-  if(err < 0) return -2; // No ha sido posible escribir en el fichero
+  if(err < 0) return -3; // No ha sido posible escribir en el fichero
 
   write(ptr, line, len-1);
   free(line);

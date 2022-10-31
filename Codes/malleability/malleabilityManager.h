@@ -7,8 +7,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <mpi.h>
-#include "../IOcodes/read_ini.h"
 #include "../IOcodes/results.h"
+#include "../Main/configuration.h"
 #include "../Main/Main_datatypes.h"
 #include "malleabilityStates.h"
 
@@ -22,8 +22,8 @@ void set_malleability_configuration(int spawn_method, int spawn_strategies, int 
 void set_children_number(int numC); // TODO TO BE DEPRECATED
 void get_malleability_user_comm(MPI_Comm *comm);
 
-void malleability_add_data(void *data, int total_qty, int type, int is_replicated, int is_constant);
-void malleability_get_entries(int *entries, int is_replicated, int is_constant);
+void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant);
+void malleability_get_entries(size_t *entries, int is_replicated, int is_constant);
 void malleability_get_data(void **data, int index, int is_replicated, int is_constant);
 
 void set_benchmark_configuration(configuration *config_file);

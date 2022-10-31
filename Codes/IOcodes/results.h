@@ -10,7 +10,7 @@
 typedef struct {
   // Iters data
   double *iters_time, **stage_times;
-  int iters_async, iter_index, iters_size;
+  size_t iters_async, iter_index, iters_size;
 
   // Spawn, Thread, Sync, Async and Exec time
   double spawn_start, *spawn_time, *spawn_real_time;
@@ -30,11 +30,11 @@ void compute_results_iter(results_data *results, int myId, int root, MPI_Comm co
 void compute_results_stages(results_data *results, int myId, int root, int n_stages, MPI_Comm comm);
 
 void print_iter_results(results_data results);
-void print_stage_results(results_data results, int n_stages);
-void print_global_results(results_data results, int resizes);
+void print_stage_results(results_data results, size_t n_stages);
+void print_global_results(results_data results, size_t resizes);
 
-void init_results_data(results_data *results, int resizes, int stages, int iters_size);
-void realloc_results_iters(results_data *results, int stages, int needed);
+void init_results_data(results_data *results, size_t resizes, size_t stages, size_t iters_size);
+void realloc_results_iters(results_data *results, int stages, size_t needed);
 void free_results_data(results_data *results, int stages);
 
 #endif

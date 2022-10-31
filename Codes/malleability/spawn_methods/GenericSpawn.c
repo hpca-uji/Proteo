@@ -34,7 +34,7 @@ int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double 
 
 //--------------PRIVATE THREADS DECLARATIONS---------------//
 int allocate_thread_spawn();
-void* thread_work(void* arg);
+void* thread_work();
 
 
 //--------------PUBLIC FUNCTIONS---------------//
@@ -339,7 +339,7 @@ int allocate_thread_spawn() {
  * Una vez esta lista la configuracion y es posible crear los procesos
  * se avisa al hilo maestro.
  */
-void* thread_work(void* arg) {
+void* thread_work() {
   int local_state;
   returned_comm = (MPI_Comm *) malloc(sizeof(MPI_Comm));
  

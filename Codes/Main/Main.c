@@ -6,14 +6,14 @@
 #include <sys/stat.h>
 #include "process_stage.h"
 #include "Main_datatypes.h"
-#include "../IOcodes/read_ini.h"
+#include "configuration.h"
 #include "../IOcodes/results.h"
 #include "../malleability/CommDist.h"
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
 
 int work();
-double iterate(double *matrix, int n, int async_comm, int iter);
+double iterate(int async_comm);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
     if(group->myId == ROOT && config_file->sm == MALL_SPAWN_MERGE) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
-    free_application_data();
+    free_application_data(); //FIXME Error al liberar memoria de SDR/ADR
 
     MPI_Finalize();
 
@@ -185,14 +185,13 @@ int main(int argc, char *argv[]) {
  */
 int work() {
   int iter, maxiter, state, res;
-  double *matrix = NULL;
 
   maxiter = config_file->iters[group->grp];
   state = MALL_NOT_STARTED;
 
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
-    iterate(matrix, config_file->granularity, state, iter);
+    iterate(state);
   }
 
   if(config_file->n_resizes != group->grp + 1)
@@ -201,7 +200,7 @@ int work() {
   iter = 0;
   while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE) {
     if(iter < config_file->iters[group->grp+1]) {
-      iterate(matrix, config_file->granularity, state, iter);
+      iterate(state);
       iter++;
       group->iter_start = iter;
     }
@@ -226,24 +225,26 @@ int work() {
  * Simula la ejecucción de una iteración de computo en la aplicación
  * que dura al menos un tiempo de "time" segundos.
  */
-double iterate(double *matrix, int n, int async_comm, int iter) {
-  double start_time, start_time_stage, actual_time, *times_stages;
-  int i, cnt_async = 0;
+double iterate(int async_comm) {
+  double start_time, start_time_stage, actual_time, *times_stages_aux;
+  int i;
   double aux = 0;
 
-  times_stages = malloc(config_file->n_stages * sizeof(double));
+  times_stages_aux = malloc((size_t) config_file->n_stages * sizeof(double));
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
     start_time_stage = MPI_Wtime();
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    times_stages[i] = MPI_Wtime() - start_time_stage;
+    times_stages_aux[i] = MPI_Wtime() - start_time_stage;
   }
 
   actual_time = MPI_Wtime(); // Guardar tiempos
+
+  // Se esta realizando una redistribucion de datos asincrona
+  if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { 
   // TODO Que diferencie entre ambas en el IO
-  if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { // Se esta realizando una redistribucion de datos asincrona
-    cnt_async=1;
+    results->iters_async += 1;
   }
 
   if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
@@ -251,12 +252,11 @@ double iterate(double *matrix, int n, int async_comm, int iter) {
   }
   results->iters_time[results->iter_index] = actual_time - start_time;
   for(i=0; i < config_file->n_stages; i++) {
-    results->stage_times[i][results->iter_index] = times_stages[i];
+    results->stage_times[i][results->iter_index] = times_stages_aux[i];
   }
-  results->iters_async += cnt_async;
   results->iter_index = results->iter_index + 1;
 
-  free(times_stages);
+  free(times_stages_aux);
 
   return aux;
 }
@@ -304,7 +304,7 @@ int print_local_results() {
   
     print_config_group(config_file, group->grp);
     print_iter_results(*results);
-    print_stage_results(*results, config_file->n_stages);
+    print_stage_results(*results, (size_t) config_file->n_stages);
     free(file_name);
 
     fflush(stdout);
@@ -334,7 +334,7 @@ int print_final_results() {
       ptr_out = dup(1);
       create_out_file(file_name, &ptr_global, 1);
       print_config(config_file, group->grp);
-      print_global_results(*results, config_file->n_resizes);
+      print_global_results(*results, (size_t)config_file->n_resizes);
       fflush(stdout);
       free(file_name);
 
@@ -349,7 +349,7 @@ int print_final_results() {
  * Inicializa la estructura group
  */
 void init_group_struct(char *argv[], int argc, int myId, int numP) {
-  group = malloc(1 * sizeof(group_data));
+  group = malloc(sizeof(group_data));
   group->myId        = myId;
   group->numP        = numP;
   group->grp         = 0;
@@ -376,9 +376,10 @@ void init_application() {
     run_id = atoi(group->argv[2]);
   }
 
-  config_file = read_ini_file(group->argv[1]);
+  //config_file = read_ini_file(group->argv[1]);
+  init_config(group->argv[1], &config_file);
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->iters[group->grp]);
+  init_results_data(results, (size_t)config_file->n_resizes, (size_t)config_file->n_stages, (size_t)config_file->iters[group->grp]);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
@@ -387,11 +388,9 @@ void init_application() {
   }
 
   int message_tam = 100000000;
-  for(int i=0; i<3; i++) {
-    config_file->latency_m = latency(group->myId, group->numP, comm);
-    config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
-  //if(group->myId == ROOT) printf("numP=%d Lat=%lf Bw=%lf\n", group->numP, config_file->latency_m, config_file->bw_m);
-  }
+  config_file->latency_m = latency(group->myId, group->numP, comm);
+  config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
+
   obtain_op_times(1);
 }
 

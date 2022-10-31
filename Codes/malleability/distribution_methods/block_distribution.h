@@ -27,7 +27,7 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
 void prepare_comm_allgatherv(int numP, int n, struct Counts *counts);
 void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data);
 
-void mallocCounts(struct Counts *counts, int numP);
+void mallocCounts(struct Counts *counts, size_t numP);
 void freeCounts(struct Counts *counts);
 void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, int include_zero, const char* name);
 

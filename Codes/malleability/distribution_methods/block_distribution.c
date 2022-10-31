@@ -18,7 +18,7 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
   struct Dist_data dist_data;
 
   get_block_dist(n, myId, numP, &dist_data);
-  mallocCounts(counts, numP_other);
+  mallocCounts(counts, (size_t)numP_other);
   get_util_ids(dist_data, numP_other, &idS);
 
   if(idS[0] == 0) {
@@ -42,7 +42,7 @@ void prepare_comm_allgatherv(int numP, int n, struct Counts *counts) {
   int i;
   struct Dist_data dist_data;
 
-  mallocCounts(counts, numP);
+  mallocCounts(counts, (size_t)numP);
   get_block_dist(n, 0, numP, &dist_data);
 
   counts->counts[0] = dist_data.tamBl;
@@ -187,7 +187,7 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS) {
  * El vector zero_arr se utiliza cuando se quiere indicar un vector incializado
  * a 0 en todos sus elementos. Sirve para indicar que no hay comunicacion.
  */
-void mallocCounts(struct Counts *counts, int numP) {
+void mallocCounts(struct Counts *counts, size_t numP) {
     counts->counts = calloc(numP, sizeof(int)); 
     if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 

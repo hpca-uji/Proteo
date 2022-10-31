@@ -292,7 +292,7 @@ void get_malleability_user_comm(MPI_Comm *comm) {
  *
  * Mas informacion en la funcion "add_data".
  */
-void malleability_add_data(void *data, int total_qty, int type, int is_replicated, int is_constant) {
+void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant) {
 
   if(is_constant) {
     if(is_replicated) {
@@ -304,14 +304,14 @@ void malleability_add_data(void *data, int total_qty, int type, int is_replicate
     if(is_replicated) {
       add_data(data, total_qty, type, 0, rep_a_data); //FIXME Numero magico || Un request?
     } else {
-      int total_reqs = 0;
+      size_t total_reqs = 0;
       
       if(mall_conf->comm_type  == MAL_USE_NORMAL) {
         total_reqs = 1;
       } else if(mall_conf->comm_type  == MAL_USE_IBARRIER) {
         total_reqs = 2;
       } else if(mall_conf->comm_type  == MAL_USE_POINT) {
-        total_reqs = mall->numC;
+        total_reqs = (size_t) mall->numC;
       }
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
@@ -323,7 +323,7 @@ void malleability_add_data(void *data, int total_qty, int type, int is_replicate
  * Devuelve el numero de entradas para la estructura de descripcion de 
  * datos elegida.
  */
-void malleability_get_entries(int *entries, int is_replicated, int is_constant){
+void malleability_get_entries(size_t *entries, int is_replicated, int is_constant){
   
   if(is_constant) {
     if(is_replicated) {
@@ -381,18 +381,18 @@ void malleability_get_data(void **data, int index, int is_replicated, int is_con
  * de forma bloqueante o no. El padre puede tener varios hilos.
  */
 void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
-  int i;
+  size_t i;
   char *aux;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_async(aux, data_struct->qty[i], mall->myId, mall->numP, mall->root, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
+      send_async(aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_sync(aux, data_struct->qty[i], mall->myId, mall->numP, mall->root, mall->intercomm, numP_children);
+      send_sync(aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children);
     }
   }
 }
@@ -403,19 +403,19 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
  * de forma bloqueante o no. El padre puede tener varios hilos.
  */
 void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
-  int i;
+  size_t i;
   char *aux;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_async(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->root, mall->intercomm, numP_parents, mall_conf->comm_type);
+      recv_async(&aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->comm_type);
       data_struct->arrays[i] = (void *) aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_sync(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->root, mall->intercomm, numP_parents);
+      recv_sync(&aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents);
       data_struct->arrays[i] = (void *) aux;
     }
   }
@@ -434,7 +434,8 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
  * ya sea de forma sincrona, asincrona o ambas.
  */
 void Children_init() {
-  int numP_parents, root_parents, i;
+  size_t i;
+  int numP_parents, root_parents;
   int is_intercomm;
 
   malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
@@ -444,7 +445,7 @@ void Children_init() {
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
-  init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
+  init_results_data(mall_conf->results, (size_t) mall_conf->config_file->n_resizes, (size_t) mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -473,7 +474,7 @@ void Children_init() {
       } else {
         datatype = MPI_CHAR;
       }
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], (int) rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
   }
 
@@ -620,7 +621,8 @@ int check_redistribution() {
  * Finalmente termina enviando los datos temporales a los hijos.
  */ 
 int end_redistribution() {
-  int i, is_intercomm, rootBcast, local_state;
+  size_t i;
+  int is_intercomm, rootBcast, local_state;
 
   is_intercomm = 0;
   if(mall->intercomm != MPI_COMM_NULL) {
@@ -650,7 +652,7 @@ int end_redistribution() {
       } else {
         datatype = MPI_CHAR;
       }
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], (int) rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
     } 
   }
 

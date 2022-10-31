@@ -28,7 +28,7 @@ typedef struct {
 typedef struct
 {
   int pt; // Procedure type
-  float t_stage; // Time to complete the stage
+  double t_stage; // Time to complete the stage
 
   double t_op;
   int operations;
@@ -59,6 +59,7 @@ typedef struct
     int *iters, *procs, *phy_dist;
     float *factors;
 
+    double t_op_comms;
     iter_stage_t *stages;
 } configuration;
 

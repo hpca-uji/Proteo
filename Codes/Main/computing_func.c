@@ -40,8 +40,8 @@ double computePiSerial(int n) {
 /*
  * Init matrix
  */
-void initMatrix(double **matrix, int n) {
-  int i, j;
+void initMatrix(double **matrix, size_t n) {
+  size_t i, j;
 
   // Init matrix
   if(matrix != NULL) {
@@ -49,7 +49,7 @@ void initMatrix(double **matrix, int n) {
     if(*matrix == NULL) { MPI_Abort(MPI_COMM_WORLD, -1);}
     for(i=0; i < n; i++) {
       for(j=0; j < n; j++) {
-        (*matrix)[i*n + j] = i+j;
+        (*matrix)[i*n + j] =(double) i + (double) j;
       }
     }
   }

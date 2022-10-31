@@ -1,8 +1,8 @@
 #include "malleabilityTypes.h"
 
 
-void init_malleability_data_struct(malleability_data_t *data_struct, int size);
-void realloc_malleability_data_struct(malleability_data_t *data_struct, int qty_to_add);
+void init_malleability_data_struct(malleability_data_t *data_struct, size_t size);
+void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t qty_to_add);
 
 void def_malleability_entries(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, MPI_Datatype *new_type);
 void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, MPI_Datatype *new_type);
@@ -20,8 +20,8 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
  * todos los padres. La nueva serie "data" solo representa los datos
  * que tiene este padre.
  */
-void add_data(void *data, int total_qty, int type, int request_qty, malleability_data_t *data_struct) {
-  int i;
+void add_data(void *data, size_t total_qty, int type, size_t request_qty, malleability_data_t *data_struct) {
+  size_t i;
   
   if(data_struct->entries == 0) {
     init_malleability_data_struct(data_struct, MALLEABILITY_INIT_DATA_QTY);
@@ -49,7 +49,8 @@ void add_data(void *data, int total_qty, int type, int request_qty, malleability
  * unicamente.
  */
 void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group, int myId, int root, MPI_Comm intercomm) {
-  int i, is_intercomm, rootBcast = MPI_PROC_NULL;
+  int is_intercomm, rootBcast = MPI_PROC_NULL;
+  size_t i;
   MPI_Datatype entries_type, struct_type;
 
 
@@ -65,8 +66,8 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
   if(is_children_group) {
-    if(data_struct_rep->entries != 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
-    if(data_struct_dist->entries != 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
+    if(data_struct_rep->entries != (size_t) 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
+    if(data_struct_dist->entries != (size_t) 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
@@ -99,9 +100,9 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
  * caracteristicas de localización y uso. Se inicializa para utilizar hasta
  * "size" elementos.
  */
-void init_malleability_data_struct(malleability_data_t *data_struct, int size) {
+void init_malleability_data_struct(malleability_data_t *data_struct, size_t size) {
   data_struct->max_entries = size;
-  data_struct->qty = (int *) malloc(size * sizeof(int));
+  data_struct->qty = (size_t *) malloc(size * sizeof(size_t));
   data_struct->types = (int *) malloc(size * sizeof(int));
   data_struct->requests = (MPI_Request **) malloc(size * sizeof(MPI_Request *));
   data_struct->arrays = (void **) malloc(size * sizeof(void *));
@@ -114,13 +115,14 @@ void init_malleability_data_struct(malleability_data_t *data_struct, int size) {
  * caracteristicas de localización y uso. Se anyaden "size" entradas nuevas
  * a las ya existentes.
  */
-void realloc_malleability_data_struct(malleability_data_t *data_struct, int qty_to_add) {
-  int *qty_aux, *types_aux, needed;
+void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t qty_to_add) {
+  size_t needed, *qty_aux;
+  int *types_aux;
   MPI_Request **requests_aux;
   void **arrays_aux;
 
   needed = data_struct->max_entries + qty_to_add;
-  qty_aux = (int *) realloc(data_struct->qty, needed * sizeof(int));
+  qty_aux = (size_t *) realloc(data_struct->qty, needed * sizeof(int));
   types_aux = (int *) realloc(data_struct->types, needed * sizeof(int));
   requests_aux = (MPI_Request **) realloc(data_struct->requests, needed * sizeof(MPI_Request *));
   arrays_aux = (void **) realloc(data_struct->arrays, needed * sizeof(void *));
@@ -138,7 +140,7 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, int qty_
 }
 
 void free_malleability_data_struct(malleability_data_t *data_struct) {
-  int i, max;
+  size_t i, max;
 
   max = data_struct->entries;
   if(max != 0) {
@@ -195,8 +197,8 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
   MPI_Datatype types[counts];
 
   types[0] = types[1] = types[2] = types[3] = MPI_INT;
-  blocklengths[0] = blocklengths[1] = data_struct_rep->entries;
-  blocklengths[2] = blocklengths[3] = data_struct_dist->entries;
+  blocklengths[0] = blocklengths[1] = (int)data_struct_rep->entries;
+  blocklengths[2] = blocklengths[3] = (int)data_struct_dist->entries;
 
   MPI_Get_address((data_struct_rep->qty), &displs[0]);
   MPI_Get_address((data_struct_rep->types), &displs[1]);

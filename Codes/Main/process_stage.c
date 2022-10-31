@@ -4,13 +4,11 @@
 #include <mpi.h>
 #include "computing_func.h"
 #include "comunication_func.h"
-#include "linear_reg.h"
 #include "Main_datatypes.h"
 #include "process_stage.h"
 #include "../malleability/distribution_methods/block_distribution.h"
 
-void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm comm);
-
+double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
 
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
@@ -47,6 +45,7 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
     //Computo
     case COMP_MATRIX:
       result = init_matrix_pt(group, config_file, stage, comm, compute);
+      break;
     case COMP_PI:
       result = init_pi_pt(group, config_file, stage, comm, compute);
       break;
@@ -87,7 +86,7 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       break;
     case COMP_MATRIX:
       for(i=0; i < stage.operations; i++) {
-        result += computeMatrix(stage.double_array, config_file.granularity); //FIXME No da tiempos repetibles
+        result += computeMatrix(stage.double_array, config_file.granularity);
       } 
       break;
     //Comunicaciones
@@ -95,7 +94,13 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       point_to_point(group.myId, group.numP, ROOT, comm, stage.array, stage.real_bytes);
       break;
     case COMP_BCAST:
-      MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
+      if(stage.bytes != 0) {
+        MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
+      } else {
+        for(i=0; i < stage.operations; i++) {
+          point_to_point_inter(group.myId, group.numP, comm, stage.array, stage.real_bytes);
+	}
+      }
       break;
     case COMP_ALLGATHER:
       MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
@@ -109,8 +114,6 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
   }
   return result;
 }
-
-
 
 
 // Se realizan varios tests de latencia al 
@@ -159,8 +162,8 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
   double start_time, stop_time, bw, time;
   char *aux;
 
-  n_bytes = n * sizeof(char);
-  aux = malloc(n_bytes);
+  n_bytes = ((size_t)n) * sizeof(char);
+  aux = malloc((size_t)n_bytes);
   time = 0;
 
 
@@ -188,77 +191,6 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
 }
 
 /*
- * Creates a linear regression model to predict
- * the number of bytes needed to perform a collective
- * communication.
- */
-void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm comm) {
-  int i, j, tam, loop_iters = 100;
-
-  tam = LR_ARRAY_TAM * loop_iters;
-  double *bytes = malloc(tam * sizeof(double));
-  double *times = malloc(tam * sizeof(double));
-  
-  for(i=0; i<LR_ARRAY_TAM; i++) {
-    for(j=0; j<loop_iters; j++) {
-      bytes[i*loop_iters + j] = LR_bytes_array[i];
-    }
-  }
-
-  // TODO Calcular solo si no se ha calculado para otra fase.
-  // Si se ha calculado antes, copiar esos valores
-
-  switch(stage->pt) {
-    //Comunicaciones
-    case COMP_BCAST:
-      lr_times_bcast(group.myId, group.numP, ROOT, comm, loop_iters, times);
-      break;
-    case COMP_ALLGATHER:
-      lr_times_allgatherv(group.myId, group.numP, ROOT, comm, loop_iters, times);
-      break;
-    case COMP_REDUCE:
-      lr_times_reduce(group.myId, group.numP, ROOT, comm, loop_iters, times);
-      break;
-    case COMP_ALLREDUCE:
-      lr_times_allreduce(group.myId, group.numP, ROOT, comm, loop_iters, times);
-      break;
-    default:
-      return;
-      break;
-  }
-
-  if(group.myId == ROOT) {
-    MPI_Reduce(MPI_IN_PLACE, times, LR_ARRAY_TAM * loop_iters, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    /*
-    printf("PT=%d ", stage->pt);
-    for(i=0; i<tam; i++) {
-      printf("%lf, ", times[i]);
-    }
-    printf("\n");
-    printf("BYTES ");
-    for(i=0; i<tam; i++) {
-      printf("%lf, ", bytes[i]);
-    }
-    printf("\n");
-    */
-    //if(stage->t_stage < 0.1) {
-    //lr_compute(8*loop_iters, bytes, times, &(stage->slope), &(stage->intercept));
-    //} else {
-    lr_compute(tam, bytes, times, &(stage->slope), &(stage->intercept));
-    //}
-  } else {
-    MPI_Reduce(times, NULL, LR_ARRAY_TAM * loop_iters, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-  }
-
-  MPI_Bcast(&(stage->slope), 1, MPI_DOUBLE, ROOT, comm);
-  MPI_Bcast(&(stage->intercept), 1, MPI_DOUBLE, ROOT, comm);
-
-  free(times);
-  free(bytes);
-}
-
-
-/*
  * ========================================================================================
  * ========================================================================================
  * =================================INIT STAGE FUNCTIONS===================================
@@ -266,12 +198,30 @@ void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm com
  * ========================================================================================
 */
 
+double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+  double start_time, time = 0;
+
+  stage->array = malloc(sizeof(char) * (size_t)config_file->granularity);
+  if(config_file->t_op_comms != 0) {
+    stage->t_op = config_file->t_op_comms;
+    return time;
+  }
+
+  MPI_Barrier(comm);
+  start_time = MPI_Wtime();
+  process_stage(*config_file, *stage, group, comm);
+  MPI_Barrier(comm);
+  stage->t_op = ceil((MPI_Wtime() - start_time) / stage->operations); //Tiempo de una operacion
+  MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
+  return time;
+}
+
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double result, t_stage, start_time;
 
   result = 0;
   t_stage = stage->t_stage * config_file->factors[group.grp];
-  initMatrix(&(stage->double_array), config_file->granularity);
+  initMatrix(&(stage->double_array), (size_t) config_file->granularity);
 
   if(compute) {
     start_time = MPI_Wtime();
@@ -281,7 +231,7 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
     }
     MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
   }
-  stage->operations = t_stage / stage->t_op;
+  stage->operations = (int) ceil(t_stage / stage->t_op);
 
   return result;
 }
@@ -299,106 +249,81 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
     }
     MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
   }
-  stage->operations = t_stage / stage->t_op;
+  stage->operations = (int) ceil(t_stage / stage->t_op);
 
   return result;
 }
 
 void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  struct Dist_data dist_data;
+  int aux_bytes = stage->bytes;
 
   if(stage->array != NULL)
     free(stage->array);
-  if(stage->bytes == 0) {
-    stage->bytes = (stage->t_stage - config_file->latency_m) * config_file->bw_m;
+  if(aux_bytes == 0) {
+    //aux_bytes = (stage->t_stage - config_file->latency_m) * config_file->bw_m;
+    init_emulation_comm_time(group, config_file, stage, comm);
   }
-  get_block_dist(stage->bytes, group.myId, group.numP, &dist_data);
-  stage->real_bytes = dist_data.tamBl;
-  stage->array = malloc(sizeof(char) * stage->real_bytes);
+  stage->real_bytes = aux_bytes;
+  stage->array = malloc(sizeof(char) * (size_t)stage->real_bytes);
 }
 
 double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  double start_time, time = 0;
-  stage->real_bytes = stage->bytes;
-  if(stage->bytes == 0) {
-    start_time = MPI_Wtime();
-    linear_regression_stage(stage, group, comm);
-    lr_calc_Y(stage->slope, stage->intercept, stage->t_stage, &(stage->real_bytes));
-
-    time = MPI_Wtime() - start_time;
-    if(group.myId == ROOT) {
-      MPI_Reduce(MPI_IN_PLACE, &time, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    } else {
-      MPI_Reduce(&time, NULL, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    }
-  }
-
+  double time = 0;
   if(stage->array != NULL)
     free(stage->array);
-  stage->array = malloc(sizeof(char) * stage->real_bytes);
 
+  if(stage->bytes != 0) {
+    stage->real_bytes = stage->bytes;
+    stage->array = malloc(sizeof(char) * (size_t)stage->real_bytes);
+  } else { // Prepare to emulate Collective as PtoP
+    time = init_emulation_comm_time(group, config_file, stage, comm);
+  }
   return time;
 }
 
 
 double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  double start_time, time = 0;
+  double time=0;
   struct Dist_data dist_data;
-
-  stage->real_bytes = stage->bytes;
-  if(stage->bytes == 0) {
-    start_time = MPI_Wtime();
-    linear_regression_stage(stage, group, comm);
-    lr_calc_Y(stage->slope, stage->intercept, stage->t_stage, &(stage->real_bytes));
-
-    time = MPI_Wtime() - start_time;
-    if(group.myId == ROOT) {
-      MPI_Reduce(MPI_IN_PLACE, &time, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    } else {
-      MPI_Reduce(&time, NULL, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    }
-  }
-  if(stage->counts.counts != NULL)
-    freeCounts(&(stage->counts));
-  prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
-      
-  get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
-  stage->my_bytes = dist_data.tamBl;
 
   if(stage->array != NULL)
     free(stage->array);
-  stage->array = malloc(sizeof(char) * stage->my_bytes);
-  if(stage->full_array != NULL)
-    free(stage->full_array);
-  stage->full_array = malloc(sizeof(char) * stage->real_bytes);
+
+  stage->real_bytes = stage->bytes;
+  if(stage->bytes != 0) {
+    prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
+      
+    get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
+    stage->my_bytes = dist_data.tamBl;
+
+    stage->array = malloc(sizeof(char) * (size_t)stage->my_bytes);
+    if(stage->full_array != NULL)
+      free(stage->full_array);
+    stage->full_array = malloc(sizeof(char) * (size_t)stage->real_bytes);
+    if(stage->counts.counts != NULL)
+      freeCounts(&(stage->counts));
+  } else {
+    time = init_emulation_comm_time(group, config_file, stage, comm);
+  }
 
   return time;
 }
 
 double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  double start_time, time = 0;
-
-  stage->real_bytes = stage->bytes;
-  if(stage->bytes == 0) {
-    start_time = MPI_Wtime();
-    linear_regression_stage(stage, group, comm);
-    lr_calc_Y(stage->slope, stage->intercept, stage->t_stage, &(stage->real_bytes));
-
-    time = MPI_Wtime() - start_time;
-    if(group.myId == ROOT) {
-      MPI_Reduce(MPI_IN_PLACE, &time, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    } else {
-      MPI_Reduce(&time, NULL, 1, MPI_DOUBLE, MPI_MAX, ROOT, comm);
-    }
-  }
-
+  double time = 0;
   if(stage->array != NULL)
     free(stage->array);
-  stage->array = malloc(sizeof(char) * stage->real_bytes);
-  //Full array para el reduce necesita el mismo tamanyo
-  if(stage->full_array != NULL)
-    free(stage->full_array);
-  stage->full_array = malloc(sizeof(char) * stage->real_bytes);
+
+  stage->real_bytes = stage->bytes;
+  if(stage->bytes != 0) {
+    stage->array = malloc(sizeof(char) * (size_t)stage->real_bytes);
+    //Full array para el reduce necesita el mismo tamanyo
+    if(stage->full_array != NULL)
+      free(stage->full_array);
+    stage->full_array = malloc(sizeof(char) * (size_t)stage->real_bytes);
+  } else {
+    init_emulation_comm_time(group, config_file, stage, comm);
+  }
 
   return time;
 }

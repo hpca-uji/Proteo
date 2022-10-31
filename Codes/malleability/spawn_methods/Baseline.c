@@ -1,41 +1,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include <pthread.h>
 #include "../malleabilityStates.h"
 #include "Baseline.h"
 #include "Spawn_state.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
 int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child);
-int baseline_single_spawn(Spawn_data spawn_data, MPI_Comm *child);
-void baseline_establish_connection(int myId, int root, MPI_Comm *parents);
+int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child);
+void single_strat_children(int myId, int root, MPI_Comm *parents);
+
 
 //--------------PUBLIC FUNCTIONS---------------//
 /*
  * Metodo basico para la creacion de procesos. Crea en total
  * spawn_data.spawn_qty procesos.
- *
- * Tiene incorporada la estrategia Single para permitir que
- * un solo proceso padre cree a los hijos.
- *
- * Si la funcion es llamada por los hijos se comprobara si
- * se esta utilizando la estrategia Single para terminar
- * la creacion de procesos. En caso contrario no realizan
- * nada los hijos.
  */
 int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de errores
   MPI_Comm intercomm;
   MPI_Comm_get_parent(&intercomm);
 
   if (intercomm == MPI_COMM_NULL) { // Parents path
-    if(spawn_data.spawn_is_single) {  
-      baseline_single_spawn(spawn_data, child);
+    if (spawn_data.spawn_is_single) {
+      single_strat_parents(spawn_data, child);
     } else {
       baseline_spawn(spawn_data, spawn_data.comm, child);
     }
   } else if(spawn_data.spawn_is_single) { // Children path
-    baseline_establish_connection(spawn_data.myId, spawn_data.root, child);
+    single_strat_children(spawn_data.myId, spawn_data.root, child);
   }
   return MALL_SPAWN_COMPLETED;
 }
@@ -52,23 +44,21 @@ int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child) {
 
   // WORK
   int spawn_err = MPI_Comm_spawn(spawn_data.cmd, MPI_ARGV_NULL, spawn_data.spawn_qty, spawn_data.mapping, spawn_data.root, comm, child, MPI_ERRCODES_IGNORE); 
+  // END WORK
 
   if(spawn_err != MPI_SUCCESS) {
     printf("Error creating new set of %d procs.\n", spawn_data.spawn_qty);
   }
-  // END WORK
-
   MPI_Bcast(&spawn_data, 1, spawn_data.dtype, rootBcast, *child);
 
   return spawn_err;
 }
 
-
 /* 
  * Si la variable "type" es 1, la creación es con la participación de todo el grupo de padres
  * Si el valor es diferente, la creación es solo con la participación del proceso root
  */
-int baseline_single_spawn(Spawn_data spawn_data, MPI_Comm *child) {
+int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
   int spawn_err;
   char *port_name;
   MPI_Comm newintercomm;
@@ -95,7 +85,6 @@ int baseline_single_spawn(Spawn_data spawn_data, MPI_Comm *child) {
   return spawn_err;
 }
 
-
 /*
  * Conectar grupo de hijos con grupo de padres
  * Devuelve un intercomunicador para hablar con los padres
@@ -103,7 +92,7 @@ int baseline_single_spawn(Spawn_data spawn_data, MPI_Comm *child) {
  * Solo se utiliza cuando la creación de los procesos ha sido
  * realizada por un solo proceso padre
  */
-void baseline_establish_connection(int myId, int root, MPI_Comm *parents) {
+void single_strat_children(int myId, int root, MPI_Comm *parents) {
   char *port_name;
   MPI_Comm newintercomm;
 

@@ -20,3 +20,16 @@ void point_to_point(int myId, int numP, int root, MPI_Comm comm, char *array, in
     MPI_Send(array, qty, MPI_CHAR, next, 99, comm);
   }
 }
+
+void point_to_point_inter(int myId, int numP, MPI_Comm comm, char *array, int qty) {
+  int target;
+  target = (myId + numP/2)%numP;
+
+  if(myId < numP/2) {
+    MPI_Send(array, qty, MPI_CHAR, target, 99, comm);
+    //MPI_Recv(array, qty, MPI_CHAR, target, 99, comm, MPI_STATUS_IGNORE);
+  } else {
+    MPI_Recv(array, qty, MPI_CHAR, target, 99, comm, MPI_STATUS_IGNORE);
+    //MPI_Send(array, qty, MPI_CHAR, target, 99, comm);
+  }
+}

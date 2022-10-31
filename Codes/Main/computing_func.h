@@ -3,7 +3,7 @@
 
 double computeMatrix(double *matrix, int n);
 double computePiSerial(int n);
-void initMatrix(double **matrix, int n);
+void initMatrix(double **matrix, size_t n);
 void freeMatrix(double **matrix);
 
 #endif

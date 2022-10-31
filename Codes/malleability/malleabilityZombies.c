@@ -20,8 +20,8 @@ void gestor_usr2() {}
 
 void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void) {
   int pid = getpid();
-  int *pids_counts = malloc(numP * sizeof(int));
-  int *pids_displs = malloc(numP * sizeof(int));
+  int *pids_counts = malloc((size_t)numP * sizeof(int));
+  int *pids_displs = malloc((size_t)numP * sizeof(int));
   int i, count=1;
 
   if(myId < numC) {

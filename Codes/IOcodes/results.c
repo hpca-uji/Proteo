@@ -3,6 +3,8 @@
 #include <mpi.h>
 #include "results.h"
 
+#define RESULTS_EXTRA_SIZE 100
+
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type);
 
 //======================================================||
@@ -131,9 +133,9 @@ void reset_results_index(results_data *results) {
  */
 void compute_results_iter(results_data *results, int myId, int root, MPI_Comm comm) {
   if(myId == root)
-    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+    MPI_Reduce(MPI_IN_PLACE, results->iters_time, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
   else
-    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+    MPI_Reduce(results->iters_time, NULL, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
 }
 
 
@@ -148,12 +150,12 @@ void compute_results_stages(results_data *results, int myId, int root, int stage
   int i;
   if(myId == root) {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
     }
   }
   else {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+      MPI_Reduce(results->stage_times[i], NULL, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
     }
   }
 }
@@ -170,25 +172,25 @@ void compute_results_stages(results_data *results, int myId, int root, int stage
  * por iteracion, el tipo (Normal o durante communicacion asincrona).
  */
 void print_iter_results(results_data results) {
-  int i;
+  size_t i;
 
   printf("T_iter: ");
   for(i=0; i< results.iter_index; i++) {
     printf("%lf ", results.iters_time[i]);
   }
 
-  printf("\nAsync_Iters: %d\n", results.iters_async);
+  printf("\nAsync_Iters: %ld\n", results.iters_async);
 }
 
 /*
  * Imprime por pantalla los resultados locales de un stage.
  */
-void print_stage_results(results_data results, int n_stages) {
-  int i, j;
+void print_stage_results(results_data results, size_t n_stages) {
+  size_t i, j;
 
-  for(i=0; i<n_stages; i++) {
-    printf("T_stage %d: ", i);
-    for(j=0; j< results.iter_index; j++) {
+  for(i=0; i < n_stages; i++) {
+    printf("T_stage %ld: ", i);
+    for(j=0; j < results.iter_index; j++) {
       printf("%lf ", results.stage_times[i][j]);
     }
     printf("\n");
@@ -200,15 +202,15 @@ void print_stage_results(results_data results, int n_stages) {
  * Estos son el tiempo de creacion de procesos, los de comunicacion
  * asincrona y sincrona y el tiempo total de ejecucion.
  */
-void print_global_results(results_data results, int resizes) {
-  int i;
+void print_global_results(results_data results, size_t resizes) {
+  size_t i;
 
-  printf("T_spawn: ");  // FIXME REFACTOR Cambiar nombre a T_resize_real
-  for(i=0; i< resizes - 1; i++) {
+  printf("T_spawn: ");
+  for(i=0; i < resizes - 1; i++) {
     printf("%lf ", results.spawn_time[i]);
   }
 
-  printf("\nT_spawn_real: "); // FIXME REFACTOR Cambiar nombre a T_resize
+  printf("\nT_spawn_real: ");
   for(i=0; i< resizes - 1; i++) {
     printf("%lf ", results.spawn_real_time[i]);
   }
@@ -238,8 +240,8 @@ void print_global_results(results_data results, int resizes) {
  * Los argumentos "resizes" y "iters_size" se necesitan para obtener el tamaño
  * de los vectores de resultados.
  */
-void init_results_data(results_data *results, int resizes, int stages, int iters_size) {
-  int i;
+void init_results_data(results_data *results, size_t resizes, size_t stages, size_t iters_size) {
+  size_t i;
 
   results->spawn_time = calloc(resizes, sizeof(double));
   results->spawn_real_time = calloc(resizes, sizeof(double));
@@ -247,11 +249,11 @@ void init_results_data(results_data *results, int resizes, int stages, int iters
   results->async_time = calloc(resizes, sizeof(double));
   results->wasted_time = 0;
 
-  results->iters_size = iters_size + 100;
-  results->iters_time = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
-  results->stage_times = malloc(stages * sizeof(double*)); //FIXME Numero magico
+  results->iters_size = iters_size + RESULTS_EXTRA_SIZE;
+  results->iters_time = calloc(results->iters_size, sizeof(double));
+  results->stage_times = malloc(stages * sizeof(double*));
   for(i=0; i<stages; i++) {
-    results->stage_times[i] = calloc(iters_size + 100, sizeof(double)); //FIXME Numero magico
+    results->stage_times[i] = calloc(results->iters_size, sizeof(double));
   }
 
   results->iters_async = 0;
@@ -259,7 +261,7 @@ void init_results_data(results_data *results, int resizes, int stages, int iters
 
 }
 
-void realloc_results_iters(results_data *results, int stages, int needed) {
+void realloc_results_iters(results_data *results, int stages, size_t needed) {
   int i;
   double *time_aux;
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
