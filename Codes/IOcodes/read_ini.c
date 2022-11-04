@@ -28,12 +28,9 @@ static int handler(void* user, const char* section, const char* name,
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     if (MATCH("general", "Total_Resizes")) {
         pconfig->n_resizes = atoi(value) + 1;
-        //malloc_config_resizes(pconfig); //FIXME Unknown
         user_functions->resizes_f(pconfig);
     } else if (MATCH("general", "Total_Stages")) {
         pconfig->n_stages = atoi(value);
-        pconfig->stages = malloc(sizeof(iter_stage_t) * (size_t) pconfig->n_stages);
-        //init_config_stages(pconfig); //FIXME Unkown
         user_functions->stages_f(pconfig);
     } else if (MATCH("general", "Granularity")) {
         pconfig->granularity = atoi(value);
@@ -41,48 +38,40 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
         pconfig->adr = atoi(value);
-    } else if (MATCH("general", "Asynch_Redistribution_Type")) {
-        pconfig->at = atoi(value);
-    } else if (MATCH("general", "Spawn_Method")) {
-        pconfig->sm = atoi(value);
-    } else if (MATCH("general", "Spawn_Strategy")) {
-        pconfig->ss = atoi(value);
 
     // Iter stage
     } else if (MATCH(stage_name, "Stage_Type")) {
-	if(pconfig->actual_stage < pconfig->n_stages)
-          pconfig->stages[pconfig->actual_stage].pt = atoi(value);
-    } else if (MATCH(stage_name, "Stage_bytes")) {
-	if(pconfig->actual_stage < pconfig->n_stages)
-          pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
-    } else if (MATCH(stage_name, "Stage_time")) {
-	if(pconfig->actual_stage < pconfig->n_stages) {
-          pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
-          pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
-	}
+	//if(pconfig->actual_stage < pconfig->n_stages)
+        pconfig->stages[pconfig->actual_stage].pt = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Bytes")) {
+        pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time")) {
+        pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
+        pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
 
     // Resize stage
     } else if (MATCH(resize_name, "Iters")) {
-	if(pconfig->actual_resize < pconfig->n_resizes)
-          pconfig->iters[pconfig->actual_resize] = atoi(value);
+	//if(pconfig->actual_resize < pconfig->n_resizes)
+        pconfig->groups[pconfig->actual_resize].iters = atoi(value);
     } else if (MATCH(resize_name, "Procs")) {
-	if(pconfig->actual_resize < pconfig->n_resizes)
-          pconfig->procs[pconfig->actual_resize] = atoi(value);
+        pconfig->groups[pconfig->actual_resize].procs = atoi(value);
     } else if (MATCH(resize_name, "FactorS")) {
-	if(pconfig->actual_resize < pconfig->n_resizes)
-          pconfig->factors[pconfig->actual_resize] =(float) atof(value);
+        pconfig->groups[pconfig->actual_resize].factor =(float) atof(value);
     } else if (MATCH(resize_name, "Dist")) {
-	if(pconfig->actual_resize < pconfig->n_resizes) {
-  	  char *aux = strdup(value);
-          if (strcmp(aux, "spread") == 0) {
-            pconfig->phy_dist[pconfig->actual_resize] = MALL_DIST_SPREAD;
-  	  } else {
-            pconfig->phy_dist[pconfig->actual_resize] = MALL_DIST_COMPACT;
-	  }
-	  free(aux);
-          pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
-	}
+	int aux_value = MALL_DIST_COMPACT;
+        if (strcmp(value, "spread") == 0) {
+          aux_value = MALL_DIST_SPREAD;
+  	}
+        pconfig->groups[pconfig->actual_resize].phy_dist = aux_value;
+    } else if (MATCH(resize_name, "Asynch_Redistribution_Type")) {
+        pconfig->groups[pconfig->actual_resize].at = atoi(value);
+    } else if (MATCH(resize_name, "Spawn_Method")) {
+        pconfig->groups[pconfig->actual_resize].sm = atoi(value);
+    } else if (MATCH(resize_name, "Spawn_Strategy")) {
+        pconfig->groups[pconfig->actual_resize].ss = atoi(value);
+        pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
 
+    // Unkown case
     } else {
         return 0;  /* unknown section or name, error */
     }

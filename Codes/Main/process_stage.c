@@ -220,7 +220,7 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
   double result, t_stage, start_time;
 
   result = 0;
-  t_stage = stage->t_stage * config_file->factors[group.grp];
+  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
   initMatrix(&(stage->double_array), (size_t) config_file->granularity);
 
   if(compute) {
@@ -240,7 +240,7 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
   double result, t_stage, start_time;
 
   result = 0;
-  t_stage = stage->t_stage * config_file->factors[group.grp];	 
+  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
   if(compute) {
     start_time = MPI_Wtime();
     if(group.myId == ROOT) {
@@ -288,6 +288,10 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
 
   if(stage->array != NULL)
     free(stage->array);
+  if(stage->counts.counts != NULL)
+    freeCounts(&(stage->counts));
+  if(stage->full_array != NULL)
+    free(stage->full_array);
 
   stage->real_bytes = stage->bytes;
   if(stage->bytes != 0) {
@@ -297,11 +301,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
     stage->my_bytes = dist_data.tamBl;
 
     stage->array = malloc(sizeof(char) * (size_t)stage->my_bytes);
-    if(stage->full_array != NULL)
-      free(stage->full_array);
     stage->full_array = malloc(sizeof(char) * (size_t)stage->real_bytes);
-    if(stage->counts.counts != NULL)
-      freeCounts(&(stage->counts));
   } else {
     time = init_emulation_comm_time(group, config_file, stage, comm);
   }
@@ -313,13 +313,13 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
+  if(stage->full_array != NULL)
+    free(stage->full_array);
 
   stage->real_bytes = stage->bytes;
   if(stage->bytes != 0) {
     stage->array = malloc(sizeof(char) * (size_t)stage->real_bytes);
     //Full array para el reduce necesita el mismo tamanyo
-    if(stage->full_array != NULL)
-      free(stage->full_array);
     stage->full_array = malloc(sizeof(char) * (size_t)stage->real_bytes);
   } else {
     init_emulation_comm_time(group, config_file, stage, comm);

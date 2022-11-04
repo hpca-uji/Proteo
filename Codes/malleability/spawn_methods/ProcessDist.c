@@ -5,9 +5,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <mpi.h>
-#include <slurm/slurm.h>
 #include "ProcessDist.h"
 
+#define USE_SLURM
 
 //--------------PRIVATE DECLARATIONS---------------//
 
@@ -15,16 +15,24 @@ void node_dist( struct physical_dist dist, int **qty, int *used_nodes);
 void spread_dist(struct physical_dist dist, int *used_nodes, int *procs);
 void compact_dist(struct physical_dist dist, int *used_nodes, int *procs);
 
-void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info);
-void fill_str_hostfile(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str);
-int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name);
-
+void generate_info_string(int target_qty, MPI_Info *info);
+//--------------------------------SLURM USAGE-------------------------------------//
+#ifdef USE_SLURM
+#include <slurm/slurm.h>
+void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info);
+void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str);
 //@deprecated functions
-void generate_info_hostfile(char *nodelist, int *procs_array, int nodes, MPI_Info *info);
+void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, MPI_Info *info);
+void fill_hostfile_slurm(char *nodelist, int ptr, int *qty, int used_nodes);
+#endif
+//--------------------------------SLURM USAGE-------------------------------------//
+
+int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name);
+//@deprecated functions
 int create_hostfile(char **file_name);
-void fill_hostfile(char *nodelist, int ptr, int *qty, int used_nodes);
 int write_hostfile_node(int ptr, int qty, char *node_name);
 
+//--------------PUBLIC FUNCTIONS---------------//
 /*
  * Pone los datos para una estructura que guarda los parametros
  * para realizar un mappeado de los procesos.
@@ -69,23 +77,28 @@ int physical_struct_create(int target_qty, int already_created, int num_cpus, in
  *   a usar al crear los procesos.
  */
 void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
+#ifdef USE_SLURM
   int used_nodes=0;
   int *procs_array;
-
   // GET NEW DISTRIBUTION 
   node_dist(dist, &procs_array, &used_nodes);
   switch(dist.info_type) {
     case MALL_DIST_STRING:
-      generate_info_string(dist.nodelist, procs_array, (size_t) used_nodes, info_spawn);
+      generate_info_string_slurm(dist.nodelist, procs_array, (size_t) used_nodes, info_spawn);
       break;
     case MALL_DIST_HOSTFILE:
-      generate_info_hostfile(dist.nodelist, procs_array, used_nodes, info_spawn);
+      generate_info_hostfile_slurm(dist.nodelist, procs_array, used_nodes, info_spawn);
       break;
   }
   free(procs_array);
+#else
+  generate_info_string(dist.target_qty, info_spawn);
+#endif
 }
 
 
+//--------------PRIVATE FUNCTIONS---------------//
+//-----------------DISTRIBUTION-----------------//
 /*
  * Obtiene la distribucion fisica del grupo de procesos a crear, devolviendo
  * cuantos nodos se van a utilizar y la cantidad de procesos que alojara cada
@@ -184,15 +197,43 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   if(*used_nodes > dist.num_nodes) *used_nodes = dist.num_nodes;  //FIXME Si ocurre esto no es un error?
 }
 
+
+//--------------PRIVATE FUNCTIONS---------------//
+//-------------------INFO SET-------------------//
+
 /*
  * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
  * en el que se indica el mappeado a utilizar en los nuevos
  * procesos.
+ *
+ * Actualmente no considera que puedan haber varios nodos
+ * y lleva todos al mismo. Las funciones "generate_info_string_slurm"
+ * o "generate_info_hostfile_slurm" permiten utilizar varios
+ * nodos, pero es necesario activar Slurm.
  */
-void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info){
+void generate_info_string(int target_qty, MPI_Info *info){
+  char *host_string, host[9] = "localhost";
+
+  // CREATE AND SET STRING HOSTS
+  write_str_node(&host_string, 0, (size_t)target_qty, host);
+  // SET MAPPING
+  MPI_Info_create(info);
+  MPI_Info_set(*info, "hosts", host_string);
+  free(host_string);
+}
+
+//--------------------------------SLURM USAGE-------------------------------------//
+#ifdef USE_SLURM
+/*
+ * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
+ * en el que se indica el mappeado a utilizar en los nuevos
+ * procesos.
+ * Es necesario usar Slurm para usarlo.
+ */
+void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info){
   // CREATE AND SET STRING HOSTS
   char *hoststring;
-  fill_str_hostfile(nodelist, procs_array, nodes, &hoststring);
+  fill_str_hosts_slurm(nodelist, procs_array, nodes, &hoststring);
   MPI_Info_create(info);
   MPI_Info_set(*info, "hosts", hoststring);
   free(hoststring);
@@ -203,7 +244,7 @@ void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_In
  * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
  * al crear procesos e indicar donde tienen que ser creados.
  */
-void fill_str_hostfile(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str) {
+void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str) {
   char *host;
   size_t i=0,len=0;
   hostlist_t hostlist;
@@ -219,6 +260,8 @@ void fill_str_hostfile(char *nodelist, int *qty, size_t used_nodes, char **hostf
   slurm_hostlist_destroy(hostlist);
 }
 
+#endif
+//--------------------------------SLURM USAGE-------------------------------------//
 /*
  * Añade en una cadena "qty" entradas de "node_name".
  * Realiza la reserva de memoria y la realoja si es necesario.
@@ -263,12 +306,14 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
 //====================================================
 //====================================================
 
+//--------------------------------SLURM USAGE-------------------------------------//
+#ifdef USE_SLURM
 /* FIXME Por revisar
  * @deprecated
  * Genera un fichero hostfile y lo anyade a un objeto
  * MPI_Info para ser utilizado.
  */
-void generate_info_hostfile(char *nodelist, int *procs_array, int nodes, MPI_Info *info){
+void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, MPI_Info *info){
     char *hostfile;
     int ptr;
 
@@ -279,7 +324,7 @@ void generate_info_hostfile(char *nodelist, int *procs_array, int nodes, MPI_Inf
     free(hostfile);
 
     // SET NEW DISTRIBUTION 
-    fill_hostfile(nodelist, ptr, procs_array, nodes);
+    fill_hostfile_slurm(nodelist, ptr, procs_array, nodes);
     close(ptr);
 }
 
@@ -316,7 +361,7 @@ int create_hostfile(char **file_name) {
  * de los nodos a utilizar indicados por "job_record" y la cantidad 
  * de procesos que alojara cada nodo indicado por "qty".
  */
-void fill_hostfile(char *nodelist, int ptr, int *qty, int nodes) {
+void fill_hostfile_slurm(char *nodelist, int ptr, int *qty, int nodes) {
   int i=0;
   char *host;
   hostlist_t hostlist;
@@ -359,6 +404,8 @@ int write_hostfile_node(int ptr, int qty, char *node_name) {
 
   return 0;
 }
+#endif
+//--------------------------------SLURM USAGE-------------------------------------//
 
 
 //TODO REFACTOR PARA CUANDO SE COMUNIQUE CON RMS

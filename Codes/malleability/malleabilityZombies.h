@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <mpi.h>
-//#include <slurm/slurm.h>
 #include <signal.h>
 
 void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void);

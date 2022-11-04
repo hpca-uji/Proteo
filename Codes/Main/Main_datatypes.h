@@ -34,10 +34,6 @@ typedef struct
   int operations;
   int bytes, real_bytes, my_bytes;
   
-  // Variables to represent linear regresion
-  // for collective calls.
-  double slope, intercept;
-
   // Arrays to communicate data;
   char* array, *full_array;
   double* double_array;
@@ -49,18 +45,21 @@ typedef struct
 
 typedef struct
 {
+  int iters, procs;
+  int sm, ss, phy_dist, at;
+  float factor;
+} group_config_t;
+
+typedef struct
+{
     int n_resizes, n_stages;
     int actual_resize, actual_stage;
     int granularity, sdr, adr;
-    int sm, ss;
-    int at;
     double latency_m, bw_m;
-
-    int *iters, *procs, *phy_dist;
-    float *factors;
 
     double t_op_comms;
     iter_stage_t *stages;
+    group_config_t *groups;
 } configuration;
 
 #endif

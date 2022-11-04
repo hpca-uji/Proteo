@@ -57,7 +57,6 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    //FIXME No funciona en OpenMPI
     im_child = init_malleability(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
@@ -118,8 +117,9 @@ int main(int argc, char *argv[]) {
       }
 
       if(config_file->n_resizes != group->grp + 1) { //TODO Llevar a otra funcion
-        set_malleability_configuration(config_file->sm, config_file->ss, config_file->phy_dist[group->grp+1], config_file->at, -1);
-        set_children_number(config_file->procs[group->grp+1]); // TODO TO BE DEPRECATED
+        set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
+			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].at, -1);
+        set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp == 0) {
           malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
 
       print_local_results();
       reset_results_index(results);
-    } while(config_file->n_resizes > group->grp + 1 && config_file->sm == MALL_SPAWN_MERGE);
+    } while(config_file->n_resizes > group->grp + 1 && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE);
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
       MPI_Comm_free(&comm);
     }
 
-    if(group->myId == ROOT && config_file->sm == MALL_SPAWN_MERGE) {
+    if(group->myId == ROOT && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
     free_application_data(); //FIXME Error al liberar memoria de SDR/ADR
@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
 int work() {
   int iter, maxiter, state, res;
 
-  maxiter = config_file->iters[group->grp];
+  maxiter = config_file->groups[group->grp].iters;
   state = MALL_NOT_STARTED;
 
   res = 0;
@@ -199,7 +199,7 @@ int work() {
 
   iter = 0;
   while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE) {
-    if(iter < config_file->iters[group->grp+1]) {
+    if(iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;
@@ -379,7 +379,9 @@ void init_application() {
   //config_file = read_ini_file(group->argv[1]);
   init_config(group->argv[1], &config_file);
   results = malloc(sizeof(results_data));
-  init_results_data(results, (size_t)config_file->n_resizes, (size_t)config_file->n_stages, (size_t)config_file->iters[group->grp]);
+  printf("Test 0 P%d -- Resizes=%d Stages=%d Iters=%d\n", group->myId, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  init_results_data(results, (size_t)config_file->n_resizes, (size_t)config_file->n_stages, (size_t)config_file->groups[group->grp].iters);
+  printf("Test F P%d\n", group->myId); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
