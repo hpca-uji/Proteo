@@ -2,9 +2,11 @@ CC = gcc
 MCC = mpicc
 C_FLAGS_ALL = -Wfatal-errors -Wall -Wextra -Wpedantic -Wconversion -Wshadow
 C_FLAGS = -Wall
-LD_FLAGS = -lm -lslurm -pthread
+LD_FLAGS = -lm -pthread
+DEF =
 
-.PHONY : clean clear
+
+.PHONY : clean clear install install_slurm
 
 # Final binary
 BIN = a.out
@@ -40,12 +42,18 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
 	mkdir -p $(@D)
-	$(MCC) $(C_FLAGS_ALL) -MMD -c $< -o $@
+	$(MCC) $(C_FLAGS_ALL) $(DEF) -MMD -c $< -o $@
 
 clean:
 	-rm $(BUILD_DIR)/$(BIN) $(OBJ) $(DEP)
 clear:
 	-rm -rf $(BUILDDIR)
 
-install: 
 
+install: $(BIN)
+	echo "Done"
+
+# Builds target with slurm
+install_slurm: LD_FLAGS += -lslurm
+install_slurm: DEF += -DUSE_SLURM
+install_slurm: install

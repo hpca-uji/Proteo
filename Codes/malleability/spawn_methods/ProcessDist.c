@@ -7,7 +7,7 @@
 #include <mpi.h>
 #include "ProcessDist.h"
 
-#define USE_SLURM
+//#define USE_SLURM
 
 //--------------PRIVATE DECLARATIONS---------------//
 
