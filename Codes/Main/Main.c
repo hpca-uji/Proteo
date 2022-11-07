@@ -14,6 +14,8 @@
 
 int work();
 double iterate(int async_comm);
+double iterate_relaxed(double *time, double *times_stages);
+double iterate_rigid(double *time, double *times_stages);
 
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
@@ -223,23 +225,21 @@ int work() {
 
 /*
  * Simula la ejecucción de una iteración de computo en la aplicación
- * que dura al menos un tiempo de "time" segundos.
+ * que dura al menos un tiempo determinado por la suma de todas las
+ * etapas definidas en la configuracion.
  */
 double iterate(int async_comm) {
-  double start_time, start_time_stage, actual_time, *times_stages_aux;
+  double time, *times_stages_aux;
   size_t i;
   double aux = 0;
 
   times_stages_aux = malloc(config_file->n_stages * sizeof(double));
-  start_time = MPI_Wtime();
 
-  for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime();
-    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    times_stages_aux[i] = MPI_Wtime() - start_time_stage;
+  if(config_file->rigid_times) {
+    iterate_relaxed(&time, times_stages_aux);
+  } else {
+    iterate_rigid(&time, times_stages_aux);
   }
-
-  actual_time = MPI_Wtime(); // Guardar tiempos
 
   // Se esta realizando una redistribucion de datos asincrona
   if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { 
@@ -250,7 +250,7 @@ double iterate(int async_comm) {
   if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
     realloc_results_iters(results, config_file->n_stages, results->iters_size + 100);
   }
-  results->iters_time[results->iter_index] = actual_time - start_time;
+  results->iters_time[results->iter_index] = time;
   for(i=0; i < config_file->n_stages; i++) {
     results->stage_times[i][results->iter_index] = times_stages_aux[i];
   }
@@ -258,6 +258,50 @@ double iterate(int async_comm) {
 
   free(times_stages_aux);
 
+  return aux;
+}
+
+
+/*
+ * Performs an iteration. The gathered times for iterations
+ * and stages could be imprecise in order to ensure the 
+ * global execution time is precise.
+ */
+double iterate_relaxed(double *time, double *times_stages) {
+  size_t i;
+  double start_time, start_time_stage, aux=0;
+  start_time = MPI_Wtime();
+
+  for(i=0; i < config_file->n_stages; i++) {
+    start_time_stage = MPI_Wtime();
+    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
+    times_stages[i] = MPI_Wtime() - start_time_stage;
+  }
+
+  *time = MPI_Wtime() - start_time; // Guardar tiempos
+  return aux;
+}
+
+/*
+ * Performs an iteration. The gathered times for iterations
+ * and stages are ensured to be precise but the global 
+ * execution time could be imprecise.
+ */
+double iterate_rigid(double *time, double *times_stages) {
+  size_t i;
+  double start_time, start_time_stage, aux=0;
+
+  MPI_Barrier(comm);
+  start_time = MPI_Wtime();
+
+  for(i=0; i < config_file->n_stages; i++) {
+    start_time_stage = MPI_Wtime();
+    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
+    MPI_Barrier(comm);
+    times_stages[i] = MPI_Wtime() - start_time_stage;
+  }
+
+  *time = MPI_Wtime() - start_time; // Guardar tiempos
   return aux;
 }
 

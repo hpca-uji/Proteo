@@ -479,7 +479,7 @@ void Children_init() {
   }
 
   // Guardar los resultados de esta transmision
-  recv_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
+  comm_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
   if(!is_intercomm) {
     if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
     if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
@@ -656,7 +656,7 @@ int end_redistribution() {
     } 
   }
 
-  send_results(mall_conf->results, rootBcast, mall_conf->config_file->n_resizes, mall->intercomm);
+  comm_results(mall_conf->results, rootBcast, mall_conf->config_file->n_resizes, mall->intercomm);
 
   local_state = MALL_DIST_COMPLETED;
   if(!is_intercomm) { // Merge Spawn

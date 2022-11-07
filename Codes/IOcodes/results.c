@@ -13,37 +13,16 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
 //======================================================||
 //======================================================||
 
-//TODO Generalizar ambas funciones en una sola
 /*
- * Envia una estructura de resultados al grupo de procesos al que se 
- * enlaza este grupo a traves del intercomunicador pasado como argumento.
+ * Comunica una estructura de resultados a todos los procesos del comunicador
+ * a traves de un tipo derivado.
  *
- * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
- * e indicar cual es el proceso raiz que se encargara de enviar los
- * resultados al otro grupo.
+ * Si se llama con un intercommunicador, el grupo de procesos que envia los datos
+ * tiene que indicar en el proceso raiz el valor "MPI_ROOT" para "root" y el resto
+ * de ese grupo el valor "MPI_PROC_NULL". Los procesos del otro grupo tienen que
+ * indicar el Id del proceso raiz que ha puesto "MPI_ROOT".
  */
-void send_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
-  MPI_Datatype results_type;
-
-  // Obtener un tipo derivado para enviar todos los
-  // datos escalares con una sola comunicacion
-  def_results_type(results, resizes, &results_type);
-  MPI_Bcast(results, 1, results_type, root, intercomm);
-
-  //Liberar tipos derivados
-  MPI_Type_free(&results_type);
-}
-
-/*
- * Recibe una estructura de resultados desde otro grupo de procesos
- * y la devuelve. La memoria de la estructura se tiene que reservar con antelacion
- * con la función "init_results_data".
- *
- * Esta funcion tiene que ser llamada por todos los procesos del mismo grupo
- * e indicar cual es el proceso raiz del otro grupo que se encarga de enviar
- * los resultados a este grupo.
- */
-void recv_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
+void comm_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los

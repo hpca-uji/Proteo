@@ -31,10 +31,10 @@ static int handler(void* user, const char* section, const char* name,
 
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     if (MATCH("general", "Total_Resizes")) {
-        pconfig->n_resizes = atoi(value) + 1;
+        pconfig->n_resizes = strtoul(value, NULL, 10) + 1;
         user_functions->resizes_f(pconfig);
     } else if (MATCH("general", "Total_Stages")) {
-        pconfig->n_stages = atoi(value);
+        pconfig->n_stages = strtoul(value, NULL, 10);
         user_functions->stages_f(pconfig);
     } else if (MATCH("general", "Granularity")) {
         pconfig->granularity = atoi(value);
@@ -42,6 +42,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->sdr = atoi(value);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
         pconfig->adr = atoi(value);
+    } else if (MATCH("general", "Rigid")) {
+        pconfig->rigid_times = atoi(value);
 
     // Iter stage
     } else if (MATCH(stage_name, "Stage_Type")) {

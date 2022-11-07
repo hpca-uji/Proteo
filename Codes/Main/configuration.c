@@ -273,14 +273,14 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
-  int i, counts = 7;
-  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 8;
+  int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = MPI_INT;
-  types[5] = types[6] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
+  types[6] = types[7] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -290,8 +290,9 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Get_address(&(config_file->granularity), &displs[2]);
   MPI_Get_address(&(config_file->sdr), &displs[3]);
   MPI_Get_address(&(config_file->adr), &displs[4]);
-  MPI_Get_address(&(config_file->latency_m), &displs[5]);
-  MPI_Get_address(&(config_file->bw_m), &displs[6]);
+  MPI_Get_address(&(config_file->rigid_times), &displs[5]);
+  MPI_Get_address(&(config_file->latency_m), &displs[6]);
+  MPI_Get_address(&(config_file->bw_m), &displs[7]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 

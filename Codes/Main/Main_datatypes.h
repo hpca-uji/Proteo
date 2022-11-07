@@ -54,6 +54,7 @@ typedef struct
 {
     size_t n_resizes, n_stages;
     size_t actual_resize, actual_stage;
+    int rigid_times;
     int granularity, sdr, adr;
     double latency_m, bw_m;
 
