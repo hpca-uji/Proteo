@@ -91,7 +91,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   mall->numP = numP;
   mall->root = root;
   mall->comm = dup_comm;
-  mall->thread_comm = thread_comm; // TODO Refactor -- Crear solo si es necesario?
+  mall->thread_comm = thread_comm;
   mall->user_comm = comm;
 
   mall->name_exec = name_exec;
@@ -133,8 +133,8 @@ void free_malleability() {
   free(dist_s_data);
   free(dist_a_data);
 
-  //MPI_Comm_free(&(mall->comm)); // TODO Revisar si hace falta?
-  //MPI_Comm_free(&(mall->thread_comm));
+  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
   free(mall);
   free(mall_conf);
 

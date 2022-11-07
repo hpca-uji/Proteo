@@ -81,6 +81,7 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     //Computo
     case COMP_PI:
       for(i=0; i < stage.operations; i++) {
+	if(i%100 == 0) {printf("Test 0.7");}
         result += computePiSerial(config_file.granularity);
       }
       break;

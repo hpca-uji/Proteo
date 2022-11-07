@@ -88,6 +88,7 @@ void malloc_config_stages(configuration *user_config) {
   int i;
   if(user_config != NULL) {
     user_config->stages = malloc(sizeof(iter_stage_t) * (size_t) user_config->n_stages);
+    user_config->t_op_comms = 0;
     for(i=0; i<user_config->n_stages; i++) {
       user_config->stages[i].array = NULL;
       user_config->stages[i].full_array = NULL;
@@ -127,7 +128,7 @@ void free_config(configuration *user_config) {
       }
       
       free(user_config->groups);
-      //free(user_config->stages); //FIXME ERROR de memoria relacionado con la carpeta malleability
+      free(user_config->stages);
       free(user_config);
     }
 }

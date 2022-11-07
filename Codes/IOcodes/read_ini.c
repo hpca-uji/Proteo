@@ -19,6 +19,10 @@ static int handler(void* user, const char* section, const char* name,
                    const char* value) {
     configuration* pconfig = (configuration*)user;
 
+    if(pconfig->actual_resize >= pconfig->n_resizes && pconfig->actual_stage >= pconfig->n_stages) {
+      return 1; // There is no more work to perform
+    }
+
     char *resize_name = malloc(10 * sizeof(char));
     snprintf(resize_name, 10, "resize%d", pconfig->actual_resize);
 
@@ -96,6 +100,8 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
+    config->n_resizes = 1;
+    config->n_stages = 1;
     config->actual_resize=0;
     config->actual_stage=0;
 

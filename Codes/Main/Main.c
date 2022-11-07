@@ -379,9 +379,7 @@ void init_application() {
   //config_file = read_ini_file(group->argv[1]);
   init_config(group->argv[1], &config_file);
   results = malloc(sizeof(results_data));
-  printf("Test 0 P%d -- Resizes=%d Stages=%d Iters=%d\n", group->myId, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   init_results_data(results, (size_t)config_file->n_resizes, (size_t)config_file->n_stages, (size_t)config_file->groups[group->grp].iters);
-  printf("Test F P%d\n", group->myId); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
@@ -393,7 +391,9 @@ void init_application() {
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
 
+    printf("Test 0\n");
   obtain_op_times(1);
+    printf("Test 1\n");
 }
 
 /*
@@ -411,6 +411,7 @@ void obtain_op_times(int compute) {
   int i;
   double time = 0;
   for(i=0; i<config_file->n_stages; i++) {
+    printf("Test P%d 0.5\n", group->myId);
     time+=init_stage(config_file, i, *group, comm, compute);
   }
   if(!compute) {results->wasted_time += time;}

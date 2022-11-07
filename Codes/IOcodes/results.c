@@ -243,11 +243,7 @@ void print_global_results(results_data results, size_t resizes) {
 void init_results_data(results_data *results, size_t resizes, size_t stages, size_t iters_size) {
   size_t i;
 
-  printf("Test 1 R=%ld\n", resizes); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  double *test = calloc(1, sizeof(double));
-  printf("Test 2 R=%ld\n", resizes); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   results->spawn_time = calloc(resizes, sizeof(double));
-  printf("Test 3\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
@@ -255,13 +251,10 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
 
   results->iters_size = iters_size + RESULTS_EXTRA_SIZE;
   results->iters_time = calloc(results->iters_size, sizeof(double));
-  printf("Test 6\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   results->stage_times = malloc(stages * sizeof(double*));
-  printf("Test 7\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   for(i=0; i<stages; i++) {
     results->stage_times[i] = calloc(results->iters_size, sizeof(double));
   }
-  printf("Test 8\n"); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
 
   results->iters_async = 0;
   results->iter_index = 0;
