@@ -20,8 +20,8 @@ typedef struct {
   double wasted_time; // Time spent recalculating iter stages
 } results_data;
 
-void send_results(results_data *results, int root, int resizes, MPI_Comm intercomm);
-void recv_results(results_data *results, int root, int resizes, MPI_Comm intercomm);
+void send_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm);
+void recv_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm);
 
 void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr);
 void reset_results_index(results_data *results);
@@ -34,7 +34,7 @@ void print_stage_results(results_data results, size_t n_stages);
 void print_global_results(results_data results, size_t resizes);
 
 void init_results_data(results_data *results, size_t resizes, size_t stages, size_t iters_size);
-void realloc_results_iters(results_data *results, int stages, size_t needed);
-void free_results_data(results_data *results, int stages);
+void realloc_results_iters(results_data *results, size_t stages, size_t needed);
+void free_results_data(results_data *results, size_t stages);
 
 #endif

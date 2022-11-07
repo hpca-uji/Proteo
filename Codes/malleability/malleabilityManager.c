@@ -311,7 +311,7 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
       } else if(mall_conf->comm_type  == MAL_USE_IBARRIER) {
         total_reqs = 2;
       } else if(mall_conf->comm_type  == MAL_USE_POINT) {
-        total_reqs = (size_t) mall->numC;
+        total_reqs = mall->numC;
       }
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
@@ -387,12 +387,12 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_async(aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
+      send_async(aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_sync(aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children);
+      send_sync(aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children);
     }
   }
 }
@@ -409,13 +409,13 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_async(&aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->comm_type);
+      recv_async(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->comm_type);
       data_struct->arrays[i] = (void *) aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_sync(&aux, (int) data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents);
+      recv_sync(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents);
       data_struct->arrays[i] = (void *) aux;
     }
   }
@@ -445,7 +445,7 @@ void Children_init() {
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
-  init_results_data(mall_conf->results, (size_t) mall_conf->config_file->n_resizes, (size_t) mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
+  init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -474,7 +474,7 @@ void Children_init() {
       } else {
         datatype = MPI_CHAR;
       }
-      MPI_Bcast(rep_s_data->arrays[i], (int) rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
   }
 
@@ -652,7 +652,7 @@ int end_redistribution() {
       } else {
         datatype = MPI_CHAR;
       }
-      MPI_Bcast(rep_s_data->arrays[i], (int) rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
     } 
   }
 

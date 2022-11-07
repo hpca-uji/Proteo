@@ -12,7 +12,7 @@
 typedef struct {
   int myId;
   int numP;
-  int grp;
+  unsigned int grp;
   int iter_start;
   int argc;
 
@@ -52,8 +52,8 @@ typedef struct
 
 typedef struct
 {
-    int n_resizes, n_stages;
-    int actual_resize, actual_stage;
+    size_t n_resizes, n_stages;
+    size_t actual_resize, actual_stage;
     int granularity, sdr, adr;
     double latency_m, bw_m;
 

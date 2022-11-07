@@ -66,8 +66,8 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
   if(is_children_group) {
-    if(data_struct_rep->entries != (size_t) 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
-    if(data_struct_dist->entries != (size_t) 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
+    if(data_struct_rep->entries != 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
+    if(data_struct_dist->entries != 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
@@ -197,8 +197,8 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
   MPI_Datatype types[counts];
 
   types[0] = types[1] = types[2] = types[3] = MPI_INT;
-  blocklengths[0] = blocklengths[1] = (int)data_struct_rep->entries;
-  blocklengths[2] = blocklengths[3] = (int)data_struct_dist->entries;
+  blocklengths[0] = blocklengths[1] = data_struct_rep->entries;
+  blocklengths[2] = blocklengths[3] = data_struct_dist->entries;
 
   MPI_Get_address((data_struct_rep->qty), &displs[0]);
   MPI_Get_address((data_struct_rep->types), &displs[1]);

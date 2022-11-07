@@ -9,8 +9,8 @@
 
 void init_config(char *file_name, configuration **user_config);
 void free_config(configuration *user_config);
-void print_config(configuration *user_config, int grp);
-void print_config_group(configuration *user_config, int grp);
+void print_config(configuration *user_config);
+void print_config_group(configuration *user_config, size_t grp);
 
 // MPI Intercomm functions
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm);

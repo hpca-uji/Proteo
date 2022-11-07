@@ -60,9 +60,9 @@ void init_config(char *file_name, configuration **user_config) {
  *  - recv_config_file
  */
 void malloc_config_resizes(configuration *user_config) {
-  int i;
+  size_t i;
   if(user_config != NULL) {
-    user_config->groups = malloc(sizeof(group_config_t) * (size_t) user_config->n_resizes);
+    user_config->groups = malloc(sizeof(group_config_t) * user_config->n_resizes);
     for(i=0; i<user_config->n_resizes; i++) {
       user_config->groups[i].iters = 0;
       user_config->groups[i].procs = 1;
@@ -85,9 +85,9 @@ void malloc_config_resizes(configuration *user_config) {
  *  - recv_config_file
  */
 void malloc_config_stages(configuration *user_config) {
-  int i;
+  size_t i;
   if(user_config != NULL) {
-    user_config->stages = malloc(sizeof(iter_stage_t) * (size_t) user_config->n_stages);
+    user_config->stages = malloc(sizeof(iter_stage_t) * user_config->n_stages);
     user_config->t_op_comms = 0;
     for(i=0; i<user_config->n_stages; i++) {
       user_config->stages[i].array = NULL;
@@ -104,7 +104,7 @@ void malloc_config_stages(configuration *user_config) {
  * Libera toda la memoria de una estructura de configuracion
  */
 void free_config(configuration *user_config) {
-    int i;
+    size_t i;
     if(user_config != NULL) {
       
       for(i=0; i < user_config->n_stages; i++) {
@@ -138,18 +138,18 @@ void free_config(configuration *user_config) {
  * Imprime por salida estandar toda la informacion que contiene
  * la configuracion pasada como argumento
  */
-void print_config(configuration *user_config, int grp) {
+void print_config(configuration *user_config) {
   if(user_config != NULL) {
-    int i;
-    printf("Config loaded: R=%d, S=%d, granularity=%d, SDR=%d, ADR=%d, latency=%2.8f, bw=%lf || grp=%d\n",
+    size_t i;
+    printf("Config loaded: R=%zu, S=%zu, granularity=%d, SDR=%d, ADR=%d, latency=%2.8f, bw=%lf\n",
         user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr, 
-	user_config->latency_m, user_config->bw_m, grp);
+	user_config->latency_m, user_config->bw_m);
     for(i=0; i<user_config->n_stages; i++) {
-      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
+      printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes);
     }
     for(i=0; i<user_config->n_resizes; i++) {
-      printf("Group %d: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d\n",
+      printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d\n",
         i, user_config->groups[i].iters, user_config->groups[i].procs, user_config->groups[i].factor, 
 	user_config->groups[i].phy_dist, user_config->groups[i].at, user_config->groups[i].sm,
 	user_config->groups[i].ss);
@@ -162,8 +162,8 @@ void print_config(configuration *user_config, int grp) {
  * Imprime por salida estandar la informacion relacionada con un
  * solo grupo de procesos en su configuracion.
  */
-void print_config_group(configuration *user_config, int grp) {
-  int i;
+void print_config_group(configuration *user_config, size_t grp) {
+  size_t i;
   if(user_config != NULL) {
     int parents, sons;
     parents = sons = 0;
@@ -177,10 +177,10 @@ void print_config_group(configuration *user_config, int grp) {
     printf("Config: granularity=%d, SDR=%d, ADR=%d, latency=%2.8f, bw=%lf\n",
         user_config->granularity, user_config->sdr, user_config->adr, user_config->latency_m, user_config->bw_m);
     for(i=0; i<user_config->n_stages; i++) {
-      printf("Stage %d: PT=%d, T_stage=%lf, bytes=%d\n",
+      printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes);
     }
-    printf("Group %d: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d, parents=%d, children=%d\n",
+    printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d, parents=%d, children=%d\n",
       grp, user_config->groups[grp].iters, user_config->groups[grp].procs, user_config->groups[grp].factor,
       user_config->groups[grp].phy_dist, user_config->groups[grp].at, user_config->groups[grp].sm,
       user_config->groups[grp].ss, parents, sons);
@@ -211,8 +211,8 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
 
   // Obtener un tipo derivado para enviar las estructuras de fases de iteracion
   // con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), (size_t) config_file->n_resizes, &group_type);
-  def_struct_iter_stage(&(config_file->stages[0]), (size_t) config_file->n_stages, &iter_stage_type);
+  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
+  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
   MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
@@ -247,15 +247,15 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
 
   //Inicializado de estructuras internas
-  config_file->groups = malloc(sizeof(group_config_t) * (size_t) config_file->n_resizes);
-  config_file->stages = malloc(sizeof(iter_stage_t) * (size_t) config_file->n_stages);
+  config_file->groups = malloc(sizeof(group_config_t) * config_file->n_resizes);
+  config_file->stages = malloc(sizeof(iter_stage_t) * config_file->n_stages);
   malloc_config_resizes(config_file); // Inicializar valores de grupos
   malloc_config_stages(config_file); // Inicializar a NULL vectores stage
 
   // Obtener un tipo derivado para enviar los tres vectores
   // de enteros con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), (size_t) config_file->n_resizes, &group_type);
-  def_struct_iter_stage(&(config_file->stages[0]), (size_t) config_file->n_stages, &iter_stage_type);
+  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
+  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
   MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
   MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
 

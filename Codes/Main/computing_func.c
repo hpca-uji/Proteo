@@ -49,7 +49,7 @@ void initMatrix(double **matrix, size_t n) {
     if(*matrix == NULL) { MPI_Abort(MPI_COMM_WORLD, -1);}
     for(i=0; i < n; i++) {
       for(j=0; j < n; j++) {
-        (*matrix)[i*n + j] =(double) i + (double) j;
+        (*matrix)[i*n + j] = i+j;
       }
     }
   }

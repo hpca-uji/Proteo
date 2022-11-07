@@ -84,7 +84,7 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
   node_dist(dist, &procs_array, &used_nodes);
   switch(dist.info_type) {
     case MALL_DIST_STRING:
-      generate_info_string_slurm(dist.nodelist, procs_array, (size_t) used_nodes, info_spawn);
+      generate_info_string_slurm(dist.nodelist, procs_array, used_nodes, info_spawn);
       break;
     case MALL_DIST_HOSTFILE:
       generate_info_hostfile_slurm(dist.nodelist, procs_array, used_nodes, info_spawn);
@@ -114,7 +114,7 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
 void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
   int i, *procs;
 
-  procs = calloc((size_t)dist.num_nodes, sizeof(int)); // Numero de procesos por nodo
+  procs = calloc(dist.num_nodes, sizeof(int)); // Numero de procesos por nodo
 
   /* GET NEW DISTRIBUTION  */
   switch(dist.dist_type) {
@@ -127,7 +127,7 @@ void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
   }
 
   //Copy results to output vector qty
-  *qty = calloc((size_t)*used_nodes, sizeof(int)); // Numero de procesos por nodo
+  *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
   for(i=0; i< *used_nodes; i++) {
     (*qty)[i] = procs[i];
   }
@@ -215,7 +215,7 @@ void generate_info_string(int target_qty, MPI_Info *info){
   char *host_string, host[9] = "localhost";
 
   // CREATE AND SET STRING HOSTS
-  write_str_node(&host_string, 0, (size_t)target_qty, host);
+  write_str_node(&host_string, 0, target_qty, host);
   // SET MAPPING
   MPI_Info_create(info);
   MPI_Info_set(*info, "hosts", host_string);
@@ -252,7 +252,7 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
   hostlist = slurm_hostlist_create(nodelist);
   while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
     if(qty[i] != 0) {
-      len = (size_t) write_str_node(hostfile_str, len, (size_t)qty[i], host);
+      len = write_str_node(hostfile_str, len, qty[i], host);
     }
     i++;
     free(host);
@@ -390,7 +390,7 @@ int write_hostfile_node(int ptr, int qty, char *node_name) {
   len_node = strlen(node_name);
   err = snprintf(NULL, 0, "%d", qty);
   if(err < 0) return -1;
-  len_int = (size_t) err;
+  len_int = err;
 
   len = len_node + len_int + 3;
   line = malloc(len * sizeof(char));

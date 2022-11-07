@@ -18,7 +18,7 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
   struct Dist_data dist_data;
 
   get_block_dist(n, myId, numP, &dist_data);
-  mallocCounts(counts, (size_t)numP_other);
+  mallocCounts(counts, numP_other);
   get_util_ids(dist_data, numP_other, &idS);
 
   if(idS[0] == 0) {
@@ -42,7 +42,7 @@ void prepare_comm_allgatherv(int numP, int n, struct Counts *counts) {
   int i;
   struct Dist_data dist_data;
 
-  mallocCounts(counts, (size_t)numP);
+  mallocCounts(counts, numP);
   get_block_dist(n, 0, numP, &dist_data);
 
   counts->counts[0] = dist_data.tamBl;

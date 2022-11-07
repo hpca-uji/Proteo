@@ -227,10 +227,10 @@ int work() {
  */
 double iterate(int async_comm) {
   double start_time, start_time_stage, actual_time, *times_stages_aux;
-  int i;
+  size_t i;
   double aux = 0;
 
-  times_stages_aux = malloc((size_t) config_file->n_stages * sizeof(double));
+  times_stages_aux = malloc(config_file->n_stages * sizeof(double));
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
@@ -304,7 +304,7 @@ int print_local_results() {
   
     print_config_group(config_file, group->grp);
     print_iter_results(*results);
-    print_stage_results(*results, (size_t) config_file->n_stages);
+    print_stage_results(*results, config_file->n_stages);
     free(file_name);
 
     fflush(stdout);
@@ -333,8 +333,8 @@ int print_final_results() {
 
       ptr_out = dup(1);
       create_out_file(file_name, &ptr_global, 1);
-      print_config(config_file, group->grp);
-      print_global_results(*results, (size_t)config_file->n_resizes);
+      print_config(config_file);
+      print_global_results(*results, config_file->n_resizes);
       fflush(stdout);
       free(file_name);
 
@@ -379,7 +379,7 @@ void init_application() {
   //config_file = read_ini_file(group->argv[1]);
   init_config(group->argv[1], &config_file);
   results = malloc(sizeof(results_data));
-  init_results_data(results, (size_t)config_file->n_resizes, (size_t)config_file->n_stages, (size_t)config_file->groups[group->grp].iters);
+  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   if(config_file->sdr) {
     malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
   }
@@ -391,9 +391,7 @@ void init_application() {
   config_file->latency_m = latency(group->myId, group->numP, comm);
   config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
 
-    printf("Test 0\n");
   obtain_op_times(1);
-    printf("Test 1\n");
 }
 
 /*
@@ -408,10 +406,9 @@ void init_application() {
  * al tiempo total de ejecucion.
  */
 void obtain_op_times(int compute) {
-  int i;
+  size_t i;
   double time = 0;
   for(i=0; i<config_file->n_stages; i++) {
-    printf("Test P%d 0.5\n", group->myId);
     time+=init_stage(config_file, i, *group, comm, compute);
   }
   if(!compute) {results->wasted_time += time;}

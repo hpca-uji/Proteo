@@ -1,7 +1,7 @@
 CC = gcc
 MCC = mpicc
-C_FLAGS_ALL = -Wfatal-errors -Wall -Wextra -Wpedantic -Wconversion -Wshadow
-C_FLAGS = -Wall
+#C_FLAGS_ALL = -Wconversion -Wpedantic
+C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
 LD_FLAGS = -lm -pthread
 DEF =
 
@@ -29,7 +29,7 @@ $(BIN) : $(BUILD_DIR)/$(BIN)
 
 # Actual target of the binary - depends on all .o files.
 $(BUILD_DIR)/$(BIN) : $(OBJ)
-	$(MCC) $(C_FLAGS_ALL) $^ -o $@ $(LD_FLAGS)
+	$(MCC) $(C_FLAGS) $^ -o $@ $(LD_FLAGS)
 
 # Include all .d files
 # .d files are used for knowing the dependencies of each source file
@@ -42,7 +42,7 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
 	mkdir -p $(@D)
-	$(MCC) $(C_FLAGS_ALL) $(DEF) -MMD -c $< -o $@
+	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
 
 clean:
 	-rm $(BUILD_DIR)/$(BIN) $(OBJ) $(DEP)

@@ -22,7 +22,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
  * e indicar cual es el proceso raiz que se encargara de enviar los
  * resultados al otro grupo.
  */
-void send_results(results_data *results, int root, int resizes, MPI_Comm intercomm) {
+void send_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los
@@ -43,7 +43,7 @@ void send_results(results_data *results, int root, int resizes, MPI_Comm interco
  * e indicar cual es el proceso raiz del otro grupo que se encarga de enviar
  * los resultados a este grupo.
  */
-void recv_results(results_data *results, int root, int resizes, MPI_Comm intercomm) {
+void recv_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los
@@ -216,12 +216,12 @@ void print_global_results(results_data results, size_t resizes) {
   }
 
   printf("\nT_SR: ");
-  for(i=1; i < resizes; i++) {
+  for(i=0; i < resizes - 1; i++) {
     printf("%lf ", results.sync_time[i]);
   }
 
   printf("\nT_AR: ");
-  for(i=1; i < resizes; i++) {
+  for(i=0; i < resizes - 1; i++) {
     printf("%lf ", results.async_time[i]);
   }
 
@@ -261,16 +261,19 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
 
 }
 
-void realloc_results_iters(results_data *results, int stages, size_t needed) {
-  int i;
+void realloc_results_iters(results_data *results, size_t stages, size_t needed) {
+  int error = 0;
   double *time_aux;
+  size_t i;
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
 
   for(i=0; i<stages; i++) { //TODO Comprobar que no da error el realloc
-    results->stage_times[i] = (double *) realloc(results->stage_times[i], needed * sizeof(double)); 
+    results->stage_times[i] = (double *) realloc(results->stage_times[i], needed * sizeof(double));
+    if(results->stage_times[i] == NULL) error = 1;
   }
 
-  if(time_aux == NULL) {
+  if(time_aux == NULL) error = 1;
+  if(error) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
@@ -281,18 +284,18 @@ void realloc_results_iters(results_data *results, int stages, size_t needed) {
 /*
  * Libera toda la memoria asociada con una estructura de resultados.
  */
-void free_results_data(results_data *results, int stages) {
-    int i;
-    if(results != NULL) {
-      free(results->spawn_time);
-      free(results->spawn_real_time);
-      free(results->sync_time);
-      free(results->async_time);
+void free_results_data(results_data *results, size_t stages) {
+  size_t i;
+  if(results != NULL) {
+    free(results->spawn_time);
+    free(results->spawn_real_time);
+    free(results->sync_time);
+    free(results->async_time);
 
-      free(results->iters_time);
-      for(i=0; i<stages; i++) {
-        free(results->stage_times[i]);
-      }
-      free(results->stage_times);
+    free(results->iters_time);
+    for(i=0; i<stages; i++) {
+      free(results->stage_times[i]);
     }
+    free(results->stage_times);
+  }
 }

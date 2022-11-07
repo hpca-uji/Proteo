@@ -24,7 +24,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
     struct Dist_data dist_data;
 
     get_block_dist(qty, myId, numP, &dist_data);
-    if( (*array = malloc( (size_t) dist_data.tamBl * sizeof(char))) == NULL) {
+    if( (*array = malloc(dist_data.tamBl * sizeof(char))) == NULL) {
       printf("Memory Error (Malloc Arrays(%d))\n", dist_data.tamBl); 
       exit(1); 
     }
@@ -60,7 +60,7 @@ int send_sync(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int 
     dist_data.intercomm = intercomm;
 
     // Create arrays which contains info about how many elements will be send to each created process
-    mallocCounts(&counts, (size_t)numP_child);
+    mallocCounts(&counts, numP_child);
 
     getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
 
@@ -87,12 +87,12 @@ void recv_sync(char **array, int qty, int myId, int numP, MPI_Comm intercomm, in
 
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
-    *array = malloc( (size_t)dist_data.tamBl * sizeof(char));
+    *array = malloc(dist_data.tamBl * sizeof(char));
     //(*array)[dist_data.tamBl] = '\0';
     dist_data.intercomm = intercomm;
 
     /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
-    mallocCounts(&counts, (size_t)numP_parents);
+    mallocCounts(&counts, numP_parents);
 
     getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
@@ -167,7 +167,7 @@ int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int
     dist_data.intercomm = intercomm;
 
     // Create arrays which contains info about how many elements will be send to each created process
-    mallocCounts(&counts, (size_t)numP_child);
+    mallocCounts(&counts, numP_child);
 
     getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
 
@@ -217,17 +217,17 @@ void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, i
 
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
-    *array = malloc( (size_t)dist_data.tamBl * sizeof(char));
+    *array = malloc( dist_data.tamBl * sizeof(char));
     dist_data.intercomm = intercomm;
 
     /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
-    mallocCounts(&counts, (size_t)numP_parents);
+    mallocCounts(&counts, numP_parents);
 
     getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
     // MAL_USE_THREAD sigue el camino sincrono
     if(parents_wait == MAL_USE_POINT) {
-      comm_req = (MPI_Request *) malloc((size_t)numP_parents * sizeof(MPI_Request));
+      comm_req = (MPI_Request *) malloc(numP_parents * sizeof(MPI_Request));
       for(i=0; i<numP_parents; i++){
         comm_req[i] = MPI_REQUEST_NULL;
       }

@@ -24,10 +24,10 @@ static int handler(void* user, const char* section, const char* name,
     }
 
     char *resize_name = malloc(10 * sizeof(char));
-    snprintf(resize_name, 10, "resize%d", pconfig->actual_resize);
+    snprintf(resize_name, 10, "resize%zu", pconfig->actual_resize);
 
     char *stage_name = malloc(10 * sizeof(char));
-    snprintf(stage_name, 10, "stage%d", pconfig->actual_stage);
+    snprintf(stage_name, 10, "stage%zu", pconfig->actual_stage);
 
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     if (MATCH("general", "Total_Resizes")) {
