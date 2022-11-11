@@ -43,8 +43,8 @@ def get_value(line, index):
 # Obtains the general parameters of an execution and
 # stores them for creating a global dataframe
 def record_config_line(lineS, dataG_it):
-  ordered_indexes = [G_enum.TOTAL_RESIZES.value, G_enum.TOTAL_STAGES.value, G_enum.GRANULARITY.value, G_enum.SDR.value, \
-          G_enum.ADR.value, G_enum.ASYNCH_REDISTRIBUTION_TYPE.value, G_enum.SPAWN_METHOD.value, G_emun.SPAWN_STRATEGY.value]
+  ordered_indexes = [G_enum.TOTAL_RESIZES.value, G_enum.TOTAL_STAGES.value, \
+          G_enum.GRANULARITY.value, G_enum.SDR.value, G_enum.ADR.value]
   offset_line = 2
   for i in range(len(ordered_indexes)):
     value = get_value(lineS, i+offset_line)
@@ -76,15 +76,6 @@ def record_config_line(lineS, dataG_it):
   for index in array_stages:
     dataG_it[index] = [None]*dataG_it[G_enum.TOTAL_STAGES.value]
 
-
-
-
-
-#columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Asynch_Redistribution_Type", \\
-#            "Spawn_Method", "Spawn_Strategy", "Groups", "Dist",   "Stage_Types", "Stage_Times", "Stage_Bytes", \\
-#            "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #24
-#columnsG = ["N", "%Async", "Groups", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TE"] #13
-
 # Obtains the parameters of a stage line 
 # and stores it in the dataframe
 # Is needed to indicate in which stage is
@@ -105,8 +96,8 @@ def record_stage_line(lineS, dataG_it, stage):
 # Is needed to indicate to which group refers
 # the resize line
 def record_resize_line(lineS, dataG_it, group):
-  array_stages = [G_enum.ITERS.value, G_enum.GROUPS.value\
-          G_enum.FACTOR_S.value, G_enum.DIST.value]
+  array_stages = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
+          G_enum.ASYNCH_REDISTRIBUTION_TYPE.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
   offset_lines = 2
   for i in range(len(array_stages)):
     value = get_value(lineS, i+offset_lines)
@@ -128,7 +119,7 @@ def record_time_line(lineS, dataG_it):
     dataG_it[index][i] = value
 
 #-----------------------------------------------
-def read_global_file(f, dataA, dataB, it):
+def read_global_file(f, dataG, it):
   resizes = 0
   timer = 0
   previousNP = 0
@@ -139,31 +130,61 @@ def read_global_file(f, dataA, dataB, it):
     if len(lineS) > 0:
       if lineS[0] == "Config": # CONFIG LINE
         it += 1
-        dataA.append([None]*25)
-        record_config(lineS, dataG[it], dataM[it])
+        dataG.append([None]*(25+1))
+        #dataG[it][-1] = None Indicates if local data has been recorded(1) or not(None)
+        record_config(lineS, dataG[it])
+        resize = 0
+        stage = 0
 
       elif lineS[0] == "Stage":
-        record_stage_line(lineS, dataG[it], ??)
+        record_stage_line(lineS, dataG[it], stage)
+        stage+=1
       elif lineS[0] == "Resize":
-        record_resize_line(lineS, dataG[it], ??)
-      elif lineS[0] in T_names:
-        dataG[it][]
+        record_resize_line(lineS, dataG[it], resize)
+        resize+=1
+      elif lineS[0] == "T_total:":
+        value = get_value(lineS, 1)
+        dataG[it][G_enum.T_TOTAL.value] = value
+      else:
+        record_time_line(lineS, dataG[it])
           
   return it
-#columnsA1 = ["N", "%Async", "Groups", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TE"] #8
-#columnsB1 = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TC", "TS", "TA"] #12
-#Config loaded: resizes=2, matrix=1000, sdr=1000000000, adr=0, aib=0, time=2.000000 || grp=1
-#Resize 0: Iters=100, Procs=2, Factors=1.000000, Phy=2
-#Resize 1: Iters=100, Procs=4, Factors=0.500000, Phy=2
-#Tspawn: 0.249393 
-#Tthread: 0 
-#Tsync: 0.330391 
-#Tasync: 0
-#Tex: 301.428615
 
-#Config loaded: resizes=1, matrix=0, comm_tam=0, sdr=0, adr=0, aib=0, cst=3, css=1, time=1 || grp=1
 #-----------------------------------------------
+def read_local_file(f, dataG, it):
+  resizes = 0
+  timer = 0
+  previousNP = 0
 
+  for line in f: 
+    lineS = line.split()
+
+    if len(lineS) > 0:
+      if lineS[0] == "Config": # CONFIG LINE
+        it += 1
+        record_config(lineS, dataG[it], dataM[it])
+        resize = 0
+        stage = 0
+
+      elif lineS[0] == "Stage":
+        record_stage_line(lineS, dataG[it], stage)
+        stage+=1
+      elif lineS[0] == "Resize":
+        record_resize_line(lineS, dataG[it], resize)
+        resize+=1
+      elif lineS[0] == "T_total:":
+        value = get_value(lineS, 1)
+        dataG[it][G_enum.T_TOTAL.value] = value
+      else:
+        record_time_line(lineS, dataG[it])
+          
+  return it
+
+#columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Asynch_Redistribution_Type", \\
+#            "Spawn_Method", "Spawn_Strategy", "Groups", "Dist",   "Stage_Types", "Stage_Times", "Stage_Bytes", \\
+#            "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #24
+
+#-----------------------------------------------
 if len(sys.argv) < 2:
     print("The files name is missing\nUsage: python3 iterTimes.py resultsName directory csvOutName")
     exit(1)
