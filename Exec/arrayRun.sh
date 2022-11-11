@@ -38,14 +38,18 @@ do
 
           i=$(($i + 1))
           cd $name_dir/Run$i
-          config_file="config$i.ini"
+          configFile="config$i.ini"
 
+          aux=$(grep "\[resize0\]" -n $configFile | cut -d ":" -f1)
+          read -r ini fin <<<$(echo $aux)
+          diff=$(( fin - ini ))
+          numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
           echo "EXEC $procs_parents -- $procs_sons -- $adr_perc -- $ibarrier_use -- $phy_dist -- $cst -- $css -- RUN $i"
 
           for index in 1 2 3 4 5 6 7 8 9 10
           do
-            numP=$(bash $dir$codeDir/recordMachinefile.sh $config_file) # Crea el fichero hostfile
-            mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/./bench.out $config_file $i $nodelist $nodes
+
+            mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/./bench.out $configFile $i $nodelist $nodes
             rm hostfile.o$SLURM_JOB_ID
           done
 
