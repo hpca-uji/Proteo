@@ -62,6 +62,9 @@ do
   procs_array=(${procs_array[@]} $value)
 done
 
+i=$(($i + 1))
+procs_array[$i]=120
+
 #Crear carpeta de resultados
 cd $dir$ResultsDir
 name_res=$node_qty"N-"$(date '+%m-%d')

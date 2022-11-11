@@ -225,8 +225,8 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
   initMatrix(&(stage->double_array), config_file->granularity);
 
   if(compute) {
-    start_time = MPI_Wtime();
     if(group.myId == ROOT) {
+      start_time = MPI_Wtime();
       result+= process_stage(*config_file, *stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
     }
@@ -243,8 +243,8 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
   result = 0;
   t_stage = stage->t_stage * config_file->groups[group.grp].factor;
   if(compute) {
-    start_time = MPI_Wtime();
     if(group.myId == ROOT) {
+      start_time = MPI_Wtime();
       result+= process_stage(*config_file, *stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
     }
@@ -261,6 +261,7 @@ void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_
   if(stage->array != NULL)
     free(stage->array);
   if(aux_bytes == 0) {
+    MPI_Barrier(comm);
     //aux_bytes = (stage->t_stage - config_file->latency_m) * config_file->bw_m;
     init_emulation_comm_time(group, config_file, stage, comm);
   }
@@ -277,6 +278,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
     stage->real_bytes = stage->bytes;
     stage->array = malloc(stage->real_bytes * sizeof(char));
   } else { // Prepare to emulate Collective as PtoP
+    MPI_Barrier(comm);
     time = init_emulation_comm_time(group, config_file, stage, comm);
   }
   return time;
@@ -304,6 +306,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
     stage->array = malloc(stage->my_bytes * sizeof(char));
     stage->full_array = malloc(stage->real_bytes * sizeof(char));
   } else {
+    MPI_Barrier(comm);
     time = init_emulation_comm_time(group, config_file, stage, comm);
   }
 
@@ -323,6 +326,7 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
     //Full array para el reduce necesita el mismo tamanyo
     stage->full_array = malloc(stage->real_bytes * sizeof(char));
   } else {
+    MPI_Barrier(comm);
     init_emulation_comm_time(group, config_file, stage, comm);
   }
 

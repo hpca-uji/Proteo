@@ -43,7 +43,7 @@ void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int 
   // FIXME No deberia estar aqui
   // Needed to ensure iteration times are collected before suspending these processes
   results_data *results = (results_data *) results_void;
-  compute_results_iter(results, myId, root, comm); 
+  compute_results_iter(results, myId, numP,root, comm); 
 
   if(myId >= numC) {
     zombies_suspend();

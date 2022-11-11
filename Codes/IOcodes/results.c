@@ -110,11 +110,15 @@ void reset_results_index(results_data *results) {
  * Es necesario obtener el maximo, pues es el que representa el tiempo real
  * que se ha utilizado.
  */
-void compute_results_iter(results_data *results, int myId, int root, MPI_Comm comm) {
-  if(myId == root)
-    MPI_Reduce(MPI_IN_PLACE, results->iters_time, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
-  else
-    MPI_Reduce(results->iters_time, NULL, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
+  if(myId == root) {
+    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    for(size_t i=0; i<results->iter_index; i++) {
+      results->iters_time[i] = results->iters_time[i] / numP;
+    }
+  } else {
+    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+  }
 }
 
 
@@ -125,16 +129,19 @@ void compute_results_iter(results_data *results, int myId, int root, MPI_Comm co
  * Es necesario obtener el maximo, pues es el que representa el tiempo real
  * que se ha utilizado.
  */
-void compute_results_stages(results_data *results, int myId, int root, int stages, MPI_Comm comm) {
+void compute_results_stages(results_data *results, int myId, int numP, int root, int stages, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
   int i;
   if(myId == root) {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+      for(size_t j=0; j<results->iter_index; j++) {
+        results->stage_times[i][j] = results->stage_times[i][j] / numP;
+      }
     }
   }
   else {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, (int) results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
     }
   }
 }

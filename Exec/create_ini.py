@@ -60,6 +60,8 @@ for resize in range(resizes):
 
     if proc_time != 0: # Si el argumento proc_time es 0, todos los grupos tienen un factor de 1
         factor = proc_time / float(procs)
+        if proc_time != int(procs):
+            factor = factor/0.85 # Para reducir la escalabilidad por un porcentaje
     else:
         factor = 1
 

@@ -41,7 +41,7 @@ int main(int argc, char *argv[]) {
     //FIXME El codigo no es capaz de hacer mas de una redistribucion - Arreglar malleabilityTypes.c
     int num_cpus, num_nodes; //nodelist_len; //FIXME Eliminar cuando se utilice Slurm
     char *nodelist = NULL;
-    num_cpus = 20; //FIXME NUMERO MAGICO
+    num_cpus = 20; //FIXME NUMERO MAGICO //TODO Usar openMP para obtener el valor con un pragma
     if (argc >= 5) {
       nodelist = argv[3];
       //nodelist_len = strlen(nodelist);
@@ -236,9 +236,9 @@ double iterate(int async_comm) {
   times_stages_aux = malloc(config_file->n_stages * sizeof(double));
 
   if(config_file->rigid_times) {
-    iterate_relaxed(&time, times_stages_aux);
+    aux = iterate_rigid(&time, times_stages_aux);
   } else {
-    iterate_rigid(&time, times_stages_aux);
+    aux = iterate_relaxed(&time, times_stages_aux);
   }
 
   // Se esta realizando una redistribucion de datos asincrona
@@ -264,16 +264,16 @@ double iterate(int async_comm) {
 
 /*
  * Performs an iteration. The gathered times for iterations
- * and stages could be imprecise in order to ensure the 
+ * and stages could be IMPRECISE in order to ensure the 
  * global execution time is precise.
  */
 double iterate_relaxed(double *time, double *times_stages) {
   size_t i;
   double start_time, start_time_stage, aux=0;
-  start_time = MPI_Wtime();
+  start_time = MPI_Wtime(); // Imprecise timings
 
   for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime();
+    start_time_stage = MPI_Wtime(); 
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
     times_stages[i] = MPI_Wtime() - start_time_stage;
   }
@@ -295,12 +295,13 @@ double iterate_rigid(double *time, double *times_stages) {
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
+    MPI_Barrier(comm);
     start_time_stage = MPI_Wtime();
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    MPI_Barrier(comm);
     times_stages[i] = MPI_Wtime() - start_time_stage;
   }
 
+  MPI_Barrier(comm);
   *time = MPI_Wtime() - start_time; // Guardar tiempos
   return aux;
 }
@@ -335,7 +336,7 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
-  compute_results_iter(results, group->myId, ROOT, comm);
+  compute_results_iter(results, group->myId, group->numP, ROOT, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 

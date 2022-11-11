@@ -4,33 +4,55 @@
 #SBATCH -p P1
 
 dir="/home/martini/malleability_benchmark"
-codeDir="/Codes"
-ResultsDir="/Results"
+codeDir="/Codes/build"
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
 
-module load mpich-3.4.1-noucx
+if [ $# -lt 1 ]
+then
+  echo "Not enough arguments. Usage:"
+  echo "singleRun.sh config.ini [outFileIndex] [Qty] [Output path]"
+  exit 1
+fi
+
 echo "START TEST"
 
 #$1 == configFile
 #$2 == outFileIndex
-#$3 == cantidad de ejecuciones
+#$3 == Qty of repetitions
+#$4 == Output path
+
+configFile=$1
+outFileIndex=$2
+qty=1
 
 if [ $# -gt 2 ]
 then
   qty=$3
-else
-  qty=1
+  if [ $# -gt 3 ]
+  then
+    output=$4
+  fi
 fi
+
+aux=$(grep "\[resize0\]" -n $configFile | cut -d ":" -f1)
+read -r ini fin <<<$(echo $aux)
+diff=$(( fin - ini ))
+numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
 
 for ((i=0; i<qty; i++))
 do
   echo "Iter $i"
-  numP=$(bash $dir$codeDir/recordMachinefile.sh $1)
-  mpirun -f hostfile.o$SLURM_JOB_ID $dir$codeDir/exec/a.out $1 $2 $nodelist $nodes
-  rm hostfile.o$SLURM_JOB_ID
+  mpirun $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
 done
 
 echo "END TEST"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
+
+if [ $# -gt 3 ]
+then
+  echo "Moving data to $output\nMoved files:"
+  ls R${outFileIndex}_G*
+  mv R${outFileIndex}_G* $output
+fi
