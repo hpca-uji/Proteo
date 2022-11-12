@@ -102,7 +102,13 @@ void reset_results_index(results_data *results) {
   results->iter_index = 0;
 }
 
-
+//=============================================================== FIXME BORRAR?
+int compare(const void *_a, const void *_b) { 
+        double *a, *b;
+        a = (double *) _a;
+        b = (double *) _b;
+        return (*a - *b);
+}
 /*
  * Obtiene para cada iteracion, el tiempo maximo entre todos los procesos
  * que han participado.
@@ -112,12 +118,32 @@ void reset_results_index(results_data *results) {
  */
 void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
   if(myId == root) {
-    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    /*MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
     for(size_t i=0; i<results->iter_index; i++) {
       results->iters_time[i] = results->iters_time[i] / numP;
-    }
+    }*/
   } else {
-    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    //MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+  }
+  double *aux_all_iters, *aux_id_iters, median;
+  if(myId == root) {
+    aux_all_iters = malloc(numP *results->iter_index * sizeof(double));
+  }
+  MPI_Gather(results->iters_time, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
+  if(myId == root) {
+    aux_id_iters = malloc(numP * sizeof(double));
+    for(size_t i=0; i<results->iter_index; i++) {
+      for(int j=0; j<numP; j++) {
+        aux_id_iters[j] = aux_all_iters[i+(results->iter_index*j)];
+      }
+      // Get Median
+      qsort(aux_id_iters, results->iter_index, sizeof(double), &compare);
+      median = aux_id_iters[numP/2];
+      if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1] + aux_id_iters[numP/2]) / 2;
+      results->iters_time[i] = median;
+    }
+    free(aux_all_iters);
+    free(aux_id_iters);
   }
 }
 

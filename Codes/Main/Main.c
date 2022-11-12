@@ -141,6 +141,11 @@ int main(int argc, char *argv[]) {
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
 
+      if(res==1) { // Se ha llegado al final de la aplicacion
+        MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
+        results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
+      }
+
       print_local_results();
       reset_results_index(results);
     } while(config_file->n_resizes > group->grp + 1 && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE);
@@ -148,12 +153,6 @@ int main(int argc, char *argv[]) {
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
     //
-
-
-    if(res==1) { // Se ha llegado al final de la aplicacion
-      MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
-      results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
-    }
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
@@ -337,6 +336,7 @@ int print_local_results() {
   char *file_name;
 
   compute_results_iter(results, group->myId, group->numP, ROOT, comm);
+  compute_results_stages(results, group->myId, group->numP, config_file->n_stages, ROOT, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
