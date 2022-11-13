@@ -137,7 +137,7 @@ void compute_results_iter(results_data *results, int myId, int numP, int root, M
         aux_id_iters[j] = aux_all_iters[i+(results->iter_index*j)];
       }
       // Get Median
-      qsort(aux_id_iters, results->iter_index, sizeof(double), &compare);
+      qsort(aux_id_iters, numP, sizeof(double), &compare);
       median = aux_id_iters[numP/2];
       if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1] + aux_id_iters[numP/2]) / 2;
       results->iters_time[i] = median;

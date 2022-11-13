@@ -43,7 +43,7 @@ numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut 
 
 for ((i=0; i<qty; i++))
 do
-  echo "Iter $i"
+  echo "Iter $i -- numP=$numP"
   mpirun $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
 done
 
