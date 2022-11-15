@@ -21,9 +21,7 @@ read -r ini fin <<<$(echo $aux)
 diff=$(( fin - ini ))
 numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
 
-#mpirun -np 4 /home/martini/Instalaciones/valgrind-mpich-3.4.1-noucx/bin/valgrind --leak-check=full --show-leak-kinds=all --log-file=nc.vg.%p $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
 mpirun -np $numP $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
-rm hostfile.o$SLURM_JOB_ID
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out

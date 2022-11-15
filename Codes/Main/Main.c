@@ -155,6 +155,7 @@ int main(int argc, char *argv[]) {
     //
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
+    MPI_Barrier(comm);
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
     }
@@ -355,6 +356,7 @@ int print_local_results() {
     fflush(stdout);
     close(1);
     dup(ptr_out);
+    close(ptr_out);
   }
   return 0;
 }

@@ -118,13 +118,15 @@ int compare(const void *_a, const void *_b) {
  */
 void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
   if(myId == root) {
-    /*MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+    /*
     for(size_t i=0; i<results->iter_index; i++) {
       results->iters_time[i] = results->iters_time[i] / numP;
     }*/
   } else {
-    //MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
   }
+  /*
   double *aux_all_iters, *aux_id_iters, median;
   if(myId == root) {
     aux_all_iters = malloc(numP *results->iter_index * sizeof(double));
@@ -145,6 +147,7 @@ void compute_results_iter(results_data *results, int myId, int numP, int root, M
     free(aux_all_iters);
     free(aux_id_iters);
   }
+  */
 }
 
 
