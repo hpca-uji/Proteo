@@ -41,6 +41,7 @@ read -r ini fin <<<$(echo $aux)
 diff=$(( fin - ini ))
 numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
 
+echo "Nodes=$SLURM_JOB_NODELIST"
 for ((i=0; i<qty; i++))
 do
   echo "Iter $i -- numP=$numP"

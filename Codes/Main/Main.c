@@ -50,8 +50,8 @@ int main(int argc, char *argv[]) {
     }
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
-    MPI_Comm_size(MPI_COMM_WORLD, &numP);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
+    MPI_Comm_size(MPI_COMM_WORLD, &numP);
     comm = MPI_COMM_WORLD;
 
     if(req != MPI_THREAD_MULTIPLE) {
@@ -435,8 +435,8 @@ void init_application() {
   }
 
   int message_tam = 100000000;
-  config_file->latency_m = latency(group->myId, group->numP, comm);
-  config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
+  //config_file->latency_m = latency(group->myId, group->numP, comm);
+  //config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
 
   obtain_op_times(1);
 }

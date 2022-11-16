@@ -21,6 +21,9 @@ read -r ini fin <<<$(echo $aux)
 diff=$(( fin - ini ))
 numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
 
+ls /home/martini/malleability_benchmark/Codes/build/a.out
+
+echo "Test PreRUN $numP"
 mpirun -np $numP $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
 
 echo "END RUN"
