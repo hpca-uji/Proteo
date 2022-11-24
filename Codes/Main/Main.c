@@ -434,10 +434,6 @@ void init_application() {
     malloc_comm_array(&(group->async_array), config_file->adr , group->myId, group->numP);
   }
 
-  int message_tam = 100000000;
-  //config_file->latency_m = latency(group->myId, group->numP, comm);
-  //config_file->bw_m = bandwidth(group->myId, group->numP, comm, config_file->latency_m, message_tam);
-
   obtain_op_times(1);
 }
 

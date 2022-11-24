@@ -13,9 +13,9 @@ double init_emulation_comm_time(group_data group, configuration *config_file, it
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
-double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
-double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
-double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
+double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 
 /*
  * Calcula el tiempo por operacion o total de bytes a enviar
@@ -55,14 +55,14 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
       init_comm_ptop_pt(group, config_file, stage, comm);
       break;
     case COMP_BCAST:
-      result = init_comm_bcast_pt(group, config_file, stage, comm);
+      result = init_comm_bcast_pt(group, config_file, stage, comm, compute);
       break;
     case COMP_ALLGATHER:
-      result = init_comm_allgatherv_pt(group, config_file, stage, comm);
+      result = init_comm_allgatherv_pt(group, config_file, stage, comm, compute);
       break;
     case COMP_REDUCE:
     case COMP_ALLREDUCE:
-      result = init_comm_reduce_pt(group, config_file, stage, comm);
+      result = init_comm_reduce_pt(group, config_file, stage, comm, compute);
       break;
   }
   return result;
@@ -103,13 +103,31 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       }
       break;
     case COMP_ALLGATHER:
-      MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
+      if(stage.bytes != 0) {
+        MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
+      } else {
+        for(i=0; i < stage.operations; i++) {
+          MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
+	}
+      }
       break;
     case COMP_REDUCE:
-      MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+      if(stage.bytes != 0) {
+        MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+      } else {
+        for(i=0; i < stage.operations; i++) {
+          MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+	}
+      }
       break;
     case COMP_ALLREDUCE:
-      MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
+      if(stage.bytes != 0) {
+        MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
+      } else {
+        for(i=0; i < stage.operations; i++) {
+          MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
+	}
+      }
       break;
   }
   return result;
@@ -198,22 +216,20 @@ double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
  * ========================================================================================
  * ========================================================================================
 */
-
 double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  double start_time, time = 0;
-
-  stage->array = malloc(config_file->granularity * sizeof(char));
-  if(config_file->t_op_comms != 0) {
-    stage->t_op = config_file->t_op_comms;
-    return time;
-  }
+  double start_time, end_time, time = 0;
+  double t_stage;
 
   MPI_Barrier(comm);
   start_time = MPI_Wtime();
   process_stage(*config_file, *stage, group, comm);
   MPI_Barrier(comm);
-  stage->t_op = ceil((MPI_Wtime() - start_time) / stage->operations); //Tiempo de una operacion
-  MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
+  end_time = MPI_Wtime();
+  stage->t_op = (end_time - start_time) / stage->operations; //Tiempo de una operacion
+  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
+  stage->operations = ceil(t_stage / stage->t_op);
+  MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
+
   return time;
 }
 
@@ -229,10 +245,10 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
       start_time = MPI_Wtime();
       result+= process_stage(*config_file, *stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+      stage->operations = ceil(t_stage / stage->t_op);
     }
-    MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
+    MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
   }
-  stage->operations = ceil(t_stage / stage->t_op);
 
   return result;
 }
@@ -247,10 +263,10 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
       start_time = MPI_Wtime();
       result+= process_stage(*config_file, *stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
+      stage->operations = ceil(t_stage / stage->t_op);
     }
-    MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
+    MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
   }
-  stage->operations = ceil(t_stage / stage->t_op);
 
   return result;
 }
@@ -269,23 +285,24 @@ void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_
   stage->array = malloc(stage->real_bytes * sizeof(char));
 }
 
-double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
 
-  if(stage->bytes != 0) {
-    stage->real_bytes = stage->bytes;
-    stage->array = malloc(stage->real_bytes * sizeof(char));
-  } else { // Prepare to emulate Collective as PtoP
-    MPI_Barrier(comm);
+  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
+  stage->array = malloc(stage->real_bytes * sizeof(char));
+
+  if(compute && stage->bytes) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
+  } else {
+    stage->operations = 1;
   }
   return time;
 }
 
 
-double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time=0;
   struct Dist_data dist_data;
 
@@ -296,38 +313,41 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = stage->bytes;
-  if(stage->bytes != 0) {
-    prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
-      
-    get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
-    stage->my_bytes = dist_data.tamBl;
+  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
 
-    stage->array = malloc(stage->my_bytes * sizeof(char));
-    stage->full_array = malloc(stage->real_bytes * sizeof(char));
-  } else {
-    MPI_Barrier(comm);
+  prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
+      
+  get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
+  stage->my_bytes = dist_data.tamBl;
+
+  stage->array = malloc(stage->my_bytes * sizeof(char));
+  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+
+  if(compute && stage->bytes) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
+  } else {
+    stage->operations = 1;
   }
 
   return time;
 }
 
-double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = stage->bytes;
-  if(stage->bytes != 0) {
-    stage->array = malloc(stage->real_bytes * sizeof(char));
-    //Full array para el reduce necesita el mismo tamanyo
-    stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
+  stage->array = malloc(stage->real_bytes * sizeof(char));
+  //Full array para el reduce necesita el mismo tamanyo
+  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+
+  if(compute && stage->bytes) {
+    time = init_emulation_comm_time(group, config_file, stage, comm);
   } else {
-    MPI_Barrier(comm);
-    init_emulation_comm_time(group, config_file, stage, comm);
+    stage->operations = 1;
   }
 
   return time;
