@@ -41,6 +41,7 @@ do
     mkdir $lower_dir
     cd $lower_dir
     cp $dir$execDir/extrae.xml .
+    cp $dir$execDir/trace.sh .
     cp ../../$config_file .
 
     #pwd

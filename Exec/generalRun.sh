@@ -34,10 +34,7 @@ if [ $use_extrae -ne 1 ]
 then
   mpirun -np $numP $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES 
 else
-  # EXTRAE Configuration
-  export EXTRAE_CONFIG_FILE=./extrae.xml
-  export LD_PRELOAD=${EXTRAE_HOME}/lib/libmpitrace.so
-  srun -n$numP --mpi=pmi2 $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES
+  srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES
 fi
 
 
