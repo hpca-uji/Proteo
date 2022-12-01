@@ -173,7 +173,7 @@ void def_malleability_entries(malleability_data_t *data_struct_rep, malleability
   MPI_Datatype types[counts];
 
   blocklengths[0] = blocklengths[1] = 1;
-  types[0] = types[1] = MPI_INT;
+  types[0] = types[1] = MPI_UNSIGNED_LONG;
 
   // Obtener direccion base
   MPI_Get_address(&(data_struct_rep->entries), &displs[0]);
@@ -196,7 +196,8 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
   MPI_Aint displs[counts];
   MPI_Datatype types[counts];
 
-  types[0] = types[1] = types[2] = types[3] = MPI_INT;
+  types[0] = types[2] = MPI_UNSIGNED_LONG;
+  types[1] = types[3] = MPI_INT;
   blocklengths[0] = blocklengths[1] = data_struct_rep->entries;
   blocklengths[2] = blocklengths[3] = data_struct_dist->entries;
 

@@ -278,7 +278,8 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
+  types[0] = types[1] = MPI_UNSIGNED_LONG;
+  types[2] = types[3] = types[4] = types[5] = MPI_INT;
   types[6] = types[7] = MPI_DOUBLE;
 
   // Rellenar vector displs
