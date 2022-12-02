@@ -212,13 +212,17 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
  * nodos, pero es necesario activar Slurm.
  */
 void generate_info_string(int target_qty, MPI_Info *info){
-  char *host_string, host[9] = "localhost";
+  char *host_string, *host;
+  int len;
 
+  host = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
+  MPI_Get_processor_name(host, &len);
   // CREATE AND SET STRING HOSTS
   write_str_node(&host_string, 0, target_qty, host);
   // SET MAPPING
   MPI_Info_create(info);
   MPI_Info_set(*info, "hosts", host_string);
+  free(host);
   free(host_string);
 }
 
