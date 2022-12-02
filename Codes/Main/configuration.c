@@ -333,7 +333,7 @@ void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *c
   } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
     MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
     // Tipo derivado para enviar N elementos de la estructura
-    MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), config_type); 
+    MPI_Type_create_resized(aux, 0, sizeof(group_config_t), config_type); 
   }
   MPI_Type_commit(config_type);
 }

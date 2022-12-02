@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <string.h>
 #include "malleabilityManager.h"
 #include "malleabilityStates.h"
 #include "malleabilityDataStructures.h"
@@ -20,6 +21,9 @@ int start_redistribution();
 int check_redistribution();
 int end_redistribution();
 int shrink_redistribution();
+
+void comm_node_data(int rootBcast, int is_child_group);
+void def_nodeinfo_type(MPI_Datatype *node_type);
 
 int thread_creation();
 int thread_check();
@@ -49,7 +53,7 @@ typedef struct { //FIXME numC_spawned no se esta usando
   MPI_Comm user_comm;
   
   char *name_exec, *nodelist;
-  int num_cpus, num_nodes;
+  int num_cpus, num_nodes, nodelist_len;
 } malleability_t;
 
 int state = MALL_UNRESERVED; //FIXME Mover a otro lado
@@ -112,6 +116,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
     Children_init();
     return MALLEABILITY_CHILDREN;
   }
+
+  mall->nodelist_len = strlen(nodelist);
 
   zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;
@@ -443,6 +449,7 @@ void Children_init() {
   // TODO A partir de este punto tener en cuenta si es BASELINE o MERGE
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
+  comm_node_data(root_parents, MALLEABILITY_CHILDREN);
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
@@ -490,6 +497,7 @@ void Children_init() {
     MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
     
   }
+
   MPI_Comm_disconnect(&(mall->intercomm));
 }
 
@@ -548,6 +556,7 @@ int start_redistribution() {
   }
 
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
+  comm_node_data(rootBcast, MALLEABILITY_NOT_CHILDREN);
 
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
     mall_conf->results->async_start = MPI_Wtime();
@@ -639,8 +648,8 @@ int end_redistribution() {
   }
   
 
+  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
-    comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc
@@ -678,10 +687,7 @@ int end_redistribution() {
   }
 
 
-  /*FIXMENOW En algun momento P0 cambia tanto su comm como intercomm respecto al resto...*/
-  MPI_Barrier(mall->comm); //FIXMENOW Por alguna razon da error en Comm
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
-    //FIXMENOW Intercomm se borra, pero no es COMM WORLD ni COMM NULL
     MPI_Comm_disconnect(&(mall->intercomm));
   }
 
@@ -692,7 +698,7 @@ int end_redistribution() {
 ///=============================================
 ///=============================================
 ///=============================================
-
+//TODO Add comment
 int shrink_redistribution() {
     double time_extra = MPI_Wtime();
 
@@ -722,6 +728,50 @@ int shrink_redistribution() {
     } else {
       return MALL_ZOMBIE;
     }
+}
+
+//======================================================||
+//================PRIVATE FUNCTIONS=====================||
+//=================COMM NODE INFO ======================||
+//======================================================||
+//======================================================||
+//TODO Add comment
+void comm_node_data(int rootBcast, int is_child_group) {
+  MPI_Datatype node_type;
+
+  def_nodeinfo_type(&node_type);
+  MPI_Bcast(mall, 1, node_type, rootBcast, mall->intercomm);
+
+  if(is_child_group) {
+    mall->nodelist = malloc((mall->nodelist_len+1) * sizeof(char));
+    mall->nodelist[mall->nodelist_len] = '\0';
+  }
+  MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, mall->intercomm);
+
+  MPI_Type_free(&node_type);
+}
+
+//TODO Add comment
+void def_nodeinfo_type(MPI_Datatype *node_type) {
+  int i, counts = 3;
+  int blocklengths[3] = {1, 1, 1};
+  MPI_Aint displs[counts], dir;
+  MPI_Datatype types[counts];
+
+  // Rellenar vector types
+  types[0] = types[1] = types[2] = MPI_INT;
+
+  // Rellenar vector displs
+  MPI_Get_address(mall, &dir);
+
+  MPI_Get_address(&(mall->num_cpus), &displs[0]);
+  MPI_Get_address(&(mall->num_nodes), &displs[1]);
+  MPI_Get_address(&(mall->nodelist_len), &displs[2]);
+
+  for(i=0;i<counts;i++) displs[i] -= dir;
+
+  MPI_Type_create_struct(counts, blocklengths, displs, types, node_type);
+  MPI_Type_commit(node_type);
 }
 
 // TODO MOVER A OTRO LADO??
