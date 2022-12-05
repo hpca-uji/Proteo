@@ -10,7 +10,12 @@ codeDir="/Codes"
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
 configFile=$1
-outIndex=$2
+
+outIndex=0
+if [ $# -ge 2 ]
+then
+  outIndex=$2
+fi
 
 echo "MPICH"
 #module load mpich-3.4.1-noucx
@@ -23,7 +28,7 @@ numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut 
 
 ls /home/martini/malleability_benchmark/Codes/build/a.out
 
-echo "Test PreRUN $numP"
+echo "Test PreRUN $numP $nodes"
 mpirun -np $numP $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
 
 echo "END RUN"
