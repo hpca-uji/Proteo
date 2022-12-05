@@ -133,82 +133,6 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
   return result;
 }
 
-
-// Se realizan varios tests de latencia al 
-// mandar un único dato de tipo CHAR a los procesos impares
-// desde el par inmediatamente anterior. Tras esto, los impares
-// vuelven a enviar el dato al proceso par.
-//
-// Devuelve la latencia del sistema.
-double latency(int myId, int numP, MPI_Comm comm) {
-  int i, loop_count = 100;
-  double start_time, stop_time, time;
-  char aux;
-
-  aux = '0';
-
-  MPI_Barrier(comm);
-  start_time = MPI_Wtime();
-  if(myId == ROOT) {
-    for(i=0; i<loop_count; i++){
-      MPI_Send(&aux, 0, MPI_CHAR, numP-1, 99, comm);
-    }
-    MPI_Recv(&aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
-  } else if(myId+1 == numP) {
-    for(i=0; i<loop_count; i++){
-      MPI_Recv(&aux, 0, MPI_CHAR, ROOT, 99, comm, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(&aux, 0, MPI_CHAR, ROOT, 99, comm);
-  }
-  MPI_Barrier(comm);
-  stop_time = MPI_Wtime();
-  time = (stop_time - start_time) / loop_count;
-
-  MPI_Bcast(&time, 1, MPI_DOUBLE, ROOT, comm);
-  return time;
-}
-
-
-// Se realizan varios tests de ancho de banda
-// al mandar N datos a los procesos impares desde el
-// par inmediatamente anterior. Tras esto, los impares
-// vuelven a enviar los N datos al proceso par.
-//
-// Devuelve el tiempo necesario para realizar las pruebas
-double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n) {
-  int i, loop_count = 100;
-  double start_time, stop_time, bw, time;
-  char *aux;
-  size_t n_bytes;
-
-  n_bytes = n * sizeof(char);
-  aux = malloc(n_bytes);
-  time = 0;
-
-
-  MPI_Barrier(comm);
-  start_time = MPI_Wtime();
-  if(myId == ROOT) {
-    for(i=0; i<loop_count; i++){
-      MPI_Send(aux, n, MPI_CHAR, numP-1, 99, comm);
-    }
-    MPI_Recv(aux, 0, MPI_CHAR, numP-1, 99, comm, MPI_STATUS_IGNORE);
-  } else if(myId+1 == numP) {
-    for(i=0; i<loop_count; i++){
-      MPI_Recv(aux, n, MPI_CHAR, ROOT, 99, comm, MPI_STATUS_IGNORE);
-    }
-    MPI_Send(aux, 0, MPI_CHAR, ROOT, 99, comm);
-  }
-  MPI_Barrier(comm);
-  stop_time = MPI_Wtime();
-  time = (stop_time - start_time) / loop_count;
-  bw = n_bytes / (time - latency);
-
-  MPI_Bcast(&bw, 1, MPI_DOUBLE, ROOT, comm);
-  free(aux);
-  return bw;
-}
-
 /*
  * ========================================================================================
  * ========================================================================================
@@ -248,6 +172,8 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
       stage->operations = ceil(t_stage / stage->t_op);
     }
     MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
+  } else {
+    stage->operations = ceil(t_stage / stage->t_op);
   }
 
   return result;
@@ -266,6 +192,8 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
       stage->operations = ceil(t_stage / stage->t_op);
     }
     MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
+  } else {
+    stage->operations = ceil(t_stage / stage->t_op);
   }
 
   return result;

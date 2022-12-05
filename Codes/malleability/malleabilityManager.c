@@ -326,6 +326,40 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
 }
 
 /*
+ * Modifica en la estructura concreta de datos elegida en el indice "index"
+ * con el set de datos "data" de un total de "total_qty" elementos.
+ *
+ * Los datos variables se tienen que modificar cuando quieran ser mandados, no antes
+ *
+ * Mas informacion en la funcion "modify_data".
+ */
+void malleability_modify_data(void *data, size_t index, size_t total_qty, int type, int is_replicated, int is_constant) {
+  if(is_constant) {
+    if(is_replicated) {
+      modify_data(data, index, total_qty, type, 0, rep_s_data); //FIXME Numero magico
+    } else {
+      modify_data(data, index, total_qty, type, 0, dist_s_data); //FIXME Numero magico
+    }
+  } else {
+    if(is_replicated) {
+      modify_data(data, index, total_qty, type, 0, rep_a_data); //FIXME Numero magico || UN request?
+    } else {
+      size_t total_reqs = 0;
+      
+      if(mall_conf->comm_type  == MAL_USE_NORMAL) {
+        total_reqs = 1;
+      } else if(mall_conf->comm_type  == MAL_USE_IBARRIER) {
+        total_reqs = 2;
+      } else if(mall_conf->comm_type  == MAL_USE_POINT) {
+        total_reqs = mall->numC;
+      }
+      
+      modify_data(data, index, total_qty, type, total_reqs, dist_a_data); //FIXME Numero magico
+    }
+  }
+}
+
+/*
  * Devuelve el numero de entradas para la estructura de descripcion de 
  * datos elegida.
  */
@@ -647,7 +681,6 @@ int end_redistribution() {
     rootBcast = mall->root;
   }
   
-
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);

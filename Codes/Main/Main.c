@@ -44,7 +44,6 @@ int main(int argc, char *argv[]) {
     num_cpus = 20; //FIXME NUMERO MAGICO //TODO Usar openMP para obtener el valor con un pragma
     if (argc >= 5) {
       nodelist = argv[3];
-      //nodelist_len = strlen(nodelist);
       num_nodes = atoi(argv[4]);
       num_cpus = num_nodes * num_cpus;
     }
@@ -68,6 +67,11 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
+
+      malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
+      malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+      malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
+
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
     } else { //Init hijos
@@ -75,34 +79,20 @@ int main(int argc, char *argv[]) {
       get_malleability_user_comm(&comm);
       get_benchmark_configuration(&config_file);
       get_benchmark_results(&results);
-      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
 
       // TODO Refactor - Que sea una unica funcion
       // Obtiene las variables que van a utilizar los hijos
       void *value = NULL;
       malleability_get_data(&value, 0, 1, 1);
       group->grp = *((int *)value);
-      free(value);
+
       malleability_get_data(&value, 1, 1, 1);
       run_id = *((int *)value);
-      free(value);
       
       malleability_get_data(&value, 2, 1, 1);
       group->iter_start = *((int *)value);
-      free(value);
 
-      //FIXME Eliminar cuando se utilice SLURM
-      /*
-      malleability_get_data(&value, 4, 1, 1);
-      num_nodes = *((int *)value);
-      free(value);
-
-      malleability_get_data(&value, 5, 1, 1);
-      nodelist = (char *)value;
-      //free(value);
-      nodelist_len = strlen(nodelist);
-      */
-
+      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
       group->grp = group->grp + 1;
     }
 
@@ -111,7 +101,6 @@ int main(int argc, char *argv[]) {
     //
     group->grp = group->grp - 1; // TODO REFACTOR???
     do {
-
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
       if(group->grp != 0) {
@@ -123,14 +112,8 @@ int main(int argc, char *argv[]) {
 			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].at, -1);
         set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
-        if(group->grp == 0) {
-          malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
-          malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
-          malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
-
-	  //FIXME Eliminar cuando se utilice SLURM
-          //malleability_add_data(&num_nodes, 1, MAL_INT, 1, 1);
-          //malleability_add_data(&nodelist, nodelist_len, MAL_CHAR, 1, 1);
+        if(group->grp != 0) {
+          malleability_modify_data(&(group->grp), 0, 1, MAL_INT, 1, 1);
         }
       }
 
@@ -166,7 +149,6 @@ int main(int argc, char *argv[]) {
     free_application_data(); //FIXME Error al liberar memoria de SDR/ADR
 
     MPI_Finalize();
-
     return 0;
 }
 

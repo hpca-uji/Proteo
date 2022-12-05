@@ -33,13 +33,43 @@ void add_data(void *data, size_t total_qty, int type, size_t request_qty, mallea
   data_struct->types[data_struct->entries] = type;
   data_struct->arrays[data_struct->entries] = data;
 
-  data_struct->requests[data_struct->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request));
-  for(i=0; i < request_qty; i++) {
-    data_struct->requests[data_struct->entries][i] = MPI_REQUEST_NULL;
+  if(request_qty) {
+    data_struct->requests[data_struct->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request));
+    for(i=0; i < request_qty; i++) {
+      data_struct->requests[data_struct->entries][i] = MPI_REQUEST_NULL;
+    }
   }
   data_struct->entries+=1;
 }
 
+/*
+ * Modifica en la estructura de datos a comunicar con los hijos
+ * un set de datos de un total "total_qty" distribuido entre
+ * todos los padres. La nueva serie "data" solo representa los datos
+ * que tiene este padre.
+ */
+void modify_data(void *data, size_t index, size_t total_qty, int type, size_t request_qty, malleability_data_t *data_struct) {
+  size_t i;
+  
+  if(data_struct->entries < index) { // Index does not exist
+    return;
+  }
+  if(data_struct->requests[index] != NULL) {
+    //free(data_struct->requests[index]); TODO Error when trying to free
+    data_struct->requests[index] = NULL;
+  }
+
+  data_struct->qty[index] = total_qty;
+  data_struct->types[index] = type;
+  data_struct->arrays[index] = data;
+
+  if(request_qty) {
+    data_struct->requests[index] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request));
+    for(i=0; i < request_qty; i++) {
+      data_struct->requests[index][i] = MPI_REQUEST_NULL;
+    }
+  }
+}
 
 /*
  * Comunicar desde los padres a los hijos las estructuras de datos sincronas o asincronas
@@ -71,11 +101,14 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
-  MPI_Bcast(MPI_BOTTOM, 1, struct_type, rootBcast, intercomm); //FIXME Doy error
+  MPI_Bcast(MPI_BOTTOM, 1, struct_type, rootBcast, intercomm);
 
   if(is_children_group) {
-    //data_struct->requests[data_struct->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request)); FIXME Crear los requests?
-    //data_struct->requests[data_struct->entries][i] = MPI_REQUEST_NULL;
+   /* 
+    size_t request_qty = 1; // TODO Obtener desde la funcion
+    data_struct_rep->requests[data_struct_rep->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request));
+    data_struct_dist->requests[data_struct_dist->entries] = (MPI_Request *) malloc(request_qty * sizeof(MPI_Request));
+   */
     
     for(i=0; i < data_struct_rep->entries; i++) {
       data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
