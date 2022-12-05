@@ -75,7 +75,7 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
  */
 double process_stage(configuration config_file, iter_stage_t stage, group_data group, MPI_Comm comm) {
   int i;
-  double result;
+  double result, t_start, t_total = 0;
 
   switch(stage.pt) {
     //Computo
@@ -93,18 +93,29 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     case COMP_POINT:
       point_to_point(group.myId, group.numP, ROOT, comm, stage.array, stage.real_bytes);
       break;
+      
     case COMP_BCAST:
-      if(stage.bytes != 0) {
-        MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
+      if(stage.t_capped) {
+        while(t_total < stage.t_stage) {
+	  t_start = MPI_Wtime();
+          MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
+	  t_total += MPI_Wtime() - t_start;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
       } else {
         for(i=0; i < stage.operations; i++) {
-          point_to_point_inter(group.myId, group.numP, comm, stage.array, stage.real_bytes);
+          MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
 	}
       }
       break;
     case COMP_ALLGATHER:
-      if(stage.bytes != 0) {
-        MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
+      if(stage.t_capped) {
+        while(t_total < stage.t_stage) {
+	  t_start = MPI_Wtime();
+          MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
+	  t_total += MPI_Wtime() - t_start;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
       } else {
         for(i=0; i < stage.operations; i++) {
           MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
@@ -112,8 +123,13 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       }
       break;
     case COMP_REDUCE:
-      if(stage.bytes != 0) {
-        MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+      if(stage.t_capped) {
+        while(t_total < stage.t_stage) {
+	  t_start = MPI_Wtime();
+          MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
+	  t_total += MPI_Wtime() - t_start;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
       } else {
         for(i=0; i < stage.operations; i++) {
           MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
@@ -121,8 +137,13 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       }
       break;
     case COMP_ALLREDUCE:
-      if(stage.bytes != 0) {
-        MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
+      if(stage.t_capped) {
+        while(t_total < stage.t_stage) {
+	  t_start = MPI_Wtime();
+          MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
+	  t_total += MPI_Wtime() - t_start;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
       } else {
         for(i=0; i < stage.operations; i++) {
           MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
@@ -213,15 +234,16 @@ void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_
   stage->array = malloc(stage->real_bytes * sizeof(char));
 }
 
+// TODO Compute should be always 1 if the number of processes is different
 double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
 
-  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
   stage->array = malloc(stage->real_bytes * sizeof(char));
 
-  if(compute && stage->bytes) {
+  if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
   } else {
     stage->operations = 1;
@@ -229,7 +251,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
   return time;
 }
 
-
+// TODO Compute should be always 1 if the number of processes is different
 double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time=0;
   struct Dist_data dist_data;
@@ -241,7 +263,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
 
   prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
       
@@ -251,7 +273,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   stage->array = malloc(stage->my_bytes * sizeof(char));
   stage->full_array = malloc(stage->real_bytes * sizeof(char));
 
-  if(compute && stage->bytes) {
+  if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
   } else {
     stage->operations = 1;
@@ -260,6 +282,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   return time;
 }
 
+// TODO Compute should be always 1 if the number of processes is different
 double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
@@ -267,12 +290,12 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = stage->bytes ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
   stage->array = malloc(stage->real_bytes * sizeof(char));
   //Full array para el reduce necesita el mismo tamanyo
   stage->full_array = malloc(stage->real_bytes * sizeof(char));
 
-  if(compute && stage->bytes) {
+  if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
   } else {
     stage->operations = 1;

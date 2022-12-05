@@ -49,8 +49,9 @@ static int handler(void* user, const char* section, const char* name,
 
     // Iter stage
     } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-	//if(pconfig->actual_stage < pconfig->n_stages)
         pconfig->stages[pconfig->actual_stage].pt = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
+        pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
     } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
         pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
     } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {

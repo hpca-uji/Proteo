@@ -11,9 +11,4 @@ enum compute_methods{COMP_PI, COMP_MATRIX, COMP_POINT, COMP_BCAST, COMP_ALLGATHE
 double init_stage(configuration *config_file, int stage_i, group_data group, MPI_Comm comm, int compute);
 //double stage_init_all();
 double process_stage(configuration config_file, iter_stage_t stage, group_data group, MPI_Comm comm);
-
-double latency(int myId, int numP, MPI_Comm comm);
-double bandwidth(int myId, int numP, MPI_Comm comm, double latency, int n);
-//FIXME Refactor el void??
-void linear_regression_stage(iter_stage_t *stage, group_data group, MPI_Comm comm);
 #endif

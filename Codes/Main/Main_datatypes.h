@@ -28,6 +28,9 @@ typedef struct {
 typedef struct
 {
   int pt; // Procedure type
+  // Wether the stage completes after "operations" iterations (0)
+  // or after "t_stage" time has passed (1).
+  int t_capped; 
   double t_stage; // Time to complete the stage
 
   double t_op;
@@ -56,9 +59,7 @@ typedef struct
     size_t actual_resize, actual_stage;
     int rigid_times;
     int granularity, sdr, adr;
-    double latency_m, bw_m;
 
-    double t_op_comms;
     iter_stage_t *stages;
     group_config_t *groups;
 } configuration;
