@@ -41,7 +41,6 @@ typedef struct
   char* array, *full_array;
   double* double_array;
   // Arrays to indicate how many bytes are received from each rank
-  //int *counts, *displs;
   struct Counts counts;
 
 } iter_stage_t;

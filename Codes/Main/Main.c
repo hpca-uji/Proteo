@@ -38,8 +38,7 @@ int main(int argc, char *argv[]) {
     int req;
     int im_child;
 
-    //FIXME El codigo no es capaz de hacer mas de una redistribucion - Arreglar malleabilityTypes.c
-    int num_cpus, num_nodes; //nodelist_len; //FIXME Eliminar cuando se utilice Slurm
+    int num_cpus, num_nodes;
     char *nodelist = NULL;
     num_cpus = 20; //FIXME NUMERO MAGICO //TODO Usar openMP para obtener el valor con un pragma
     if (argc >= 5) {
@@ -405,7 +404,6 @@ void init_application() {
     run_id = atoi(group->argv[2]);
   }
 
-  //config_file = read_ini_file(group->argv[1]);
   init_config(group->argv[1], &config_file);
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);

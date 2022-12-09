@@ -117,7 +117,13 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
     return MALLEABILITY_CHILDREN;
   }
 
-  mall->nodelist_len = strlen(nodelist);
+  if(nodelist != NULL) { //TODO To be deprecated by using Slurm or else statement
+    mall->nodelist_len = strlen(nodelist);
+  } else { // If no nodelist is detected, get it from the actual run
+    mall->nodelist = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
+    MPI_Get_processor_name(mall->nodelist, &mall->nodelist_len);
+    //TODO Get name of each process and create real nodelist
+  }
 
   zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;

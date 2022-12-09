@@ -90,7 +90,6 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) {
 
   if(spawn_data->spawn_is_async) { // Async
     local_state = get_spawn_state(spawn_data->spawn_is_async);
-    //printf("Test 3.5 local=%d\n",local_state);
 
     if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
       global_state = check_single_state(comm, local_state);
@@ -221,8 +220,9 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
     physical_struct_create(target_qty, spawn_data->already_created, num_cpus, num_nodes, nodelist, type_dist, MALL_DIST_STRING, &(spawn_data->dist));
 
     //COPY PROGRAM NAME
-    spawn_data->cmd = malloc(strlen(cmd) * sizeof(char));
+    spawn_data->cmd = malloc((strlen(cmd)+1) * sizeof(char));
     strcpy(spawn_data->cmd, cmd);
+    spawn_data->cmd[strlen(cmd)]='\0';
 
   } else {
     spawn_data->cmd = malloc(1 * sizeof(char));

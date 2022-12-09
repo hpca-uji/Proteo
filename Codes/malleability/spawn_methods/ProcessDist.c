@@ -213,16 +213,18 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
  */
 void generate_info_string(int target_qty, MPI_Info *info){
   char *host_string, *host;
-  int len;
+  int len, err;
 
-  host = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
-  MPI_Get_processor_name(host, &len);
+  host = "localhost";
+  //host = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
+  //MPI_Get_processor_name(host, &len);
   // CREATE AND SET STRING HOSTS
-  write_str_node(&host_string, 0, target_qty, host);
+  err = write_str_node(&host_string, 0, target_qty, host);
+  if (err<0) {printf("Error when generating mapping: %d\n", err); MPI_Abort(MPI_COMM_WORLD, err);}
   // SET MAPPING
   MPI_Info_create(info);
   MPI_Info_set(*info, "hosts", host_string);
-  free(host);
+  //free(host);
   free(host_string);
 }
 
@@ -275,19 +277,19 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
   char *ocurrence;
   size_t i, len, len_node;
 
-  len_node = strlen(node_name);
-  len = qty * (len_node + 1);
+  len_node = strlen(node_name) + 1; // Str length + ','
+  len = qty * len_node; // Number of times the node is used
 
   if(len_og == 0) { // Memoria no reservada
-    *hostfile_str = (char *) malloc(len * sizeof(char) - sizeof(char));
+    *hostfile_str = (char *) malloc((len+1) * sizeof(char));
   } else { // Cadena ya tiene datos
-    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len) * sizeof(char) - sizeof(char));
+    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len + 1) * sizeof(char));
   }
   if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
 
   ocurrence = (char *) malloc((len_node+1) * sizeof(char));
   if(ocurrence == NULL) return -2; // No ha sido posible alojar la memoria
-  err = sprintf(ocurrence, ",%s", node_name);
+  err = snprintf(ocurrence, len_node+1, ",%s", node_name);
   if(err < 0) return -3; // No ha sido posible escribir sobre la variable auxiliar
 
   i=0;
