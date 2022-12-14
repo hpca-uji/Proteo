@@ -65,7 +65,6 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
     if (local_state == MALL_SPAWN_COMPLETED)
       deallocate_spawn_data();
 
-
   } else {
     local_state = spawn_data->spawn_is_single ? 
 	    MALL_SPAWN_SINGLE_PENDING : MALL_SPAWN_PENDING;

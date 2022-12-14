@@ -534,8 +534,7 @@ void Children_init() {
 
     MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
     MPI_Comm_dup(mall->intercomm, &(mall->comm));
-    MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
-    
+    MPI_Comm_dup(mall->intercomm, &(mall->user_comm)); 
   }
 
   MPI_Comm_disconnect(&(mall->intercomm));

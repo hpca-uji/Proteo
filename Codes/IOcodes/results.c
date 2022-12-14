@@ -48,7 +48,8 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
-  blocklengths[3] = blocklengths[4] = resizes;
+  //blocklengths[3] = blocklengths[4] = resizes;
+  blocklengths[3] = blocklengths[4] = 1;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
