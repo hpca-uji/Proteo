@@ -75,7 +75,8 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
  */
 double process_stage(configuration config_file, iter_stage_t stage, group_data group, MPI_Comm comm) {
   int i;
-  double result, t_start, t_total = 0;
+  double result, t_start, t_total;
+  t_start = t_total = MPI_Wtime();
 
   switch(stage.pt) {
     //Computo
@@ -97,9 +98,8 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     case COMP_BCAST:
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
-	  t_start = MPI_Wtime();
           MPI_Bcast(stage.array, stage.real_bytes, MPI_CHAR, ROOT, comm);
-	  t_total += MPI_Wtime() - t_start;
+	  t_total = MPI_Wtime() - t_start;
           MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
 	}
       } else {
@@ -111,9 +111,8 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     case COMP_ALLGATHER:
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
-	  t_start = MPI_Wtime();
           MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
-	  t_total += MPI_Wtime() - t_start;
+	  t_total = MPI_Wtime() - t_start;
           MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
 	}
       } else {
@@ -125,9 +124,8 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     case COMP_REDUCE:
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
-	  t_start = MPI_Wtime();
           MPI_Reduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, ROOT, comm);
-	  t_total += MPI_Wtime() - t_start;
+	  t_total = MPI_Wtime() - t_start;
           MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
 	}
       } else {
@@ -139,9 +137,8 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     case COMP_ALLREDUCE:
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
-	  t_start = MPI_Wtime();
           MPI_Allreduce(stage.array, stage.full_array, stage.real_bytes, MPI_CHAR, MPI_MAX, comm);
-	  t_total += MPI_Wtime() - t_start;
+	  t_total = MPI_Wtime() - t_start;
           MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
 	}
       } else {
