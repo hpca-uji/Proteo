@@ -21,7 +21,7 @@ read -r ini fin <<<$(echo $aux)
 diff=$(( fin - ini ))
 numP=$(head -$fin $1 | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
 
-mpirun -np $numP valgrind --leak-check=full --show-leak-kinds=all --trace-children=yes --log-file=nc.vg.%p $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
+mpirun -np $numP valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=nc.vg.%p $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
