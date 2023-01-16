@@ -74,9 +74,10 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
  * realizara la operacion.
  */
 double process_stage(configuration config_file, iter_stage_t stage, group_data group, MPI_Comm comm) {
-  int i;
+  int i=0;
   double result, t_start, t_total;
-  t_start = t_total = MPI_Wtime();
+  t_start = MPI_Wtime();
+  t_total = 0;
 
   switch(stage.pt) {
     //Computo
@@ -110,7 +111,7 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       break;
     case COMP_ALLGATHER:
       if(stage.t_capped) {
-        while(t_total < stage.t_stage) {
+	while(t_total < stage.t_stage) {
           MPI_Allgatherv(stage.array, stage.my_bytes, MPI_CHAR, stage.full_array, stage.counts.counts, stage.counts.displs, MPI_CHAR, comm);
 	  t_total = MPI_Wtime() - t_start;
           MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
