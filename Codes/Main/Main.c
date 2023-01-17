@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
       }
 
-      if(config_file->n_resizes != group->grp + 1) { //TODO Llevar a otra funcion
+      if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
         set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
 			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].at, -1);
         set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
       }
       print_local_results();
       reset_results_index(results);
-    } while(config_file->n_resizes > group->grp + 1 && config_file->groups[group->grp+1].sm == MALL_SPAWN_MERGE);
+    } while(config_file->n_groups > group->grp + 1 && config_file->groups[group->grp+1].sm == MALL_SPAWN_MERGE);
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -176,7 +176,7 @@ int work() {
     iterate(state);
   }
 
-  if(config_file->n_resizes != group->grp + 1)
+  if(config_file->n_groups != group->grp + 1)
     state = malleability_checkpoint();
 
   iter = 0;
@@ -190,7 +190,7 @@ int work() {
   }
 
   
-  if(config_file->n_resizes - 1 == group->grp) res=1;
+  if(config_file->n_groups - 1 == group->grp) res=1;
   if(state == MALL_ZOMBIE) res=state;
   return res;
 }
@@ -351,7 +351,7 @@ int print_final_results() {
 
   if(group->myId == ROOT) {
 
-    if(group->grp == config_file->n_resizes -1) {
+    if(group->grp+1 == config_file->n_groups) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
       if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
@@ -454,6 +454,7 @@ void free_application_data() {
     free(results);
   }
   free_config(config_file);
+  
   free(group);
 }
 

@@ -11,7 +11,7 @@ void malloc_config_resizes(configuration *user_config);
 void malloc_config_stages(configuration *user_config);
 
 void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
-void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *config_type);
+void def_struct_groups(group_config_t *groups, size_t n_groups, MPI_Datatype *config_type);
 void def_struct_iter_stage(iter_stage_t *stages, size_t n_stages, MPI_Datatype *config_type);
 
 /*
@@ -35,7 +35,8 @@ void init_config(char *file_name, configuration **user_config) {
     configuration *config = NULL;
 
     config = malloc(sizeof(configuration));
-    config->n_resizes=1;
+    config->n_resizes=0;
+    config->n_groups=1;
     malloc_config_resizes(config);
     config->n_stages=1;
     malloc_config_stages(config);
@@ -62,8 +63,8 @@ void init_config(char *file_name, configuration **user_config) {
 void malloc_config_resizes(configuration *user_config) {
   size_t i;
   if(user_config != NULL) {
-    user_config->groups = malloc(sizeof(group_config_t) * user_config->n_resizes);
-    for(i=0; i<user_config->n_resizes; i++) {
+    user_config->groups = malloc(sizeof(group_config_t) * user_config->n_groups);
+    for(i=0; i<user_config->n_groups; i++) {
       user_config->groups[i].iters = 0;
       user_config->groups[i].procs = 1;
       user_config->groups[i].sm = 0;
@@ -147,7 +148,7 @@ void print_config(configuration *user_config) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);
     }
-    for(i=0; i<user_config->n_resizes; i++) {
+    for(i=0; i<user_config->n_groups; i++) {
       printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d\n",
         i, user_config->groups[i].iters, user_config->groups[i].procs, user_config->groups[i].factor, 
 	user_config->groups[i].phy_dist, user_config->groups[i].at, user_config->groups[i].sm,
@@ -169,7 +170,7 @@ void print_config_group(configuration *user_config, size_t grp) {
     if(grp > 0) {
       parents = user_config->groups[grp-1].procs;
     }
-    if(grp < user_config->n_resizes - 1) {
+    if(grp < user_config->n_groups - 1) {
       sons = user_config->groups[grp+1].procs;
     }
 
@@ -210,11 +211,11 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
 
   // Obtener un tipo derivado para enviar las estructuras de fases de iteracion
   // con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
+  def_struct_groups(&(config_file->groups[0]), config_file->n_groups, &group_type);
   def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
 
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
-  MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
+  MPI_Bcast(config_file->groups, config_file->n_groups, group_type, root, intercomm);
   MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
 
   //Liberar tipos derivados
@@ -244,18 +245,19 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   // datos escalares con una sola comunicacion
   def_struct_config_file(config_file, &config_type);
   MPI_Bcast(config_file, 1, config_type, root, intercomm);
+  config_file->n_resizes = config_file->n_groups-1;
 
   //Inicializado de estructuras internas
-  config_file->groups = malloc(sizeof(group_config_t) * config_file->n_resizes);
+  config_file->groups = malloc(sizeof(group_config_t) * config_file->n_groups);
   config_file->stages = malloc(sizeof(iter_stage_t) * config_file->n_stages);
   malloc_config_resizes(config_file); // Inicializar valores de grupos
   malloc_config_stages(config_file); // Inicializar a NULL vectores stage
 
   // Obtener un tipo derivado para enviar los tres vectores
   // de enteros con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
+  def_struct_groups(&(config_file->groups[0]), config_file->n_groups, &group_type);
   def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
-  MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
+  MPI_Bcast(config_file->groups, config_file->n_groups, group_type, root, intercomm);
   MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
 
   //Liberar tipos derivados
@@ -284,7 +286,7 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
 
-  MPI_Get_address(&(config_file->n_resizes), &displs[0]);
+  MPI_Get_address(&(config_file->n_groups), &displs[0]);
   MPI_Get_address(&(config_file->n_stages), &displs[1]);
   MPI_Get_address(&(config_file->granularity), &displs[2]);
   MPI_Get_address(&(config_file->sdr), &displs[3]);
@@ -302,7 +304,7 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
  * de la estructuras de la configuracion de cada grupo 
  * en una sola comunicacion.
  */
-void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *config_type) {
+void def_struct_groups(group_config_t *groups, size_t n_groups, MPI_Datatype *config_type) {
   int i, counts = 7;
   int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
@@ -325,7 +327,7 @@ void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *c
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  if (n_resizes == 1) {
+  if (n_groups == 1) {
     MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
   } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
     MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);

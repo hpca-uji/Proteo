@@ -48,8 +48,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
-  //blocklengths[3] = blocklengths[4] = resizes;
-  blocklengths[3] = blocklengths[4] = 1;
+  blocklengths[4] = blocklengths[5] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
@@ -58,8 +57,8 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(&(results->async_start), &displs[1]);
   MPI_Get_address(&(results->exec_start), &displs[2]);
   MPI_Get_address(&(results->wasted_time), &displs[3]);
-  MPI_Get_address(&(results->spawn_real_time[0]), &displs[4]);
-  MPI_Get_address(&(results->spawn_time[0]), &displs[5]); //TODO Revisar si se puede simplificar //FIXME Si hay mas de un spawn error?
+  MPI_Get_address(results->spawn_real_time, &displs[4]);
+  MPI_Get_address(results->spawn_time, &displs[5]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -222,22 +221,22 @@ void print_global_results(results_data results, size_t resizes) {
   size_t i;
 
   printf("T_spawn: ");
-  for(i=0; i < resizes - 1; i++) {
+  for(i=0; i < resizes; i++) {
     printf("%lf ", results.spawn_time[i]);
   }
 
   printf("\nT_spawn_real: ");
-  for(i=0; i< resizes - 1; i++) {
+  for(i=0; i< resizes; i++) {
     printf("%lf ", results.spawn_real_time[i]);
   }
 
   printf("\nT_SR: ");
-  for(i=0; i < resizes - 1; i++) {
+  for(i=0; i < resizes; i++) {
     printf("%lf ", results.sync_time[i]);
   }
 
   printf("\nT_AR: ");
-  for(i=0; i < resizes - 1; i++) {
+  for(i=0; i < resizes; i++) {
     printf("%lf ", results.async_time[i]);
   }
 

@@ -238,7 +238,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
     free(stage->array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = malloc(stage->real_bytes * sizeof(char)); //FIXME Valgrind indica unitialised
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
