@@ -95,9 +95,9 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
-  if(is_children_group) {
-    if(data_struct_rep->entries != 0) init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
-    if(data_struct_dist->entries != 0) init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
+  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) {
+    init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
+    init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
@@ -182,10 +182,18 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
       //free(data_struct->requests[i]); //TODO Plantear como crearlos
     }
 
-    free(data_struct->qty);
-    free(data_struct->types);
-    free(data_struct->requests);
-    free(data_struct->arrays);
+    if(data_struct->qty != NULL) {
+      free(data_struct->qty);
+    }
+    if(data_struct->types != NULL) {
+      free(data_struct->types);
+    }
+    if(data_struct->requests != NULL) {
+      free(data_struct->requests);
+    }
+    if(data_struct->arrays != NULL) {
+      free(data_struct->arrays);
+    }
   }
 }
 

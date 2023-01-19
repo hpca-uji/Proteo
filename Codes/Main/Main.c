@@ -91,8 +91,9 @@ int main(int argc, char *argv[]) {
       malleability_get_data(&value, 2, 1, 1);
       group->iter_start = *((int *)value);
 
-      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr); //TODO Cambio al añadir nueva redistribucion
+      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
       group->grp = group->grp + 1;
+
     }
 
     //
@@ -449,10 +450,9 @@ void free_application_data() {
   
   free_malleability();
 
-  if(group->grp == 0) { //FIXME Revisar porque cuando es diferente a 0 no funciona
-    free_results_data(results, config_file->n_stages);
-    free(results);
-  }
+  free_results_data(results, config_file->n_stages);
+  //free(results);
+
   free_config(config_file);
   
   free(group);

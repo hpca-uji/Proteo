@@ -48,15 +48,15 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
-  blocklengths[4] = blocklengths[5] = resizes;
+  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
 
-  MPI_Get_address(&(results->sync_start), &displs[0]);
-  MPI_Get_address(&(results->async_start), &displs[1]);
-  MPI_Get_address(&(results->exec_start), &displs[2]);
-  MPI_Get_address(&(results->wasted_time), &displs[3]);
+  MPI_Get_address(&(results->exec_start), &displs[0]);
+  MPI_Get_address(&(results->wasted_time), &displs[1]);
+  MPI_Get_address(results->sync_time, &displs[2]);
+  MPI_Get_address(results->async_time, &displs[3]);
   MPI_Get_address(results->spawn_real_time, &displs[4]);
   MPI_Get_address(results->spawn_time, &displs[5]);
 
@@ -78,14 +78,14 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
  */
 void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr) {
   if(sdr) { // Si no hay datos sincronos, el tiempo es 0
-    results->sync_time[grp]  = results->sync_end - results->sync_start;
+    results->sync_time[grp-1]  = results->sync_end - results->sync_time[grp-1];
   } else {
-    results->sync_time[grp]  = 0;
+    results->sync_time[grp-1]  = 0;
   }
   if(adr) { // Si no hay datos asincronos, el tiempo es 0
-    results->async_time[grp]  = results->async_end - results->async_start;
+    results->async_time[grp-1]  = results->async_end - results->async_time[grp-1];
   } else {
-    results->async_time[grp]  = 0;
+    results->async_time[grp-1]  = 0;
   }
 }
 
@@ -302,15 +302,36 @@ void realloc_results_iters(results_data *results, size_t stages, size_t needed) 
 void free_results_data(results_data *results, size_t stages) {
   size_t i;
   if(results != NULL) {
-    free(results->spawn_time);
-    free(results->spawn_real_time);
-    free(results->sync_time);
-    free(results->async_time);
-
-    free(results->iters_time);
-    for(i=0; i<stages; i++) {
-      free(results->stage_times[i]);
+    if(results->spawn_time != NULL) {
+      free(results->spawn_time);
+      results->spawn_time = NULL;
     }
-    free(results->stage_times);
+    if(results->spawn_real_time != NULL) {
+      free(results->spawn_real_time);
+      results->spawn_real_time = NULL;
+    }
+    if(results->sync_time != NULL) {
+      free(results->sync_time);
+      results->sync_time = NULL;
+    }
+    if(results->async_time != NULL) {
+      free(results->async_time);
+      results->async_time = NULL;
+    }
+
+    if(results->iters_time != NULL) {
+      free(results->iters_time);
+      results->iters_time = NULL;
+    }
+    for(i=0; i<stages; i++) {
+      if(results->stage_times[i] != NULL) {
+        free(results->stage_times[i]);
+        results->stage_times[i] = NULL;
+      }
+    }
+    if(results->stage_times != NULL) {
+      free(results->stage_times);
+      results->stage_times = NULL;
+    }
   }
 }
