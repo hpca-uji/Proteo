@@ -326,7 +326,7 @@ void def_struct_groups(configuration *config_file) {
     // Tipo derivado para enviar N elementos de la estructura
     MPI_Type_create_resized(aux, 0, sizeof(group_config_t), &(config_file->group_type));
     MPI_Type_commit(&(config_file->group_type));
-   // MPI_Type_free(&aux);
+   // MPI_Type_free(&aux); //FIXME It should be freed
   }
 }
 
@@ -364,6 +364,6 @@ void def_struct_iter_stage(configuration *config_file) {
     // Tipo derivado para enviar N elementos de la estructura
     MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), &(config_file->iter_stage_type)); 
     MPI_Type_commit(&(config_file->iter_stage_type));
-  //  MPI_Type_free(&aux);
+  //  MPI_Type_free(&aux); //FIXME It should be freed
   }
 }
