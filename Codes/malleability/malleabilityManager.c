@@ -142,8 +142,8 @@ void free_malleability() {
   free_malleability_data_struct(dist_a_data);
 
   free(rep_s_data);
-  free(rep_a_data); // FIXME corrupted size if n_stage>1
-  free(dist_s_data); // FIXME corrupted size if n_stage>1
+  free(rep_a_data);
+  free(dist_s_data);
   free(dist_a_data); // FIXME corrupted size if n_stage>1
 
   if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));

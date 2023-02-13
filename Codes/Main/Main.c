@@ -91,9 +91,7 @@ int main(int argc, char *argv[]) {
       malleability_get_data(&value, 2, 1, 1);
       group->iter_start = *((int *)value);
 
-      set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
       group->grp = group->grp + 1;
-
     }
 
     //
@@ -108,7 +106,8 @@ int main(int argc, char *argv[]) {
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
       if(group->grp != 0) {
-        obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+        obtain_op_times(1); //Obtener los nuevos valores de tiempo para el computo
+        set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
@@ -145,7 +144,7 @@ int main(int argc, char *argv[]) {
     if(group->myId == ROOT && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE) {
       MPI_Abort(MPI_COMM_WORLD, -100);
     }
-    free_application_data(); //FIXME Error al liberar memoria de SDR/ADR
+    free_application_data();
 
     MPI_Finalize();
     return 0;
@@ -451,7 +450,7 @@ void free_application_data() {
   free_malleability();
 
   free_results_data(results, config_file->n_stages);
-  //free(results);
+  free(results);
 
   free_config(config_file);
   

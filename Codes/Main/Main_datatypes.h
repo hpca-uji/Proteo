@@ -59,6 +59,7 @@ typedef struct
     int rigid_times;
     int granularity, sdr, adr;
 
+    MPI_Datatype config_type, group_type, iter_stage_type;
     iter_stage_t *stages;
     group_config_t *groups;
 } configuration;
