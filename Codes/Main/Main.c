@@ -190,7 +190,7 @@ int work() {
   }
 
   
-  if(config_file->n_groups - 1 == group->grp) res=1;
+  if(config_file->n_groups == group->grp + 1) res=1;
   if(state == MALL_ZOMBIE) res=state;
   return res;
 }
@@ -351,7 +351,7 @@ int print_final_results() {
 
   if(group->myId == ROOT) {
 
-    if(group->grp+1 == config_file->n_groups) {
+    if(config_file->n_groups == group->grp+1) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
       if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
