@@ -10,9 +10,9 @@
 void malloc_config_resizes(configuration *user_config);
 void malloc_config_stages(configuration *user_config);
 
-void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type);
-void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *config_type);
-void def_struct_iter_stage(iter_stage_t *stages, size_t n_stages, MPI_Datatype *config_type);
+void def_struct_config_file(configuration *config_file);
+void def_struct_groups(configuration *config_file);
+void def_struct_iter_stage(configuration *config_file);
 
 /*
  * Inicializa una estructura de configuracion
@@ -35,7 +35,8 @@ void init_config(char *file_name, configuration **user_config) {
     configuration *config = NULL;
 
     config = malloc(sizeof(configuration));
-    config->n_resizes=1;
+    config->n_resizes=0;
+    config->n_groups=1;
     malloc_config_resizes(config);
     config->n_stages=1;
     malloc_config_stages(config);
@@ -46,6 +47,7 @@ void init_config(char *file_name, configuration **user_config) {
     }
     *user_config=config;
   }
+  def_struct_config_file(*user_config);
 }
 
 /*
@@ -62,8 +64,8 @@ void init_config(char *file_name, configuration **user_config) {
 void malloc_config_resizes(configuration *user_config) {
   size_t i;
   if(user_config != NULL) {
-    user_config->groups = malloc(sizeof(group_config_t) * user_config->n_resizes);
-    for(i=0; i<user_config->n_resizes; i++) {
+    user_config->groups = malloc(sizeof(group_config_t) * user_config->n_groups);
+    for(i=0; i<user_config->n_groups; i++) {
       user_config->groups[i].iters = 0;
       user_config->groups[i].procs = 1;
       user_config->groups[i].sm = 0;
@@ -72,6 +74,7 @@ void malloc_config_resizes(configuration *user_config) {
       user_config->groups[i].at = 0;
       user_config->groups[i].factor = 1;
     }
+    def_struct_groups(user_config);
   }
 }
 
@@ -93,9 +96,16 @@ void malloc_config_stages(configuration *user_config) {
       user_config->stages[i].full_array = NULL;
       user_config->stages[i].double_array = NULL;
       user_config->stages[i].counts.counts = NULL;
+      user_config->stages[i].bytes = 0;
+      user_config->stages[i].my_bytes = 0;
       user_config->stages[i].real_bytes = 0;
+      user_config->stages[i].operations = 0;
+      user_config->stages[i].pt = 0;
+      user_config->stages[i].t_op = 0;
+      user_config->stages[i].t_stage = 0;
       user_config->stages[i].t_capped = 0;
     }
+    def_struct_iter_stage(user_config);
   }
 }
 
@@ -106,7 +116,6 @@ void malloc_config_stages(configuration *user_config) {
 void free_config(configuration *user_config) {
     size_t i;
     if(user_config != NULL) {
-      
       for(i=0; i < user_config->n_stages; i++) {
 	
         if(user_config->stages[i].array != NULL) {
@@ -124,8 +133,20 @@ void free_config(configuration *user_config) {
         if(user_config->stages[i].counts.counts != NULL) {
 	  freeCounts(&(user_config->stages[i].counts));
 	}
-	
       }
+      //Liberar tipos derivados
+      if(user_config->config_type != MPI_DATATYPE_NULL) {
+        MPI_Type_free(&(user_config->config_type));
+        user_config->config_type = MPI_DATATYPE_NULL;
+      }
+      if(user_config->group_type != MPI_DATATYPE_NULL) {
+        MPI_Type_free(&(user_config->group_type));
+        user_config->group_type = MPI_DATATYPE_NULL;
+      }
+      if(user_config->iter_stage_type != MPI_DATATYPE_NULL) {
+        MPI_Type_free(&(user_config->iter_stage_type));
+        user_config->iter_stage_type = MPI_DATATYPE_NULL;
+      } 
       
       free(user_config->groups);
       free(user_config->stages);
@@ -147,7 +168,7 @@ void print_config(configuration *user_config) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);
     }
-    for(i=0; i<user_config->n_resizes; i++) {
+    for(i=0; i<user_config->n_groups; i++) {
       printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d\n",
         i, user_config->groups[i].iters, user_config->groups[i].procs, user_config->groups[i].factor, 
 	user_config->groups[i].phy_dist, user_config->groups[i].at, user_config->groups[i].sm,
@@ -169,7 +190,7 @@ void print_config_group(configuration *user_config, size_t grp) {
     if(grp > 0) {
       parents = user_config->groups[grp-1].procs;
     }
-    if(grp < user_config->n_resizes - 1) {
+    if(grp < user_config->n_groups - 1) {
       sons = user_config->groups[grp+1].procs;
     }
 
@@ -202,25 +223,9 @@ void print_config_group(configuration *user_config, size_t grp) {
  * configuracion al otro grupo.
  */
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) {
-  MPI_Datatype config_type, group_type, iter_stage_type;
-
-  // Obtener un tipo derivado para enviar todos los
-  // datos escalares con una sola comunicacion
-  def_struct_config_file(config_file, &config_type);
-
-  // Obtener un tipo derivado para enviar las estructuras de fases de iteracion
-  // con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
-  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
-
-  MPI_Bcast(config_file, 1, config_type, root, intercomm);
-  MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
-  MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
-
-  //Liberar tipos derivados
-  MPI_Type_free(&config_type);
-  MPI_Type_free(&group_type);
-  MPI_Type_free(&iter_stage_type);
+  MPI_Bcast(config_file, 1, config_file->config_type, root, intercomm);
+  MPI_Bcast(config_file->groups, config_file->n_groups, config_file->group_type, root, intercomm);
+  MPI_Bcast(config_file->stages, config_file->n_stages, config_file->iter_stage_type, root, intercomm);
 }
 
 
@@ -237,41 +242,28 @@ void send_config_file(configuration *config_file, int root, MPI_Comm intercomm) 
  * la funcion "free_config".
  */
 void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_out) {
-  MPI_Datatype config_type, group_type, iter_stage_type;
-  configuration *config_file = malloc(sizeof(configuration) * 1);
+  configuration *config_file = malloc(sizeof(configuration));
+  def_struct_config_file(config_file);
 
-  // Obtener un tipo derivado para recibir todos los
-  // datos escalares con una sola comunicacion
-  def_struct_config_file(config_file, &config_type);
-  MPI_Bcast(config_file, 1, config_type, root, intercomm);
+  MPI_Bcast(config_file, 1, config_file->config_type, root, intercomm);
 
   //Inicializado de estructuras internas
-  config_file->groups = malloc(sizeof(group_config_t) * config_file->n_resizes);
-  config_file->stages = malloc(sizeof(iter_stage_t) * config_file->n_stages);
+  config_file->n_resizes = config_file->n_groups-1;
   malloc_config_resizes(config_file); // Inicializar valores de grupos
   malloc_config_stages(config_file); // Inicializar a NULL vectores stage
 
-  // Obtener un tipo derivado para enviar los tres vectores
-  // de enteros con una sola comunicacion
-  def_struct_groups(&(config_file->groups[0]), config_file->n_resizes, &group_type);
-  def_struct_iter_stage(&(config_file->stages[0]), config_file->n_stages, &iter_stage_type);
-  MPI_Bcast(config_file->groups, config_file->n_resizes, group_type, root, intercomm);
-  MPI_Bcast(config_file->stages, config_file->n_stages, iter_stage_type, root, intercomm);
-
-  //Liberar tipos derivados
-  MPI_Type_free(&config_type);
-  MPI_Type_free(&group_type);
-  MPI_Type_free(&iter_stage_type);
+  MPI_Bcast(config_file->groups, config_file->n_groups, config_file->group_type, root, intercomm);
+  MPI_Bcast(config_file->stages, config_file->n_stages, config_file->iter_stage_type, root, intercomm);
 
   *config_file_out = config_file;
 }
 
 
 /*
- * Tipo derivado para enviar 11 elementos especificos
+ * Tipo derivado para enviar 6 elementos especificos
  * de la estructura de configuracion con una sola comunicacion.
  */
-void def_struct_config_file(configuration *config_file, MPI_Datatype *config_type) {
+void def_struct_config_file(configuration *config_file) {
   int i, counts = 6;
   int blocklengths[6] = {1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
@@ -284,7 +276,7 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
 
-  MPI_Get_address(&(config_file->n_resizes), &displs[0]);
+  MPI_Get_address(&(config_file->n_groups), &displs[0]);
   MPI_Get_address(&(config_file->n_stages), &displs[1]);
   MPI_Get_address(&(config_file->granularity), &displs[2]);
   MPI_Get_address(&(config_file->sdr), &displs[3]);
@@ -293,8 +285,8 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
-  MPI_Type_commit(config_type);
+  MPI_Type_create_struct(counts, blocklengths, displs, types, &(config_file->config_type));
+  MPI_Type_commit(&(config_file->config_type));
 }
 
 /*
@@ -302,15 +294,16 @@ void def_struct_config_file(configuration *config_file, MPI_Datatype *config_typ
  * de la estructuras de la configuracion de cada grupo 
  * en una sola comunicacion.
  */
-void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *config_type) {
+void def_struct_groups(configuration *config_file) {
   int i, counts = 7;
   int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype aux, types[counts];
+  group_config_t *groups = config_file->groups;
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
-  types[6] = MPI_DOUBLE;
+  types[6] = MPI_FLOAT;
 
   // Rellenar vector displs
   MPI_Get_address(groups, &dir);
@@ -325,47 +318,52 @@ void def_struct_groups(group_config_t *groups, size_t n_resizes, MPI_Datatype *c
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  if (n_resizes == 1) {
-    MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
+  if (config_file->n_groups == 1) {
+    MPI_Type_create_struct(counts, blocklengths, displs, types, &(config_file->group_type));
+    MPI_Type_commit(&(config_file->group_type));
   } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
     MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
     // Tipo derivado para enviar N elementos de la estructura
-    MPI_Type_create_resized(aux, 0, sizeof(group_config_t), config_type); 
+    MPI_Type_create_resized(aux, 0, sizeof(group_config_t), &(config_file->group_type));
+    MPI_Type_commit(&(config_file->group_type));
+   // MPI_Type_free(&aux); //FIXME It should be freed
   }
-  MPI_Type_commit(config_type);
 }
 
 /*
  * Tipo derivado para enviar elementos especificos
  * de la estructuras de fases de iteracion en una sola comunicacion.
  */
-void def_struct_iter_stage(iter_stage_t *stages, size_t n_stages, MPI_Datatype *config_type) {
+void def_struct_iter_stage(configuration *config_file) {
   int i, counts = 5;
   int blocklengths[5] = {1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype aux, types[counts];
+  iter_stage_t *stages = config_file->stages;
 
   // Rellenar vector types
-  types[0] = types[3] = types[4] = MPI_INT;
-  types[1] = types[2] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = MPI_INT;
+  types[3] = types[4] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(stages, &dir);
 
   MPI_Get_address(&(stages->pt), &displs[0]);
-  MPI_Get_address(&(stages->t_stage), &displs[1]);
-  MPI_Get_address(&(stages->t_op), &displs[2]);
-  MPI_Get_address(&(stages->bytes), &displs[3]);
-  MPI_Get_address(&(stages->t_capped), &displs[4]);
+  MPI_Get_address(&(stages->bytes), &displs[1]);
+  MPI_Get_address(&(stages->t_capped), &displs[2]);
+  MPI_Get_address(&(stages->t_stage), &displs[3]);
+  MPI_Get_address(&(stages->t_op), &displs[4]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
-  if (n_stages == 1) {
-    MPI_Type_create_struct(counts, blocklengths, displs, types, config_type);
+  if (config_file->n_stages == 1) {
+    MPI_Type_create_struct(counts, blocklengths, displs, types, &(config_file->iter_stage_type));
+    MPI_Type_commit(&(config_file->iter_stage_type));
   } else { // Si hay mas de una fase(estructura), el "extent" se modifica.
     MPI_Type_create_struct(counts, blocklengths, displs, types, &aux);
     // Tipo derivado para enviar N elementos de la estructura
-    MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), config_type); 
+    MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), &(config_file->iter_stage_type)); 
+    MPI_Type_commit(&(config_file->iter_stage_type));
+  //  MPI_Type_free(&aux); //FIXME It should be freed
   }
-  MPI_Type_commit(config_type);
 }
