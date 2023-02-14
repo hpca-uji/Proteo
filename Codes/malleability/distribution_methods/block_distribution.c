@@ -16,9 +16,10 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
 void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Counts *counts) {
   int i, *idS;
   struct Dist_data dist_data;
+ 
+  mallocCounts(counts, numP_other);
 
   get_block_dist(n, myId, numP, &dist_data);
-  mallocCounts(counts, numP_other);
   get_util_ids(dist_data, numP_other, &idS);
 
   if(idS[0] == 0) {
@@ -29,6 +30,7 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
     set_interblock_counts(i, numP_other, dist_data, counts->counts);
     counts->displs[i] = counts->displs[i-1] + counts->counts[i-1];
   }
+  free(idS);
 }
 
 /*
@@ -206,12 +208,20 @@ void mallocCounts(struct Counts *counts, size_t numP) {
  * de forma dinamica.
  */
 void freeCounts(struct Counts *counts) {
-    free(counts->counts);
-    free(counts->displs);
-    free(counts->zero_arr);
-    counts->counts = NULL;
-    counts->displs = NULL;
-    counts->zero_arr = NULL;
+    if(counts != NULL) {
+      if(counts->counts != NULL) {
+        free(counts->counts);
+        counts->counts = NULL;
+      }
+      if(counts->displs != NULL) {
+        free(counts->displs);
+        counts->displs = NULL;
+      }
+      if(counts->zero_arr != NULL) {
+        free(counts->zero_arr);
+        counts->zero_arr = NULL;
+      }
+    }
 }
 
 /*

@@ -5,9 +5,6 @@
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
-void send_sync_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts);
-void recv_sync_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts);
-
 void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req);
 void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req);
 
@@ -46,101 +43,65 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
 //================================================================================
 
 /*
- * Realiza un envio síncrono del vector array desde este grupo de procesos al grupo
- * enlazado por el intercomunicador intercomm.
+ * Performs a communication to redistribute an array in a block distribution.
+ * In the redistribution is differenciated parent group from the children and the values each group indicates can be
+ * different.
  *
- * El vector array no se modifica en esta funcion.
+ * - send (IN):  Array with the data to send. This value can not be NULL.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               process receives data and is NULL, the behaviour is undefined.
+ * - qty  (IN):  Sum of elements shared by all processes that will send data.
+ * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
+ * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
+ *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
+ * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
+ *               resize, while for the children is the amount of parents.
+ * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
+ * - comm (IN):  Communicator to use to perform the redistribution.
+ *
+ * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int send_sync(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child) {
-    int *idS = NULL;
-    struct Counts counts;
+int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, MPI_Comm comm) {
+    int is_intercomm;
+    struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
 
-    get_block_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
-    dist_data.intercomm = intercomm;
+    if(is_children_group) {
+      mallocCounts(&s_counts, numO);
+      prepare_comm_alltoall(myId, numP, numO, qty, &r_counts);
+      // Obtener distribución para este hijo
+      get_block_dist(qty, myId, numP, &dist_data);
+      *recv = malloc(dist_data.tamBl * sizeof(char));
+    get_block_dist(qty, myId, numP, &dist_data);
+    print_counts(dist_data, r_counts.counts, r_counts.displs, numO, 1, "Children C");
+    } else {
+      prepare_comm_alltoall(myId, numP, numO, qty, &s_counts);
 
-    // Create arrays which contains info about how many elements will be send to each created process
-    mallocCounts(&counts, numP_child);
+      MPI_Comm_test_inter(comm, &is_intercomm);
+      if(is_intercomm) {
+        mallocCounts(&r_counts, numO);
+      } else {
+	if(myId < numO) {
+          prepare_comm_alltoall(myId, numO, numP, qty, &r_counts);
+          // Obtener distribución para este hijo
+          get_block_dist(qty, myId, numO, &dist_data);
+          *recv = malloc(dist_data.tamBl * sizeof(char));
+	} else {
+          mallocCounts(&r_counts, numP);
+	}	
+        get_block_dist(qty, myId, numP, &dist_data);
+        print_counts(dist_data, r_counts.counts, r_counts.displs, numP, 1, "Children P ");
+        print_counts(dist_data, s_counts.counts, s_counts.displs, numO, 1, "Parents ");
+      }
+    }
 
-    getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
+    /* COMUNICACION DE DATOS */
+    MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
 
-    send_sync_arrays(dist_data, array, numP_child, counts);
-
-    freeCounts(&counts);
-    free(idS);
-
+    freeCounts(&s_counts);
+    freeCounts(&r_counts);
     return 1;
 }
-
-
-/*
- * Realiza una recepcion síncrona del vector array a este grupo de procesos desde el grupo
- * enlazado por el intercomunicador intercomm.
- *
- * El vector array se reserva dentro de la funcion y se devuelve en el mismo argumento.
- * Tiene que ser liberado posteriormente por el usuario.
- */
-void recv_sync(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents) {
-    int *idS = NULL;
-    struct Counts counts;
-    struct Dist_data dist_data;
-
-    // Obtener distribución para este hijo
-    get_block_dist(qty, myId, numP, &dist_data);
-    *array = malloc(dist_data.tamBl * sizeof(char));
-    //(*array)[dist_data.tamBl] = '\0';
-    dist_data.intercomm = intercomm;
-
-    /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
-    mallocCounts(&counts, numP_parents);
-
-    getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
-
-    recv_sync_arrays(dist_data, *array, numP_parents, counts);
-    //printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
-
-    freeCounts(&counts);
-    free(idS);
-}
-
-/*
- * Envia a los hijos un vector que es redistribuido a los procesos
- * hijos. Antes de realizar la comunicacion, cada proceso padre calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- */
-void send_sync_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts) {
-
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
-    /* COMUNICACION DE DATOS */
-    MPI_Alltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm);
-}
-
-/*
- * Recibe de los padres un vector que es redistribuido a los procesos
- * de este grupo. Antes de realizar la comunicacion cada hijo calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- */
-void recv_sync_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts) {
-	
-    char aux;
-
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
-    // Ajustar los valores de recepcion
-    /*
-    if(idI == 0) {
-      set_counts(0, numP_parents, dist_data, counts.counts);
-      idI++;
-    }
-    for(i=idI; i<idE; i++) {
-      set_counts(i, numP_parents, dist_data, counts.counts);
-      counts.displs[i] = counts.displs[i-1] + counts.counts[i-1];
-    }*/
-    //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
-
-    /* COMUNICACION DE DATOS */
-    MPI_Alltoallv(&aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm);
-}
-
 
 //================================================================================
 //================================================================================

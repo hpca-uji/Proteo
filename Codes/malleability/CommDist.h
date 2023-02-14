@@ -16,9 +16,7 @@
 //#define MAL_USE_POINT 2
 //#define MAL_USE_THREAD 3
 
-int send_sync(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child);
-void recv_sync(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents);
-
+int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, MPI_Comm comm);
 
 int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child, MPI_Request **comm_req, int parents_wait);
 void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents, int parents_wait);

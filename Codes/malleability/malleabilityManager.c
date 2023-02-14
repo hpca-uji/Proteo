@@ -304,6 +304,8 @@ void get_malleability_user_comm(MPI_Comm *comm) {
  * Los datos variables se tienen que anyadir cuando quieran ser mandados, no antes
  *
  * Mas informacion en la funcion "add_data".
+ *
+ * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant) {
 
@@ -339,6 +341,7 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
  * Los datos variables se tienen que modificar cuando quieran ser mandados, no antes
  *
  * Mas informacion en la funcion "modify_data".
+ * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_modify_data(void *data, size_t index, size_t total_qty, int type, int is_replicated, int is_constant) {
   if(is_constant) {
@@ -369,6 +372,7 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, int ty
 /*
  * Devuelve el numero de entradas para la estructura de descripcion de 
  * datos elegida.
+ * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_get_entries(size_t *entries, int is_replicated, int is_constant){
   
@@ -393,6 +397,7 @@ void malleability_get_entries(size_t *entries, int is_replicated, int is_constan
  * con la funcion "malleability_add_data()".
  * Es tarea del usuario saber el tipo de esos datos.
  * TODO Refactor a que sea automatico
+ * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_get_data(void **data, int index, int is_replicated, int is_constant) {
   malleability_data_t *data_struct;
@@ -429,17 +434,19 @@ void malleability_get_data(void **data, int index, int is_replicated, int is_con
  */
 void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
   size_t i;
-  char *aux;
+  char *aux_send, *aux_recv;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
-      aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_async(aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
+      aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
+      send_async(aux_send, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
-      aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      send_sync(aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children);
+      aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
+      aux_recv = NULL;
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall->intercomm);
+      if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   }
 }
@@ -451,7 +458,7 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
  */
 void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
   size_t i;
-  char *aux;
+  char *aux, aux_s;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
@@ -462,7 +469,7 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_sync(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents);
+      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall->intercomm);
       data_struct->arrays[i] = (void *) aux;
     }
   }
@@ -486,8 +493,12 @@ void Children_init() {
   int is_intercomm;
 
   malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   // TODO A partir de este punto tener en cuenta si es BASELINE o MERGE
+  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  if(!is_intercomm) { // For intracommunicators, these processes will be added
+    MPI_Comm_rank(mall->intercomm, &(mall->myId));
+    MPI_Comm_size(mall->intercomm, &(mall->numP));
+  }
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
   comm_node_data(root_parents, MALLEABILITY_CHILDREN);
@@ -627,7 +638,7 @@ int start_redistribution() {
  * los hijos han terminado de recibir.
  */
 int check_redistribution() {
-  int completed, all_completed, test_err;
+  int is_intercomm, completed, all_completed, test_err;
   MPI_Request *req_completed;
 //dist_a_data->requests[0][X] //FIXME Numero magico 0 -- Modificar para que sea un for?
 
@@ -657,6 +668,10 @@ int check_redistribution() {
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }
+
+
+  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
 }
 
@@ -673,14 +688,7 @@ int end_redistribution() {
   size_t i;
   int is_intercomm, rootBcast, local_state;
 
-  is_intercomm = 0;
-  if(mall->intercomm != MPI_COMM_NULL) {
-    MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
-  } else { 
-    // Si no tiene comunicador creado, se debe a que se ha pospuesto el Spawn
-    //   y se trata del spawn Merge Shrink
-    mall->intercomm = mall->comm;
-  }
+  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(is_intercomm) {
     rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
   } else {
@@ -691,6 +699,7 @@ int end_redistribution() {
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     mall_conf->results->sync_time[mall_conf->grp] = MPI_Wtime();
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
+    if(!is_intercomm) mall_conf->results->sync_end = MPI_Wtime(); // Merge method only
 
     // TODO Crear funcion especifica y anyadir para Asinc
     // TODO Tener en cuenta el tipo
@@ -725,7 +734,6 @@ int end_redistribution() {
       local_state = MALL_SPAWN_ADAPT_PENDING;
     }
   }
-
 
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
     MPI_Comm_disconnect(&(mall->intercomm));
@@ -840,7 +848,7 @@ int thread_creation() {
  * El estado de la comunicación es devuelto al finalizar la función. 
  */
 int thread_check() {
-  int all_completed = 0;
+  int all_completed = 0, is_intercomm;
 
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
   MPI_Allreduce(&state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
@@ -852,6 +860,8 @@ int thread_check() {
     MPI_Abort(MPI_COMM_WORLD, -1);
     return -2;
   } 
+  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+  if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
 }
 

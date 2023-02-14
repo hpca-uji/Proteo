@@ -66,10 +66,16 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
-
       malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
       malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
       malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
+
+      if(config_file->sdr) {
+        malleability_add_data(group->sync_array, config_file->sdr, MAL_CHAR, 0, 1);
+      }
+      if(config_file->adr) {
+        malleability_add_data(group->async_array, config_file->adr, MAL_CHAR, 0, 0);
+      }
 
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
@@ -90,6 +96,15 @@ int main(int argc, char *argv[]) {
       
       malleability_get_data(&value, 2, 1, 1);
       group->iter_start = *((int *)value);
+
+      if(config_file->sdr) {
+        malleability_get_data(&value, 0, 0, 1);
+        group->sync_array = (char *)value;
+      }
+      if(config_file->adr) {
+        malleability_get_data(&value, 0, 0, 0);
+        group->async_array = (char *)value;
+      }
 
       group->grp = group->grp + 1;
     }
@@ -440,13 +455,17 @@ void obtain_op_times(int compute) {
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
-  if(config_file->sdr) {
+	// FIXME ERROR para grupo 1 en adelante (0 Guay)
+                                        if (group->grp==0){
+  if(config_file->sdr && group->sync_array != NULL) {
     free(group->sync_array);
+    group->sync_array = NULL;
   }
-  if(config_file->adr) {
+  if(config_file->adr && group->async_array != NULL) {
     free(group->async_array);
+    group->async_array = NULL;
   }
-  
+                                        } 
   free_malleability();
 
   free_results_data(results, config_file->n_stages);

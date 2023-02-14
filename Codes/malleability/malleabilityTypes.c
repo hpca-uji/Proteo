@@ -114,7 +114,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
       data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
     }
     for(i=0; i < data_struct_dist->entries; i++) {
-      data_struct_dist->arrays[i] = (void *) malloc(data_struct_dist->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
+      data_struct_dist->arrays[i] = (void *) NULL;
     }
   }
 

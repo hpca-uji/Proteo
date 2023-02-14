@@ -135,7 +135,7 @@ void free_config(configuration *user_config) {
 	}
       }
       //Liberar tipos derivados
-      if(user_config->config_type != MPI_DATATYPE_NULL) {
+      if(user_config->config_type != MPI_DATATYPE_NULL) { //FIXME No se libera
         MPI_Type_free(&(user_config->config_type));
         user_config->config_type = MPI_DATATYPE_NULL;
       }
