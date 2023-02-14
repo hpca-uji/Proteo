@@ -135,18 +135,14 @@ void free_config(configuration *user_config) {
 	}
       }
       //Liberar tipos derivados
-      if(user_config->config_type != MPI_DATATYPE_NULL) { //FIXME No se libera
-        MPI_Type_free(&(user_config->config_type));
-        user_config->config_type = MPI_DATATYPE_NULL;
-      }
-      if(user_config->group_type != MPI_DATATYPE_NULL) {
-        MPI_Type_free(&(user_config->group_type));
-        user_config->group_type = MPI_DATATYPE_NULL;
-      }
-      if(user_config->iter_stage_type != MPI_DATATYPE_NULL) {
-        MPI_Type_free(&(user_config->iter_stage_type));
-        user_config->iter_stage_type = MPI_DATATYPE_NULL;
-      } 
+      MPI_Type_free(&(user_config->config_type));
+      user_config->config_type = MPI_DATATYPE_NULL;
+
+      MPI_Type_free(&(user_config->group_type));
+      user_config->group_type = MPI_DATATYPE_NULL;
+
+      MPI_Type_free(&(user_config->iter_stage_type));
+      user_config->iter_stage_type = MPI_DATATYPE_NULL;
       
       free(user_config->groups);
       free(user_config->stages);
@@ -326,7 +322,7 @@ void def_struct_groups(configuration *config_file) {
     // Tipo derivado para enviar N elementos de la estructura
     MPI_Type_create_resized(aux, 0, sizeof(group_config_t), &(config_file->group_type));
     MPI_Type_commit(&(config_file->group_type));
-   // MPI_Type_free(&aux); //FIXME It should be freed
+    MPI_Type_free(&aux);
   }
 }
 
@@ -364,6 +360,6 @@ void def_struct_iter_stage(configuration *config_file) {
     // Tipo derivado para enviar N elementos de la estructura
     MPI_Type_create_resized(aux, 0, sizeof(iter_stage_t), &(config_file->iter_stage_type)); 
     MPI_Type_commit(&(config_file->iter_stage_type));
-  //  MPI_Type_free(&aux); //FIXME It should be freed
+    MPI_Type_free(&aux);
   }
 }

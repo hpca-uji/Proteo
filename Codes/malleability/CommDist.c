@@ -21,7 +21,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
     struct Dist_data dist_data;
 
     get_block_dist(qty, myId, numP, &dist_data);
-    if( (*array = malloc(dist_data.tamBl * sizeof(char))) == NULL) {
+    if( (*array = calloc(dist_data.tamBl, sizeof(char))) == NULL) {
       printf("Memory Error (Malloc Arrays(%d))\n", dist_data.tamBl); 
       exit(1); 
     }
@@ -72,8 +72,8 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
       // Obtener distribución para este hijo
       get_block_dist(qty, myId, numP, &dist_data);
       *recv = malloc(dist_data.tamBl * sizeof(char));
-    get_block_dist(qty, myId, numP, &dist_data);
-    print_counts(dist_data, r_counts.counts, r_counts.displs, numO, 1, "Children C");
+    //get_block_dist(qty, myId, numP, &dist_data);
+    //print_counts(dist_data, r_counts.counts, r_counts.displs, numO, 1, "Children C");
     } else {
       prepare_comm_alltoall(myId, numP, numO, qty, &s_counts);
 
@@ -89,9 +89,9 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 	} else {
           mallocCounts(&r_counts, numP);
 	}	
-        get_block_dist(qty, myId, numP, &dist_data);
-        print_counts(dist_data, r_counts.counts, r_counts.displs, numP, 1, "Children P ");
-        print_counts(dist_data, s_counts.counts, s_counts.displs, numO, 1, "Parents ");
+        //get_block_dist(qty, myId, numP, &dist_data);
+        //print_counts(dist_data, r_counts.counts, r_counts.displs, numP, 1, "Children P ");
+        //print_counts(dist_data, s_counts.counts, s_counts.displs, numO, 1, "Parents ");
       }
     }
 
