@@ -110,6 +110,8 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
 
   state = MALL_NOT_STARTED;
 
+  zombies_service_init();
+
   // Si son el primer grupo de procesos, obtienen los datos de los padres
   MPI_Comm_get_parent(&(mall->intercomm));
   if(mall->intercomm != MPI_COMM_NULL ) { 
@@ -125,7 +127,6 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
     //TODO Get name of each process and create real nodelist
   }
 
-  zombies_service_init();
   return MALLEABILITY_NOT_CHILDREN;
 }
 
@@ -134,7 +135,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
  * de maleabilidad y asegura que los zombies
  * despierten si los hubiese.
  */
-void free_malleability() {	
+void free_malleability() {	  
   free_malleability_data_struct(rep_s_data);
   free_malleability_data_struct(rep_a_data);
   free_malleability_data_struct(dist_s_data);
@@ -494,8 +495,8 @@ void Children_init() {
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
 
+  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
-    comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
 
     if(mall_conf->comm_type == MAL_USE_NORMAL || mall_conf->comm_type == MAL_USE_IBARRIER || mall_conf->comm_type == MAL_USE_POINT) {
       recv_data(numP_parents, dist_a_data, 1);
@@ -597,9 +598,9 @@ int start_redistribution() {
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
   comm_node_data(rootBcast, MALLEABILITY_NOT_CHILDREN);
 
+  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
-    mall_conf->results->async_start = MPI_Wtime();
-    comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
+    mall_conf->results->async_time[mall_conf->grp] = MPI_Wtime();
     if(mall_conf->comm_type == MAL_USE_THREAD) {
       return thread_creation();
     } else {
@@ -688,6 +689,7 @@ int end_redistribution() {
   
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
+    mall_conf->results->sync_time[mall_conf->grp] = MPI_Wtime();
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc

@@ -54,11 +54,12 @@ typedef struct
 
 typedef struct
 {
-    size_t n_resizes, n_stages;
-    size_t actual_resize, actual_stage;
+    size_t n_groups, n_resizes, n_stages; // n_groups==n_resizes+1
+    size_t actual_group, actual_stage;
     int rigid_times;
     int granularity, sdr, adr;
 
+    MPI_Datatype config_type, group_type, iter_stage_type;
     iter_stage_t *stages;
     group_config_t *groups;
 } configuration;
