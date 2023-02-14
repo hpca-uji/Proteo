@@ -20,12 +20,12 @@ static int handler(void* user, const char* section, const char* name,
     int ret_value=1;
     configuration* pconfig = (configuration*)user;
 
-    if(pconfig->actual_resize >= pconfig->n_resizes && pconfig->actual_stage >= pconfig->n_stages) {
+    if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_stage >= pconfig->n_stages) {
       return 1; // There is no more work to perform
     }
 
     char *resize_name = malloc(10 * sizeof(char));
-    snprintf(resize_name, 10, "resize%zu", pconfig->actual_resize);
+    snprintf(resize_name, 10, "resize%zu", pconfig->actual_group);
 
     char *stage_name = malloc(10 * sizeof(char));
     snprintf(stage_name, 10, "stage%zu", pconfig->actual_stage);
@@ -33,7 +33,8 @@ static int handler(void* user, const char* section, const char* name,
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     #define LAST(iter, total) iter < total
     if (MATCH("general", "Total_Resizes")) {
-        pconfig->n_resizes = strtoul(value, NULL, 10) + 1;
+        pconfig->n_resizes = strtoul(value, NULL, 10);
+        pconfig->n_groups = pconfig->n_resizes+1;
         user_functions->resizes_f(pconfig);
     } else if (MATCH("general", "Total_Stages")) {
         pconfig->n_stages = strtoul(value, NULL, 10);
@@ -59,26 +60,25 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
 
     // Resize stage
-    } else if (MATCH(resize_name, "Iters") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-	//if(pconfig->actual_resize < pconfig->n_resizes)
-        pconfig->groups[pconfig->actual_resize].iters = atoi(value);
-    } else if (MATCH(resize_name, "Procs") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-        pconfig->groups[pconfig->actual_resize].procs = atoi(value);
-    } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-        pconfig->groups[pconfig->actual_resize].factor =(float) atof(value);
-    } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
+    } else if (MATCH(resize_name, "Iters") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].iters = atoi(value);
+    } else if (MATCH(resize_name, "Procs") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].procs = atoi(value);
+    } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].factor =(float) atof(value);
+    } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_group, pconfig->n_groups)) {
 	int aux_value = MALL_DIST_COMPACT;
         if (strcmp(value, "spread") == 0) {
           aux_value = MALL_DIST_SPREAD;
   	}
-        pconfig->groups[pconfig->actual_resize].phy_dist = aux_value;
-    } else if (MATCH(resize_name, "Asynch_Redistribution_Type") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-        pconfig->groups[pconfig->actual_resize].at = atoi(value);
-    } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-        pconfig->groups[pconfig->actual_resize].sm = atoi(value);
-    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_resize, pconfig->n_resizes)) {
-        pconfig->groups[pconfig->actual_resize].ss = atoi(value);
-        pconfig->actual_resize = pconfig->actual_resize+1; // Ultimo elemento del grupo
+        pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
+    } else if (MATCH(resize_name, "Asynch_Redistribution_Type") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].at = atoi(value);
+    } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].sm = atoi(value);
+    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].ss = atoi(value);
+        pconfig->actual_group = pconfig->actual_group+1; // Ultimo elemento de la estructura
 
     // Unkown case
     } else {
@@ -105,9 +105,10 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
-    config->n_resizes = 1;
+    config->n_resizes = 0;
+    config->n_groups = 1;
     config->n_stages = 1;
-    config->actual_resize=0;
+    config->actual_group=0;
     config->actual_stage=0;
 
     user_functions = &init_functions;
