@@ -5,6 +5,8 @@
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
+
 void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req);
 void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req);
 
@@ -64,43 +66,17 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
 int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, MPI_Comm comm) {
     int is_intercomm;
     struct Counts s_counts, r_counts;
-    struct Dist_data dist_data;
 
-    if(is_children_group) {
-      mallocCounts(&s_counts, numO);
-      prepare_comm_alltoall(myId, numP, numO, qty, &r_counts);
-      // Obtener distribución para este hijo
-      get_block_dist(qty, myId, numP, &dist_data);
-      *recv = malloc(dist_data.tamBl * sizeof(char));
-    //get_block_dist(qty, myId, numP, &dist_data);
-    //print_counts(dist_data, r_counts.counts, r_counts.displs, numO, 1, "Children C");
-    } else {
-      prepare_comm_alltoall(myId, numP, numO, qty, &s_counts);
+    /* PREPARE COMMUNICATION */
+    MPI_Comm_test_inter(comm, &is_intercomm);
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
 
-      MPI_Comm_test_inter(comm, &is_intercomm);
-      if(is_intercomm) {
-        mallocCounts(&r_counts, numO);
-      } else {
-	if(myId < numO) {
-          prepare_comm_alltoall(myId, numO, numP, qty, &r_counts);
-          // Obtener distribución para este hijo
-          get_block_dist(qty, myId, numO, &dist_data);
-          *recv = malloc(dist_data.tamBl * sizeof(char));
-	} else {
-          mallocCounts(&r_counts, numP);
-	}	
-        //get_block_dist(qty, myId, numP, &dist_data);
-        //print_counts(dist_data, r_counts.counts, r_counts.displs, numP, 1, "Children P ");
-        //print_counts(dist_data, s_counts.counts, s_counts.displs, numO, 1, "Parents ");
-      }
-    }
-
-    /* COMUNICACION DE DATOS */
+    /* PERFORM COMMUNICATION */
     MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
 
     freeCounts(&s_counts);
     freeCounts(&r_counts);
-    return 1;
+    return 1; //FIXME In this case is always true...
 }
 
 //================================================================================
@@ -300,6 +276,59 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_p
  * ========================================================================================
  * ========================================================================================
 */
+
+/*
+ * Performs a communication to redistribute an array in a block distribution. For each process calculates
+ * how many elements sends/receives to other processes for the new group.
+ *
+ * - qty  (IN):  Sum of elements shared by all processes that will send data.
+ * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
+ * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
+ *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
+ * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
+ *               resize, while for the children is the amount of parents.
+ * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
+ * - is_intercomm (IN): Indicates wether the used communicator is a intercomunicator(TRUE) or intracommunicator(FALSE).
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               process receives data and is NULL, the behaviour is undefined.
+ * - s_counts (OUT): Struct where is indicated how many elements sends this process to processes in the new group.
+ * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
+ *
+ * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
+ */
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
+  struct Dist_data dist_data;
+
+  if(is_children_group) {
+    mallocCounts(s_counts, numO);
+    prepare_comm_alltoall(myId, numP, numO, qty, r_counts);
+    // Obtener distribución para este hijo
+    get_block_dist(qty, myId, numP, &dist_data);
+    *recv = malloc(dist_data.tamBl * sizeof(char));
+//get_block_dist(qty, myId, numP, &dist_data);
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 1, "Children C");
+  } else {
+//get_block_dist(qty, myId, numP, &dist_data);
+    prepare_comm_alltoall(myId, numP, numO, qty, s_counts);
+
+    if(is_intercomm) {
+      mallocCounts(r_counts, numO);
+    } else {
+      if(myId < numO) {
+        prepare_comm_alltoall(myId, numO, numP, qty, r_counts);
+        // Obtener distribución para este hijo
+        get_block_dist(qty, myId, numO, &dist_data);
+        *recv = malloc(dist_data.tamBl * sizeof(char));
+      } else {
+        mallocCounts(r_counts, numP);
+      }	
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 1, "Children P ");
+    }
+//print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ");
+  }
+}
+
+
 
 /*
  * Obtiene para un proceso de un grupo a que rango procesos de 

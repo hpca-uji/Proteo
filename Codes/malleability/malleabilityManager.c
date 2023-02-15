@@ -35,10 +35,8 @@ typedef struct {
   int spawn_method;
   int spawn_dist;
   int spawn_strategies;
-  //int spawn_is_single;
-  //int spawn_threaded;
   int comm_type;
-  int comm_threaded;
+  int comm_threaded; //TODO Modificar uso para que tenga sentido comm_threaded -- Con comm_type se elige función MPI, con esto si es hilo o no
 
   int grp;
   configuration *config_file;
@@ -213,7 +211,7 @@ int malleability_checkpoint() {
       } else {
         state = check_redistribution();
       }
-      if(state != MALL_DIST_PENDING) {
+      if(state != MALL_DIST_PENDING) { 
         malleability_checkpoint();
       }
       break;
@@ -439,7 +437,9 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
+      aux_recv = NULL;
       send_async(aux_send, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
+      if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
@@ -493,7 +493,6 @@ void Children_init() {
   int is_intercomm;
 
   malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
-  // TODO A partir de este punto tener en cuenta si es BASELINE o MERGE
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(!is_intercomm) { // For intracommunicators, these processes will be added
     MPI_Comm_rank(mall->intercomm, &(mall->myId));
@@ -502,6 +501,7 @@ void Children_init() {
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
   comm_node_data(root_parents, MALLEABILITY_CHILDREN);
+  MPI_Bcast(&(mall_conf->comm_type), 1, MPI_INT, root_parents, mall->intercomm);
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
@@ -510,17 +510,17 @@ void Children_init() {
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
 
     if(mall_conf->comm_type == MAL_USE_NORMAL || mall_conf->comm_type == MAL_USE_IBARRIER || mall_conf->comm_type == MAL_USE_POINT) {
-      recv_data(numP_parents, dist_a_data, 1);
+      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
 
     } else if (mall_conf->comm_type == MAL_USE_THREAD) { //TODO Modificar uso para que tenga sentido comm_threaded
-      recv_data(numP_parents, dist_a_data, 0);
+      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
     }
     mall_conf->results->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
   
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
-    recv_data(numP_parents, dist_s_data, 0);
+    recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     mall_conf->results->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
 
@@ -608,6 +608,7 @@ int start_redistribution() {
 
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
   comm_node_data(rootBcast, MALLEABILITY_NOT_CHILDREN);
+  MPI_Bcast(&(mall_conf->comm_type), 1, MPI_INT, rootBcast, mall->intercomm);
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
@@ -829,16 +830,18 @@ void def_nodeinfo_type(MPI_Datatype *node_type) {
 //======================================================||
 //======================================================||
 
+int comm_state; //FIXME Usar un handler
 /*
  * Crea una hebra para ejecutar una comunicación en segundo plano.
  */
 int thread_creation() {
+  comm_state = MALL_DIST_PENDING;
   if(pthread_create(&(mall->async_thread), NULL, thread_async_work, NULL)) {
     printf("Error al crear el hilo\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
     return -1;
   }
-  return MALL_DIST_PENDING;
+  return comm_state;
 }
 
 /*
@@ -851,7 +854,7 @@ int thread_check() {
   int all_completed = 0, is_intercomm;
 
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
-  MPI_Allreduce(&state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
+  MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
   if(all_completed != MALL_DIST_COMPLETED) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
   //FIXME No se tiene en cuenta el estado MALL_APP_ENDED
 
@@ -876,7 +879,7 @@ int thread_check() {
  */
 void* thread_async_work() {
   send_data(mall->numC, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
-  state = MALL_DIST_COMPLETED;
+  comm_state = MALL_DIST_COMPLETED;
   pthread_exit(NULL);
 }
 
