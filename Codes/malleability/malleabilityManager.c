@@ -445,7 +445,7 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall->intercomm);
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->comm_type, mall->intercomm);
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   }
@@ -469,7 +469,7 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall->intercomm);
+      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->comm_type, mall->intercomm);
       data_struct->arrays[i] = (void *) aux;
     }
   }

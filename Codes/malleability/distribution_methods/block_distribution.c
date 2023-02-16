@@ -15,12 +15,17 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
  */
 void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Counts *counts) {
   int i, *idS;
-  struct Dist_data dist_data;
+  struct Dist_data dist_data, dist_target;
  
   mallocCounts(counts, numP_other);
 
   get_block_dist(n, myId, numP, &dist_data);
   get_util_ids(dist_data, numP_other, &idS);
+
+  counts->idI = idS[0];
+  counts->idE = idS[0];
+  get_block_dist(n, idS[0], numP_other, &dist_target); // RMA Specific operation
+  counts->first_target_displs = dist_data.ini - dist_target.ini; // RMA Specific operation
 
   if(idS[0] == 0) {
     set_interblock_counts(0, numP_other, dist_data, counts->counts);
@@ -196,8 +201,13 @@ void mallocCounts(struct Counts *counts, size_t numP) {
     counts->displs = calloc(numP, sizeof(int));
     if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
-    counts->zero_arr = calloc(numP, sizeof(int));
-    if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
+    counts->zero_arr = calloc(numP, sizeof(int)); // TODO Deprecate
+    if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);} // TODO Deprecate
+
+    counts->len = numP;
+    counts->idI = -1;
+    counts->idE = -1;
+    counts->first_target_displs = -1;
 }
 
 

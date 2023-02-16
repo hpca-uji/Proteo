@@ -18,6 +18,8 @@ struct Dist_data {
 };
 
 struct Counts {
+  int len, idI, idE;
+  int first_target_displs; // RMA. Indicates displacement for first target when performing a Get.
   int *counts;
   int *displs;
   int *zero_arr;

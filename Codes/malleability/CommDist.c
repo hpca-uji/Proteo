@@ -7,6 +7,10 @@
 
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 
+void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int comm_type);
+void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win);
+void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win);
+//////////////////////////
 void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req);
 void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req);
 
@@ -49,9 +53,9 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  * In the redistribution is differenciated parent group from the children and the values each group indicates can be
  * different.
  *
- * - send (IN):  Array with the data to send. This value can not be NULL.
+ * - send (IN):  Array with the data to send. This data can not be null for parents.
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
- *               process receives data and is NULL, the behaviour is undefined.
+ *               If the process receives data and is NULL, the behaviour is undefined.
  * - qty  (IN):  Sum of elements shared by all processes that will send data.
  * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
@@ -63,20 +67,136 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, MPI_Comm comm) {
-    int is_intercomm;
+int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int comm_type, MPI_Comm comm) {
+    int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
+    struct Dist_data dist_data;
+    MPI_Comm aux_comm = MPI_COMM_NULL;
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
     prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    printf("P%d/%d Comm type=%d RMA_LOCK=%d RMA_All=%d\n", myId, numP, comm_type, MALL_RED_RMA_LOCK, MALL_RED_RMA_LOCKALL);
 
     /* PERFORM COMMUNICATION */
-    MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
+    switch(comm_type) {
 
+      case MALL_RED_RMA_LOCKALL:
+      case MALL_RED_RMA_LOCK:
+        if(is_children_group) {
+          get_block_dist(qty, myId, numP, &dist_data);
+	} else {
+          get_block_dist(qty, myId, numO, &dist_data);
+	}
+        if(is_intercomm) {
+          MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
+	  aux_comm_used = 1;
+	} else { aux_comm = comm; }
+        sync_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, comm_type);
+	break;
+
+      case MALL_RED_POINT:
+	//TODO
+      case MALL_RED_BASELINE:
+      default:
+        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
+	break;
+    }
+
+    if(aux_comm_used) {
+      MPI_Comm_free(&aux_comm);
+    } 
     freeCounts(&s_counts);
     freeCounts(&r_counts);
     return 1; //FIXME In this case is always true...
+}
+
+
+/*
+ * Performs synchronous MPI-RMA operations to redistribute an array in a block distribution. Is should be called after calculating
+ * how data should be redistributed
+ *
+ * - send (IN):  Array with the data to send. This value can not be NULL for parents.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               If the process receives data and is NULL, the behaviour is undefined.
+ * - r_counts (IN): Structure which describes how many elements will receive this process from each parent and the
+ *               displacements.
+ * - tamBl (IN): How many elements are stored in the parameter "send".
+ * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
+ * - comm_type (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
+ *
+ */
+void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int comm_type) {
+  int aux_array_used;
+  MPI_Win win;
+
+  aux_array_used = 0;
+  if(send == NULL) {
+    tamBl = 1;
+    send = malloc(tamBl*sizeof(char));
+    aux_array_used = 1;
+  }
+  MPI_Win_create(send, (MPI_Aint)tamBl, sizeof(char), MPI_INFO_NULL, comm, &win);
+
+  switch(comm_type) {
+    case MALL_RED_RMA_LOCKALL:
+      sync_rma_lockall(recv, r_counts, win);
+      break;
+    case MALL_RED_RMA_LOCK:
+      sync_rma_lock(recv, r_counts, win);
+      break;
+  }
+
+  MPI_Win_free(&win);
+  if(aux_array_used) { 
+    free(send);
+    send = NULL;
+  }
+}
+
+
+
+/*
+ * Performs a passive MPI-RMA data redistribution for a single array using the passive epochs Lock/Unlock.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               If the process receives data and is NULL, the behaviour is undefined.
+ * - r_counts (IN): Structure which describes how many elements will receive this process from each parent and the
+ *               displacements.
+ * - win (IN):   Window to use to perform the redistribution.
+ *
+ */
+void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win) {
+  int i, target_displs;
+
+  target_displs = r_counts.first_target_displs;
+  for(i=r_counts.idI; i<r_counts.idE; i++) {
+    MPI_Win_lock(MPI_LOCK_SHARED, i, MPI_MODE_NOCHECK, win);
+    MPI_Get(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win);
+    MPI_Win_unlock(i, win);
+    target_displs=0;
+  }
+}
+
+
+/*
+ * Performs a passive MPI-RMA data redistribution for a single array using the passive epochs Lockall/Unlockall.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               If the process receives data and is NULL, the behaviour is undefined.
+ * - r_counts (IN): Structure which describes how many elements will receive this process from each parent and the
+ *               displacements.
+ * - win (IN):   Window to use to perform the redistribution.
+ *
+ */
+void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win) {
+  int i, target_displs;
+
+  target_displs = r_counts.first_target_displs;
+  MPI_Win_lock_all(MPI_MODE_NOCHECK, win);
+  for(i=r_counts.idI; i<r_counts.idE; i++) {
+    MPI_Get(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win);
+    target_displs=0;
+  }
+  MPI_Win_unlock_all(win);
 }
 
 //================================================================================
@@ -305,10 +425,10 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * sizeof(char));
-//get_block_dist(qty, myId, numP, &dist_data);
-//print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 1, "Children C");
+get_block_dist(qty, myId, numP, &dist_data);
+print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 1, "Children C");
   } else {
-//get_block_dist(qty, myId, numP, &dist_data);
+get_block_dist(qty, myId, numP, &dist_data);
     prepare_comm_alltoall(myId, numP, numO, qty, s_counts);
 
     if(is_intercomm) {
@@ -322,9 +442,9 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
       } else {
         mallocCounts(r_counts, numP);
       }	
-//print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 1, "Children P ");
+print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 1, "Children P ");
     }
-//print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ");
+print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ");
   }
 }
 
