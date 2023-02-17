@@ -71,7 +71,8 @@ void malloc_config_resizes(configuration *user_config) {
       user_config->groups[i].sm = 0;
       user_config->groups[i].ss = 1;
       user_config->groups[i].phy_dist = 0;
-      user_config->groups[i].at = 0;
+      user_config->groups[i].rm = 0;
+      user_config->groups[i].rs = 1;
       user_config->groups[i].factor = 1;
     }
     def_struct_groups(user_config);
@@ -165,10 +166,10 @@ void print_config(configuration *user_config) {
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);
     }
     for(i=0; i<user_config->n_groups; i++) {
-      printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d\n",
+      printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, RM=%d, RS=%d, SM=%d, SS=%d\n",
         i, user_config->groups[i].iters, user_config->groups[i].procs, user_config->groups[i].factor, 
-	user_config->groups[i].phy_dist, user_config->groups[i].at, user_config->groups[i].sm,
-	user_config->groups[i].ss);
+	user_config->groups[i].phy_dist, user_config->groups[i].rm, user_config->groups[i].rs,
+	user_config->groups[i].sm, user_config->groups[i].ss);
     }
   }
 }
@@ -196,10 +197,10 @@ void print_config_group(configuration *user_config, size_t grp) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);
     }
-    printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, AT=%d, SM=%d, SS=%d, parents=%d, children=%d\n",
+    printf("Group %zu: Iters=%d, Procs=%d, Factors=%f, Dist=%d, RM=%d, RS=%d, SM=%d, SS=%d, parents=%d, children=%d\n",
       grp, user_config->groups[grp].iters, user_config->groups[grp].procs, user_config->groups[grp].factor,
-      user_config->groups[grp].phy_dist, user_config->groups[grp].at, user_config->groups[grp].sm,
-      user_config->groups[grp].ss, parents, sons);
+      user_config->groups[grp].phy_dist, user_config->groups[grp].rm, user_config->groups[grp].rs,
+      user_config->groups[grp].sm, user_config->groups[grp].ss, parents, sons);
   }
 }
 
@@ -291,15 +292,15 @@ void def_struct_config_file(configuration *config_file) {
  * en una sola comunicacion.
  */
 void def_struct_groups(configuration *config_file) {
-  int i, counts = 7;
-  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 8;
+  int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype aux, types[counts];
   group_config_t *groups = config_file->groups;
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
-  types[6] = MPI_FLOAT;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_INT;
+  types[7] = MPI_FLOAT;
 
   // Rellenar vector displs
   MPI_Get_address(groups, &dir);
@@ -309,8 +310,9 @@ void def_struct_groups(configuration *config_file) {
   MPI_Get_address(&(groups->sm), &displs[2]);
   MPI_Get_address(&(groups->ss), &displs[3]);
   MPI_Get_address(&(groups->phy_dist), &displs[4]);
-  MPI_Get_address(&(groups->at), &displs[5]);
-  MPI_Get_address(&(groups->factor), &displs[6]);
+  MPI_Get_address(&(groups->rm), &displs[5]);
+  MPI_Get_address(&(groups->rs), &displs[6]);
+  MPI_Get_address(&(groups->factor), &displs[7]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 

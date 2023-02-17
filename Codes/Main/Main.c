@@ -66,6 +66,9 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
+      set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
+	config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
+
       malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
       malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
       malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
@@ -127,7 +130,7 @@ int main(int argc, char *argv[]) {
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
         set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].at, -1);
+			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
         set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {

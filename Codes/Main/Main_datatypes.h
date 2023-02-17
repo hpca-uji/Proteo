@@ -48,7 +48,7 @@ typedef struct
 typedef struct
 {
   int iters, procs;
-  int sm, ss, phy_dist, at;
+  int sm, ss, phy_dist, rm, rs;
   float factor;
 } group_config_t;
 
