@@ -7,17 +7,16 @@
 
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 
-void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int comm_type);
+void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
 void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win);
 void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win);
 //////////////////////////
-void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req);
-void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req);
+void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req);
+void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req);
 
-void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req);
-void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req);
+void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req);
+void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req);
 
-void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS);
 /*
  * Reserva memoria para un vector de hasta "qty" elementos.
  * Los "qty" elementos se disitribuyen entre los "numP" procesos
@@ -67,7 +66,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int comm_type, MPI_Comm comm) {
+int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int red_method, MPI_Comm comm) {
     int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
@@ -76,10 +75,9 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
     prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
-    printf("P%d/%d Comm type=%d RMA_LOCK=%d RMA_All=%d\n", myId, numP, comm_type, MALL_RED_RMA_LOCK, MALL_RED_RMA_LOCKALL);
 
     /* PERFORM COMMUNICATION */
-    switch(comm_type) {
+    switch(red_method) {
 
       case MALL_RED_RMA_LOCKALL:
       case MALL_RED_RMA_LOCK:
@@ -92,7 +90,7 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
           MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
 	  aux_comm_used = 1;
 	} else { aux_comm = comm; }
-        sync_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, comm_type);
+        sync_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, red_method);
 	break;
 
       case MALL_RED_POINT:
@@ -123,10 +121,10 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
  *               displacements.
  * - tamBl (IN): How many elements are stored in the parameter "send".
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
- * - comm_type (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
+ * - red_method (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
  *
  */
-void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int comm_type) {
+void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method) {
   int aux_array_used;
   MPI_Win win;
 
@@ -138,7 +136,7 @@ void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Com
   }
   MPI_Win_create(send, (MPI_Aint)tamBl, sizeof(char), MPI_INFO_NULL, comm, &win);
 
-  switch(comm_type) {
+  switch(red_method) {
     case MALL_RED_RMA_LOCKALL:
       sync_rma_lockall(recv, r_counts, win);
       break;
@@ -214,43 +212,40 @@ void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win) {
  *
  * El vector array no se modifica en esta funcion.
  */
-int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child, MPI_Request **comm_req, int parents_wait) {
-    int i;
-    int *idS = NULL;
-    struct Counts counts;
+int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child, MPI_Request **comm_req, int red_method, int red_strategies) {
+    int i, is_intercomm;
+    struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
 
     get_block_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
     dist_data.intercomm = intercomm;
 
-    // Create arrays which contains info about how many elements will be send to each created process
-    mallocCounts(&counts, numP_child);
-
-    getIds_intercomm(dist_data, numP_child, &idS); // Obtener rango de Id hijos a los que este proceso manda datos
+    /* PREPARE COMMUNICATION */
+    MPI_Comm_test_inter(intercomm, &is_intercomm);
+    prepare_redistribution(qty, myId, numP, numP_child, MALLEABILITY_NOT_CHILDREN, is_intercomm, NULL, &s_counts, &r_counts);
 
     // MAL_USE_THREAD sigue el camino sincrono
-    if(parents_wait == MAL_USE_NORMAL) {
+    if(red_method == MALL_RED_BASELINE) {
       //*comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
       *comm_req[0] = MPI_REQUEST_NULL;
-      send_async_arrays(dist_data, array, numP_child, counts, &(*comm_req[0])); 
+      send_async_arrays(dist_data, array, numP_child, &s_counts, &(*comm_req[0])); 
 
-    } else if (parents_wait == MAL_USE_IBARRIER){
+    } else if (red_method == MALL_RED_IBARRIER){ //FIXME No es un metodo
       //*comm_req = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
       *comm_req[0] = MPI_REQUEST_NULL;
       *comm_req[1] = MPI_REQUEST_NULL;
-      send_async_arrays(dist_data, array, numP_child, counts, &((*comm_req)[1])); 
+      send_async_arrays(dist_data, array, numP_child, &s_counts, &((*comm_req)[1])); 
       MPI_Ibarrier(intercomm, &((*comm_req)[0]) );
-    } else if (parents_wait == MAL_USE_POINT){
+    } else if (red_method == MALL_RED_POINT){
       //*comm_req = (MPI_Request *) malloc(numP_child * sizeof(MPI_Request));
       for(i=0; i<numP_child; i++){
         (*comm_req)[i] = MPI_REQUEST_NULL;
       }
-      send_async_point_arrays(dist_data, array, numP_child, counts, *comm_req); 
-    } else if (parents_wait == MAL_USE_THREAD) { //TODO 
+      send_async_point_arrays(dist_data, array, numP_child, &s_counts, *comm_req); 
     }
 
-    freeCounts(&counts);
-    free(idS);
+    freeCounts(&s_counts);
+    freeCounts(&r_counts);
 
     return 1;
 }
@@ -265,8 +260,7 @@ int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int
  * El argumento "parents_wait" sirve para indicar si se usará la versión en la los padres 
  * espera a que terminen de enviar, o en la que esperan a que los hijos acaben de recibir.
  */
-void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents, int parents_wait) {
-    int *idS = NULL;
+void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents, int red_method, int red_strategies) {
     int wait_err, i;
     struct Counts counts;
     struct Dist_data dist_data;
@@ -278,39 +272,36 @@ void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, i
     dist_data.intercomm = intercomm;
 
     /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
-    mallocCounts(&counts, numP_parents);
+    //mallocCounts(&counts, numP_parents);
 
-    getIds_intercomm(dist_data, numP_parents, &idS); // Obtener el rango de Ids de padres del que este proceso recibira datos
 
     // MAL_USE_THREAD sigue el camino sincrono
-    if(parents_wait == MAL_USE_POINT) {
+    if(red_method == MALL_RED_POINT) {
       comm_req = (MPI_Request *) malloc(numP_parents * sizeof(MPI_Request));
       for(i=0; i<numP_parents; i++){
         comm_req[i] = MPI_REQUEST_NULL;
       }
-      recv_async_point_arrays(dist_data, *array, numP_parents, counts, comm_req);
+      recv_async_point_arrays(dist_data, *array, numP_parents, &counts, comm_req);
       wait_err = MPI_Waitall(numP_parents, comm_req, MPI_STATUSES_IGNORE);
 
-    } else if (parents_wait == MAL_USE_NORMAL || parents_wait == MAL_USE_IBARRIER) {
+    } else if (red_method == MALL_RED_BASELINE || red_method == MALL_RED_IBARRIER) { //FIXME IBarrier no es un método
       comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
       *comm_req = MPI_REQUEST_NULL;
-      recv_async_arrays(dist_data, *array, numP_parents, counts, comm_req);
+      recv_async_arrays(dist_data, *array, numP_parents, &counts, comm_req);
       wait_err = MPI_Wait(comm_req, MPI_STATUS_IGNORE);
-    } else if (parents_wait == MAL_USE_THREAD) { //TODO
     }
 
     if(wait_err != MPI_SUCCESS) {
       MPI_Abort(MPI_COMM_WORLD, wait_err);
     }
 
-    if(parents_wait == MAL_USE_IBARRIER) { //MAL USE IBARRIER END
+    if(red_method == MALL_RED_IBARRIER) { //MAL USE IBARRIER END //FIXME IBarrier no es un método
       MPI_Ibarrier(intercomm, &aux);
       MPI_Wait(&aux, MPI_STATUS_IGNORE); //Es necesario comprobar que la comunicación ha terminado para desconectar los grupos de procesos
     }
 
     //printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
     freeCounts(&counts);
-    free(idS);
     free(comm_req);
 }
 
@@ -321,12 +312,11 @@ void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, i
  *
  * El envio se realiza a partir de una comunicación colectiva.
  */
-void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req) {
+void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req) {
 
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
-
+    //prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, counts);
     /* COMUNICACION DE DATOS */
-    MPI_Ialltoallv(array, counts.counts, counts.displs, MPI_CHAR, NULL, counts.zero_arr, counts.zero_arr, MPI_CHAR, dist_data.intercomm, comm_req);
+    MPI_Ialltoallv(array, counts->counts, counts->displs, MPI_CHAR, NULL, counts->zero_arr, counts->zero_arr, MPI_CHAR, dist_data.intercomm, comm_req);
 }
 
 /*
@@ -336,14 +326,14 @@ void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, 
  *
  * El envio se realiza a partir de varias comunicaciones punto a punto.
  */
-void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts counts, MPI_Request *comm_req) {
+void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req) {
     int i;
     // PREPARAR ENVIO DEL VECTOR
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, &counts);
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, counts);
 
     for(i=0; i<numP_child; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
-      if(counts.counts[0] != 0) {
-        MPI_Isend(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
+      if(counts->counts[0] != 0) {
+        MPI_Isend(array+counts->displs[i], counts->counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
       }
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
@@ -356,15 +346,15 @@ void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_c
  *
  * La recepcion se realiza a partir de una comunicacion colectiva.
  */
-void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req) {
+void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req) {
     char *aux = malloc(1);
 
     // Ajustar los valores de recepcion
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
-    //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, counts);
+    //print_counts(dist_data, counts->counts, counts->displs, numP_parents, 1, "Children");
 
     /* COMUNICACION DE DATOS */
-    MPI_Ialltoallv(aux, counts.zero_arr, counts.zero_arr, MPI_CHAR, array, counts.counts, counts.displs, MPI_CHAR, dist_data.intercomm, comm_req);
+    MPI_Ialltoallv(aux, counts->zero_arr, counts->zero_arr, MPI_CHAR, array, counts->counts, counts->displs, MPI_CHAR, dist_data.intercomm, comm_req);
     free(aux);
 }
 
@@ -375,15 +365,15 @@ void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents
  *
  * La recepcion se realiza a partir de varias comunicaciones punto a punto.
  */
-void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts counts, MPI_Request *comm_req) {
+void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req) {
     int i;
 
     // Ajustar los valores de recepcion
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, &counts);
+    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, counts);
 
     for(i=0; i<numP_parents; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
-      if(counts.counts[0] != 0) {
-        MPI_Irecv(array+counts.displs[i], counts.counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
+      if(counts->counts[0] != 0) {
+        MPI_Irecv(array+counts->displs[i], counts->counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
       }
     }
     //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
@@ -414,7 +404,6 @@ void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_p
  * - s_counts (OUT): Struct where is indicated how many elements sends this process to processes in the new group.
  * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
  *
- * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
   struct Dist_data dist_data;
@@ -449,42 +438,15 @@ print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ")
 }
 
 
-
 /*
- * Obtiene para un proceso de un grupo a que rango procesos de 
- * otro grupo tiene que enviar o recibir datos.
+ * Función para obtener si entre las estrategias elegidas, se utiliza
+ * la estrategia pasada como segundo argumento.
  *
- * Devuelve el primer identificador y el último (Excluido) con el que
- * comunicarse.
+ * Devuelve en "result" 1(Verdadero) si utiliza la estrategia, 0(Falso) en caso
+ * contrario.
  */
-void getIds_intercomm(struct Dist_data dist_data, int numP_other, int **idS) {
-    int idI, idE;
-    int tamOther = dist_data.qty / numP_other;
-    int remOther = dist_data.qty % numP_other;
-    // Indica el punto de corte del grupo de procesos externo que 
-    // divide entre los procesos que tienen 
-    // un tamaño tamOther + 1 y un tamaño tamOther
-    int middle = (tamOther + 1) * remOther;
-
-    // Calcular idI teniendo en cuenta si se comunica con un
-    // proceso con tamano tamOther o tamOther+1
-    if(middle > dist_data.ini) { // First subgroup (tamOther+1)
-      idI = dist_data.ini / (tamOther + 1);
-    } else { // Second subgroup (tamOther)
-      idI = ((dist_data.ini - middle) / tamOther) + remOther;
-    }
-
-    // Calcular idR teniendo en cuenta si se comunica con un
-    // proceso con tamano tamOther o tamOther+1
-    if(middle >= dist_data.fin) { // First subgroup (tamOther +1)
-      idE = dist_data.fin / (tamOther + 1);
-      idE = (dist_data.fin % (tamOther + 1) > 0 && idE+1 <= numP_other) ? idE+1 : idE;
-    } else { // Second subgroup (tamOther)
-      idE = ((dist_data.fin - middle) / tamOther) + remOther;
-      idE = ((dist_data.fin - middle) % tamOther > 0 && idE+1 <= numP_other) ? idE+1 : idE;
-    }
-
-    *idS = malloc(2 * sizeof(int));
-    (*idS)[0] = idI;
-    (*idS)[1] = idE;
+int malleability_red_contains_strat(int comm_strategies, int strategy, int *result) {
+  int value = comm_strategies % strategy ? 0 : 1;
+  if(result != NULL) *result = value;
+  return value;
 }

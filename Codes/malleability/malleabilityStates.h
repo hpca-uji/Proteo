@@ -13,22 +13,19 @@ enum mall_spawn_methods{MALL_SPAWN_BASELINE, MALL_SPAWN_MERGE};
 #define MALL_SPAWN_PTHREAD 2
 #define MALL_SPAWN_SINGLE 3
 
-enum mall_redistribution_methods{MALL_RED_BASELINE, MALL_RED_POINT, MALL_RED_RMA_LOCK, MALL_RED_RMA_LOCKALL};
-#define MAL_RED_IBARRIER 2
-#define MAL_RED_THREAD 3
+enum mall_redistribution_methods{MALL_RED_BASELINE, MALL_RED_POINT, MALL_RED_RMA_LOCK, MALL_RED_RMA_LOCKALL, MALL_RED_IBARRIER};
+//#define MALL_RED_IBARRIER 2 Agregar como estrategia y eliminar como método
+#define MALL_RED_THREAD 3
 
 #define MALLEABILITY_ROOT 0
 
 #define MAL_APP_EXECUTING 0
 #define MAL_APP_ENDED 1
 
-#define MAL_USE_NORMAL 0
-#define MAL_USE_IBARRIER 1
-#define MAL_USE_POINT 2
-#define MAL_USE_THREAD 3
-
+//TODO DEPRECATE
 #define MAL_INT 0
 #define MAL_CHAR 1
+////////////////
 
 #define MALLEABILITY_CHILDREN 1
 #define MALLEABILITY_NOT_CHILDREN 0

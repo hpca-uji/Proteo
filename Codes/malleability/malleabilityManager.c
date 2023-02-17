@@ -35,8 +35,8 @@ typedef struct {
   int spawn_method;
   int spawn_dist;
   int spawn_strategies;
-  int comm_type;
-  int comm_threaded; //TODO Modificar uso para que tenga sentido comm_threaded -- Con comm_type se elige función MPI, con esto si es hilo o no
+  int red_method;
+  int red_strategies;
 
   int grp;
   configuration *config_file;
@@ -206,7 +206,7 @@ int malleability_checkpoint() {
       break;
 
     case MALL_DIST_PENDING:
-      if(mall_conf->comm_type == MAL_USE_THREAD) {
+      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
         state = thread_check();
       } else {
         state = check_redistribution();
@@ -261,12 +261,12 @@ void get_benchmark_results(results_data **results) {
 }
 //-------------------------------------------------------------------------------------------------------------
 
-void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int comm_type, int comm_threaded) {
+void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
   mall_conf->spawn_method = spawn_method;
   mall_conf->spawn_strategies = spawn_strategies;
   mall_conf->spawn_dist = spawn_dist;
-  mall_conf->comm_type = comm_type;
-  mall_conf->comm_threaded = comm_threaded;
+  mall_conf->red_method = red_method;
+  mall_conf->red_strategies = red_strategies;
 }
 
 /*
@@ -306,24 +306,23 @@ void get_malleability_user_comm(MPI_Comm *comm) {
  * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant) {
+  size_t total_reqs = 0;
 
   if(is_constant) {
     if(is_replicated) {
-      add_data(data, total_qty, type, 0, rep_s_data); //FIXME Numero magico
+      add_data(data, total_qty, type, total_reqs, rep_s_data);
     } else {
-      add_data(data, total_qty, type, 0, dist_s_data); //FIXME Numero magico
+      add_data(data, total_qty, type, total_reqs, dist_s_data);
     }
   } else {
     if(is_replicated) {
-      add_data(data, total_qty, type, 0, rep_a_data); //FIXME Numero magico || Un request?
+      add_data(data, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
     } else {
-      size_t total_reqs = 0;
-      
-      if(mall_conf->comm_type  == MAL_USE_NORMAL) {
+      if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->comm_type  == MAL_USE_IBARRIER) {
+      } else if(mall_conf->red_method  == MALL_RED_IBARRIER) { //TODO This is a strategy, not a method
         total_reqs = 2;
-      } else if(mall_conf->comm_type  == MAL_USE_POINT) {
+      } else if(mall_conf->red_method  == MALL_RED_POINT) {
         total_reqs = mall->numC;
       }
       
@@ -342,27 +341,27 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
  * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_modify_data(void *data, size_t index, size_t total_qty, int type, int is_replicated, int is_constant) {
+  size_t total_reqs = 0;
+
   if(is_constant) {
     if(is_replicated) {
-      modify_data(data, index, total_qty, type, 0, rep_s_data); //FIXME Numero magico
+      modify_data(data, index, total_qty, type, total_reqs, rep_s_data);
     } else {
-      modify_data(data, index, total_qty, type, 0, dist_s_data); //FIXME Numero magico
+      modify_data(data, index, total_qty, type, total_reqs, dist_s_data);
     }
   } else {
     if(is_replicated) {
-      modify_data(data, index, total_qty, type, 0, rep_a_data); //FIXME Numero magico || UN request?
-    } else {
-      size_t total_reqs = 0;
-      
-      if(mall_conf->comm_type  == MAL_USE_NORMAL) {
+      modify_data(data, index, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
+    } else {    
+      if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->comm_type  == MAL_USE_IBARRIER) {
+      } else if(mall_conf->red_method  == MALL_RED_IBARRIER) { //TODO This is a strategy, not a method
         total_reqs = 2;
-      } else if(mall_conf->comm_type  == MAL_USE_POINT) {
+      } else if(mall_conf->red_method  == MALL_RED_POINT) {
         total_reqs = mall->numC;
       }
       
-      modify_data(data, index, total_qty, type, total_reqs, dist_a_data); //FIXME Numero magico
+      modify_data(data, index, total_qty, type, total_reqs, dist_a_data);
     }
   }
 }
@@ -438,14 +437,14 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-      send_async(aux_send, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->comm_type);
+      send_async(aux_send, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->red_method, mall_conf->red_strategies);
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->comm_type, mall->intercomm);
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall->intercomm);
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   }
@@ -463,13 +462,13 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_async(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->comm_type);
+      recv_async(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->red_method, mall_conf->red_strategies);
       data_struct->arrays[i] = (void *) aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->comm_type, mall->intercomm);
+      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall->intercomm);
       data_struct->arrays[i] = (void *) aux;
     }
   }
@@ -501,7 +500,8 @@ void Children_init() {
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
   comm_node_data(root_parents, MALLEABILITY_CHILDREN);
-  MPI_Bcast(&(mall_conf->comm_type), 1, MPI_INT, root_parents, mall->intercomm);
+  MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, root_parents, mall->intercomm);
+  MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, root_parents, mall->intercomm);
 
   mall_conf->results = (results_data *) malloc(sizeof(results_data));
   init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
@@ -509,15 +509,15 @@ void Children_init() {
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
 
-    if(mall_conf->comm_type == MAL_USE_NORMAL || mall_conf->comm_type == MAL_USE_IBARRIER || mall_conf->comm_type == MAL_USE_POINT) {
-      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
-
-    } else if (mall_conf->comm_type == MAL_USE_THREAD) { //TODO Modificar uso para que tenga sentido comm_threaded
+    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+    } else {
+      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
     }
+
     mall_conf->results->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
-  
+
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
@@ -608,16 +608,18 @@ int start_redistribution() {
 
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
   comm_node_data(rootBcast, MALLEABILITY_NOT_CHILDREN);
-  MPI_Bcast(&(mall_conf->comm_type), 1, MPI_INT, rootBcast, mall->intercomm);
+  MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, rootBcast, mall->intercomm);
+  MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, rootBcast, mall->intercomm);
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
+	  //FIXME No se envian los datos replicados (rep_a_data)
     mall_conf->results->async_time[mall_conf->grp] = MPI_Wtime();
-    if(mall_conf->comm_type == MAL_USE_THREAD) {
+    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       return thread_creation();
     } else {
       send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
-      return MALL_DIST_PENDING;
+      return MALL_DIST_PENDING; 
     }
   } 
   return end_redistribution();
@@ -643,12 +645,13 @@ int check_redistribution() {
   MPI_Request *req_completed;
 //dist_a_data->requests[0][X] //FIXME Numero magico 0 -- Modificar para que sea un for?
 
-  if (mall_conf->comm_type == MAL_USE_POINT) {
+  //TODO Modificar a switch-case
+  if (mall_conf->red_method == MALL_RED_POINT) {
     test_err = MPI_Testall(mall->numC, dist_a_data->requests[0], &completed, MPI_STATUSES_IGNORE);
   } else {
-    if(mall_conf->comm_type == MAL_USE_NORMAL) {
+    if(mall_conf->red_method == MALL_RED_BASELINE) {
       req_completed = &(dist_a_data->requests[0][0]);
-    } else if (mall_conf->comm_type == MAL_USE_IBARRIER) {
+    } else if (mall_conf->red_method == MALL_RED_IBARRIER) { //FIXME No es un metodo
       req_completed = &(dist_a_data->requests[0][1]);
     }
 
@@ -660,11 +663,11 @@ int check_redistribution() {
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
 
+  MPI_Wait(req_completed, MPI_STATUS_IGNORE); completed=1;
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
   
-
-  if(mall_conf->comm_type == MAL_USE_IBARRIER) {
+  if(mall_conf->red_method == MALL_RED_IBARRIER) { //FIXME No es un metodo
     MPI_Wait(&(dist_a_data->requests[0][0]), MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
@@ -829,6 +832,7 @@ void def_nodeinfo_type(MPI_Datatype *node_type) {
 //===============COMM PARENTS THREADS===================||
 //======================================================||
 //======================================================||
+
 
 int comm_state; //FIXME Usar un handler
 /*

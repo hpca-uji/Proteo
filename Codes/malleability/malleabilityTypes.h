@@ -19,6 +19,7 @@ typedef struct {
 
   // Vector de vectores de request. En cada elemento superior se indican los requests a comprobar para dar por finalizada 
   // la comunicacion de ese dato
+  size_t *request_qty;
   MPI_Request **requests; 
   void **arrays; // Cada subvector es una serie de datos a comunicar
 
