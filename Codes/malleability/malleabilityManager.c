@@ -437,7 +437,8 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-      send_async(aux_send, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_children, data_struct->requests, mall_conf->red_method, mall_conf->red_strategies);
+      async_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
+		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   } else {
@@ -462,7 +463,8 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      recv_async(&aux, data_struct->qty[i], mall->myId, mall->numP, mall->intercomm, numP_parents, mall_conf->red_method, mall_conf->red_strategies);
+      async_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
+		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
       data_struct->arrays[i] = (void *) aux;
     }
   } else {
@@ -641,21 +643,16 @@ int start_redistribution() {
  * los hijos han terminado de recibir.
  */
 int check_redistribution() {
-  int is_intercomm, completed, all_completed, test_err;
+  int is_intercomm, req_qty, completed, all_completed, test_err;
   MPI_Request *req_completed;
-//dist_a_data->requests[0][X] //FIXME Numero magico 0 -- Modificar para que sea un for?
 
-  //TODO Modificar a switch-case
-  if (mall_conf->red_method == MALL_RED_POINT) {
-    test_err = MPI_Testall(mall->numC, dist_a_data->requests[0], &completed, MPI_STATUSES_IGNORE);
+  //FIXME Modificar para que sea un for
+  req_completed = dist_a_data->requests[0]; //FIXME Numero magico
+  req_qty = dist_a_data->request_qty[0]; //FIXME Numero magico
+  if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
+    test_err = MPI_Test(&(req_completed[req_qty-1]), &completed, MPI_STATUS_IGNORE);
   } else {
-    if(mall_conf->red_method == MALL_RED_BASELINE) {
-      req_completed = &(dist_a_data->requests[0][0]);
-    } else if (mall_conf->red_method == MALL_RED_IBARRIER) { //FIXME No es un metodo
-      req_completed = &(dist_a_data->requests[0][1]);
-    }
-
-    test_err = MPI_Test(req_completed, &completed, MPI_STATUS_IGNORE);
+    test_err = MPI_Testall(req_qty, req_completed, &completed, MPI_STATUSES_IGNORE); //FIXME Numero magico
   }
  
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
@@ -663,12 +660,11 @@ int check_redistribution() {
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
 
-  MPI_Wait(req_completed, MPI_STATUS_IGNORE); completed=1;
   MPI_Allreduce(&completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
   
-  if(mall_conf->red_method == MALL_RED_IBARRIER) { //FIXME No es un metodo
-    MPI_Wait(&(dist_a_data->requests[0][0]), MPI_STATUS_IGNORE); // Indicar como completado el envio asincrono
+  if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
+    MPI_Waitall(req_qty, req_completed, MPI_STATUSES_IGNORE);
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }

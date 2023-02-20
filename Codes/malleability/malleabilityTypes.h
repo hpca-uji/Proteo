@@ -13,7 +13,6 @@
 typedef struct {
   size_t entries; // Indica numero de vectores a comunicar (replicated data)
   size_t max_entries;
-  MPI_Request request_ibarrier; // Request para indicar que los padres esperan a que los hijos terminen de recibir
   size_t *qty; // Indica numero de elementos en cada subvector de sync_array
   int *types;
 

@@ -6,16 +6,17 @@
 #include "CommDist.h"
 
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
+void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);
 
+void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
 void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
 void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win);
 void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win);
-//////////////////////////
-void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req);
-void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req);
 
-void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req);
-void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req);
+
+void async_point2point(char *send, char *recv, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests);
+
+void perform_manual_communication(char *send, char *recv, int myId, struct Counts s_counts, struct Counts r_counts);
 
 /*
  * Reserva memoria para un vector de hasta "qty" elementos.
@@ -94,7 +95,8 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 	break;
 
       case MALL_RED_POINT:
-	//TODO
+        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, comm);
+	break;
       case MALL_RED_BASELINE:
       default:
         MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
@@ -109,6 +111,49 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
     return 1; //FIXME In this case is always true...
 }
 
+/*
+ * Performs a series of blocking point2point communications to redistribute an array in a block distribution. 
+ * It should be called after calculating how data should be redistributed.
+ *
+ * - send (IN):  Array with the data to send. This value can not be NULL for parents.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to 
+ *               receive data. If the process receives data and is NULL, the behaviour is undefined.
+ * - is_intercomm (IN): Indicates wether the communicator is an intercommunicator (TRUE) or an
+ *               intracommunicator (FALSE).
+ * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
+ * - s_counts (IN): Struct which describes how many elements will send this process to each children and 
+ *               the displacements.
+ * - r_counts (IN): Structure which describes how many elements will receive this process from each parent 
+ *               and the displacements.
+ * - comm (IN):  Communicator to use to perform the redistribution.
+ *
+ */
+void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
+    int i, init, end;
+
+    init = s_counts.idI;
+    end = s_counts.idE;
+    if(!is_intercomm && (s_counts.idI == myId || s_counts.idE == myId + 1)) {
+      perform_manual_communication(send, recv, myId, s_counts, r_counts);
+
+      if(s_counts.idI == myId) init = s_counts.idI+1;
+      else end = s_counts.idE-1;
+    }
+
+    for(i=init; i<end; i++) {
+      MPI_Send(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm);
+    }
+
+    init = r_counts.idI;
+    end = r_counts.idE;
+    if(!is_intercomm) {
+      if(r_counts.idI == myId) init = r_counts.idI+1;
+      else if(r_counts.idE == myId + 1) end = r_counts.idE-1;
+    }
+    for(i=init; i<end; i++) {
+      MPI_Recv(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, 99, comm, MPI_STATUS_IGNORE);
+    }
+}
 
 /*
  * Performs synchronous MPI-RMA operations to redistribute an array in a block distribution. Is should be called after calculating
@@ -131,7 +176,7 @@ void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Com
   aux_array_used = 0;
   if(send == NULL) {
     tamBl = 1;
-    send = malloc(tamBl*sizeof(char));
+    send = malloc(tamBl*sizeof(char)); //TODO Check if the value can be NULL at WIN_create
     aux_array_used = 1;
   }
   MPI_Win_create(send, (MPI_Aint)tamBl, sizeof(char), MPI_INFO_NULL, comm, &win);
@@ -204,179 +249,101 @@ void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win) {
 //================================================================================
 
 /*
- * Realiza un envio asincrono del vector array desde este grupo de procesos al grupo
- * enlazado por el intercomunicador intercomm.
+ * //TODO Añadir estrategia IBARRIER
+ * Performs a communication to redistribute an array in a block distribution with non-blocking MPI functions.
+ * In the redistribution is differenciated parent group from the children and the values each group indicates can be
+ * different.
  *
- * El objeto MPI_Request se devuelve con el manejador para comprobar si la comunicacion
- * ha terminado.
+ * - send (IN):  Array with the data to send. This data can not be null for parents.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
+ *               If the process receives data and is NULL, the behaviour is undefined.
+ * - qty  (IN):  Sum of elements shared by all processes that will send data.
+ * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
+ * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
+ *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
+ * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
+ *               resize, while for the children is the amount of parents.
+ * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
+ * - comm (IN):  Communicator to use to perform the redistribution.
+ * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended. If the pointer 
+ *               is null or not enough space has been reserved the pointer is allocated/reallocated.
+ * - request_qty (OUT): Quantity of requests to be used. If a process sends and receives data, this value will be 
+ *               modified to the expected value.
  *
- * El vector array no se modifica en esta funcion.
+ * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always false...
  */
-int send_async(char *array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_child, MPI_Request **comm_req, int red_method, int red_strategies) {
-    int i, is_intercomm;
+int async_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int red_method, int red_strategies, MPI_Comm comm, MPI_Request **requests, size_t *request_qty) {
+    int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
-    struct Dist_data dist_data;
-
-    get_block_dist(qty, myId, numP, &dist_data); // Distribucion de este proceso en su grupo
-    dist_data.intercomm = intercomm;
+    MPI_Comm aux_comm = MPI_COMM_NULL;
 
     /* PREPARE COMMUNICATION */
-    MPI_Comm_test_inter(intercomm, &is_intercomm);
-    prepare_redistribution(qty, myId, numP, numP_child, MALLEABILITY_NOT_CHILDREN, is_intercomm, NULL, &s_counts, &r_counts);
+    MPI_Comm_test_inter(comm, &is_intercomm);
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    check_requests(s_counts, r_counts, requests, request_qty);
 
-    // MAL_USE_THREAD sigue el camino sincrono
-    if(red_method == MALL_RED_BASELINE) {
-      //*comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
-      *comm_req[0] = MPI_REQUEST_NULL;
-      send_async_arrays(dist_data, array, numP_child, &s_counts, &(*comm_req[0])); 
+    /* PERFORM COMMUNICATION */
+    switch(red_method) {
 
-    } else if (red_method == MALL_RED_IBARRIER){ //FIXME No es un metodo
-      //*comm_req = (MPI_Request *) malloc(2 * sizeof(MPI_Request));
-      *comm_req[0] = MPI_REQUEST_NULL;
-      *comm_req[1] = MPI_REQUEST_NULL;
-      send_async_arrays(dist_data, array, numP_child, &s_counts, &((*comm_req)[1])); 
-      MPI_Ibarrier(intercomm, &((*comm_req)[0]) );
-    } else if (red_method == MALL_RED_POINT){
-      //*comm_req = (MPI_Request *) malloc(numP_child * sizeof(MPI_Request));
-      for(i=0; i<numP_child; i++){
-        (*comm_req)[i] = MPI_REQUEST_NULL;
-      }
-      send_async_point_arrays(dist_data, array, numP_child, &s_counts, *comm_req); 
+      case MALL_RED_RMA_LOCKALL:
+      case MALL_RED_RMA_LOCK:
+	return MALL_DENIED; //TODO Realizar versiones asíncronas
+      case MALL_RED_POINT:
+        async_point2point(send, *recv, s_counts, r_counts, comm, *requests);
+	break;
+      case MALL_RED_BASELINE:
+      default:
+        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm, &((*requests)[0]));
+	break;
     }
 
+    /* POST REQUESTS CHECKS */
+    if(is_children_group) {
+      MPI_Waitall(*request_qty, *requests, MPI_STATUSES_IGNORE);
+    }
+
+    if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
+      MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
+      if(is_children_group) {
+        MPI_Wait(&((*requests)[*request_qty-1]), MPI_STATUSES_IGNORE); //FIXME Not easy to read...
+      }
+    }
+
+    if(aux_comm_used) {
+      MPI_Comm_free(&aux_comm);
+    } 
     freeCounts(&s_counts);
     freeCounts(&r_counts);
-
-    return 1;
+    return 0; //FIXME In this case is always false...
 }
 
 /*
- * Realiza una recepcion asincrona del vector array a este grupo de procesos desde el grupo
- * enlazado por el intercomunicador intercomm.
+ * Performs a series of non-blocking point2point communications to redistribute an array in a block distribution. 
+ * It should be called after calculating how data should be redistributed.
  *
- * El vector array se reserva dentro de la funcion y se devuelve en el mismo argumento.
- * Tiene que ser liberado posteriormente por el usuario.
+ * - send (IN):  Array with the data to send. This value can not be NULL for parents.
+ * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to 
+ *               receive data. If the process receives data and is NULL, the behaviour is undefined.
+ * - s_counts (IN): Struct which describes how many elements will send this process to each children and 
+ *               the displacements.
+ * - r_counts (IN): Structure which describes how many elements will receive this process from each parent 
+ *               and the displacements.
+ * - comm (IN):  Communicator to use to perform the redistribution.
+ * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
- * El argumento "parents_wait" sirve para indicar si se usará la versión en la los padres 
- * espera a que terminen de enviar, o en la que esperan a que los hijos acaben de recibir.
  */
-void recv_async(char **array, int qty, int myId, int numP, MPI_Comm intercomm, int numP_parents, int red_method, int red_strategies) {
-    int wait_err, i;
-    struct Counts counts;
-    struct Dist_data dist_data;
-    MPI_Request *comm_req, aux;
+void async_point2point(char *send, char *recv, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests) {
+    int i, j = 0;
 
-    // Obtener distribución para este hijo
-    get_block_dist(qty, myId, numP, &dist_data);
-    *array = malloc( dist_data.tamBl * sizeof(char));
-    dist_data.intercomm = intercomm;
-
-    /* PREPARAR DATOS DE RECEPCION SOBRE VECTOR*/
-    //mallocCounts(&counts, numP_parents);
-
-
-    // MAL_USE_THREAD sigue el camino sincrono
-    if(red_method == MALL_RED_POINT) {
-      comm_req = (MPI_Request *) malloc(numP_parents * sizeof(MPI_Request));
-      for(i=0; i<numP_parents; i++){
-        comm_req[i] = MPI_REQUEST_NULL;
-      }
-      recv_async_point_arrays(dist_data, *array, numP_parents, &counts, comm_req);
-      wait_err = MPI_Waitall(numP_parents, comm_req, MPI_STATUSES_IGNORE);
-
-    } else if (red_method == MALL_RED_BASELINE || red_method == MALL_RED_IBARRIER) { //FIXME IBarrier no es un método
-      comm_req = (MPI_Request *) malloc(sizeof(MPI_Request));
-      *comm_req = MPI_REQUEST_NULL;
-      recv_async_arrays(dist_data, *array, numP_parents, &counts, comm_req);
-      wait_err = MPI_Wait(comm_req, MPI_STATUS_IGNORE);
+    for(i=s_counts.idI; i<s_counts.idE; i++) {
+      MPI_Isend(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm, &(requests[j]));
+      j++;
     }
 
-    if(wait_err != MPI_SUCCESS) {
-      MPI_Abort(MPI_COMM_WORLD, wait_err);
+    for(i=r_counts.idI; i<r_counts.idE; i++) {
+      MPI_Irecv(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, 99, comm, &(requests[j]));
+      j++;
     }
-
-    if(red_method == MALL_RED_IBARRIER) { //MAL USE IBARRIER END //FIXME IBarrier no es un método
-      MPI_Ibarrier(intercomm, &aux);
-      MPI_Wait(&aux, MPI_STATUS_IGNORE); //Es necesario comprobar que la comunicación ha terminado para desconectar los grupos de procesos
-    }
-
-    //printf("S%d Tam %d String: %s END\n", myId, dist_data.tamBl, *array);
-    freeCounts(&counts);
-    free(comm_req);
-}
-
-/*
- * Envia a los hijos un vector que es redistribuido a los procesos
- * hijos. Antes de realizar la comunicacion, cada proceso padre calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- *
- * El envio se realiza a partir de una comunicación colectiva.
- */
-void send_async_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req) {
-
-    //prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, counts);
-    /* COMUNICACION DE DATOS */
-    MPI_Ialltoallv(array, counts->counts, counts->displs, MPI_CHAR, NULL, counts->zero_arr, counts->zero_arr, MPI_CHAR, dist_data.intercomm, comm_req);
-}
-
-/*
- * Envia a los hijos un vector que es redistribuido a los procesos
- * hijos. Antes de realizar la comunicacion, cada proceso padre calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- *
- * El envio se realiza a partir de varias comunicaciones punto a punto.
- */
-void send_async_point_arrays(struct Dist_data dist_data, char *array, int numP_child, struct Counts *counts, MPI_Request *comm_req) {
-    int i;
-    // PREPARAR ENVIO DEL VECTOR
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_child, dist_data.qty, counts);
-
-    for(i=0; i<numP_child; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
-      if(counts->counts[0] != 0) {
-        MPI_Isend(array+counts->displs[i], counts->counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i]));
-      }
-    }
-    //print_counts(dist_data, counts.counts, counts.displs, numP_child, "Padres");
-}
-
-/*
- * Recibe de los padres un vector que es redistribuido a los procesos
- * de este grupo. Antes de realizar la comunicacion cada hijo calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- *
- * La recepcion se realiza a partir de una comunicacion colectiva.
- */
-void recv_async_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req) {
-    char *aux = malloc(1);
-
-    // Ajustar los valores de recepcion
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, counts);
-    //print_counts(dist_data, counts->counts, counts->displs, numP_parents, 1, "Children");
-
-    /* COMUNICACION DE DATOS */
-    MPI_Ialltoallv(aux, counts->zero_arr, counts->zero_arr, MPI_CHAR, array, counts->counts, counts->displs, MPI_CHAR, dist_data.intercomm, comm_req);
-    free(aux);
-}
-
-/*
- * Recibe de los padres un vector que es redistribuido a los procesos
- * de este grupo. Antes de realizar la comunicacion cada hijo calcula sobre que procesos
- * del otro grupo se transmiten elementos.
- *
- * La recepcion se realiza a partir de varias comunicaciones punto a punto.
- */
-void recv_async_point_arrays(struct Dist_data dist_data, char *array, int numP_parents, struct Counts *counts, MPI_Request *comm_req) {
-    int i;
-
-    // Ajustar los valores de recepcion
-    prepare_comm_alltoall(dist_data.myId, dist_data.numP, numP_parents, dist_data.qty, counts);
-
-    for(i=0; i<numP_parents; i++) { //TODO Esta propuesta ya no usa el IdI y Ide
-      if(counts->counts[0] != 0) {
-        MPI_Irecv(array+counts->displs[i], counts->counts[i], MPI_CHAR, i, 99, dist_data.intercomm, &(comm_req[i])); //FIXME BUffer recv
-      }
-    }
-    //print_counts(dist_data, counts.counts, counts.displs, numP_parents, "Hijos");
 }
 
 /*
@@ -437,6 +404,63 @@ print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ")
   }
 }
 
+/*
+ * Ensures that the array of request of a process has an amount of elements equal to the amount of communication
+ * functions the process will perform. In case the array is not initialized or does not have enough space it is
+ * allocated/reallocated to the minimum amount of space needed.
+ *
+ * - s_counts (IN): Struct where is indicated how many elements sends this process to processes in the new group.
+ * - r_counts (IN): Struct where is indicated how many elements receives this process from other processes in the previous group.
+ * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended. If the pointer 
+ *               is null or not enough space has been reserved the pointer is allocated/reallocated.
+ * - request_qty (OUT): Quantity of requests to be used. If the value is smaller than the amount of communication
+ *               functions to perform, it is modified to the minimum value.
+ */
+void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty) {
+  size_t i, sum;
+  MPI_Request *aux;
+
+  sum = (size_t) s_counts.idE - s_counts.idI;
+  sum += (size_t) r_counts.idE - r_counts.idI;
+
+  if (*requests != NULL && sum <= *request_qty) return; // Expected amount of requests
+
+  // FIXME Si es la estrategia Ibarrier como se tiene en cuenta en el total??
+  if (*requests == NULL) {
+    *requests = (MPI_Request *) malloc(sum * sizeof(MPI_Request));
+  } else { // Array exists, but is too small
+    aux = (MPI_Request *) realloc(*requests, sum * sizeof(MPI_Request));
+    *requests = aux;
+  }
+
+  if (*requests == NULL) {
+    fprintf(stderr, "Fatal error - It was not possible to allocate/reallocate memory for the MPI_Requests before the redistribution\n");
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  for(i=0; i < sum; i++) {
+    (*requests)[i] = MPI_REQUEST_NULL;
+  }
+  *request_qty = sum;
+}
+
+
+/*
+ * Special case to perform a manual copy of data when a process has to send data to itself. Only used
+ * when the MPI communication is not able to hand this situation. An example is when using point to point
+ * communications and the process has to perform a Send and Recv to itself
+ * - send (IN):  Array with the data to send. This value can not be NULL.
+ * - recv (OUT): Array where data will be written. This value can not be NULL.
+ * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
+ * - s_counts (IN): Struct where is indicated how many elements sends this process to processes in the new group.
+ * - r_counts (IN): Struct where is indicated how many elements receives this process from other processes in the previous group.
+ */
+void perform_manual_communication(char *send, char *recv, int myId, struct Counts s_counts, struct Counts r_counts) {
+  int i;
+  for(i=0; i<s_counts.counts[myId];i++) {
+    recv[i+r_counts.displs[myId]] = send[i+s_counts.displs[myId]];
+  }
+}
 
 /*
  * Función para obtener si entre las estrategias elegidas, se utiliza

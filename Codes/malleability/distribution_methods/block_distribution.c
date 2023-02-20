@@ -23,7 +23,7 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
   get_util_ids(dist_data, numP_other, &idS);
 
   counts->idI = idS[0];
-  counts->idE = idS[0];
+  counts->idE = idS[1];
   get_block_dist(n, idS[0], numP_other, &dist_target); // RMA Specific operation
   counts->first_target_displs = dist_data.ini - dist_target.ini; // RMA Specific operation
 
