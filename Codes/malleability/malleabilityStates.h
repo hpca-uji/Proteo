@@ -14,8 +14,8 @@ enum mall_spawn_methods{MALL_SPAWN_BASELINE, MALL_SPAWN_MERGE};
 #define MALL_SPAWN_SINGLE 3
 
 enum mall_redistribution_methods{MALL_RED_BASELINE, MALL_RED_POINT, MALL_RED_RMA_LOCK, MALL_RED_RMA_LOCKALL, MALL_RED_IBARRIER};
-//#define MALL_RED_IBARRIER 2 Agregar como estrategia y eliminar como método
-#define MALL_RED_THREAD 3
+#define MALL_RED_THREAD 2
+//#define MALL_RED_IBARRIER 3 Agregar como estrategia y eliminar como método
 
 #define MALLEABILITY_ROOT 0
 
