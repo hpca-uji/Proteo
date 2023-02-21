@@ -15,7 +15,7 @@ typedef struct {
   unsigned int grp;
   int iter_start;
   int argc;
-  int sync_data_groups, async_data_groups;
+  size_t sync_data_groups, async_data_groups;
 
   MPI_Comm children, parents;
 

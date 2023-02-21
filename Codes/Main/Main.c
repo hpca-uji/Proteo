@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
     int numP, myId, res;
     int req;
     int im_child;
-    int i;
+    size_t i;
 
     int num_cpus, num_nodes;
     char *nodelist = NULL;

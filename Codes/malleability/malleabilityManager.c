@@ -405,7 +405,7 @@ void malleability_get_entries(size_t *entries, int is_replicated, int is_constan
  * TODO Refactor a que sea automatico
  * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
-void malleability_get_data(void **data, int index, int is_replicated, int is_constant) {
+void malleability_get_data(void **data, size_t index, int is_replicated, int is_constant) {
   malleability_data_t *data_struct;
 
   if(is_constant) {

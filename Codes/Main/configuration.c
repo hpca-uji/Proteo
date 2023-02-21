@@ -267,17 +267,17 @@ void def_struct_config_file(configuration *config_file) {
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = MPI_UNSIGNED_LONG;
-  types[2] = types[3] = types[4] = types[5] = MPI_INT;
+  types[0] = types[1] = types[2] = types[3] = MPI_UNSIGNED_LONG;
+  types[4] = types[5] = MPI_INT;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
 
   MPI_Get_address(&(config_file->n_groups), &displs[0]);
   MPI_Get_address(&(config_file->n_stages), &displs[1]);
-  MPI_Get_address(&(config_file->granularity), &displs[2]);
-  MPI_Get_address(&(config_file->sdr), &displs[3]);
-  MPI_Get_address(&(config_file->adr), &displs[4]);
+  MPI_Get_address(&(config_file->sdr), &displs[2]);
+  MPI_Get_address(&(config_file->adr), &displs[3]);
+  MPI_Get_address(&(config_file->granularity), &displs[4]);
   MPI_Get_address(&(config_file->rigid_times), &displs[5]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;

@@ -381,10 +381,10 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * sizeof(char));
-get_block_dist(qty, myId, numP, &dist_data);
-print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 1, "Children C");
+//get_block_dist(qty, myId, numP, &dist_data);
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 0, "Children C ");
   } else {
-get_block_dist(qty, myId, numP, &dist_data);
+//get_block_dist(qty, myId, numP, &dist_data);
     prepare_comm_alltoall(myId, numP, numO, qty, s_counts);
 
     if(is_intercomm) {
@@ -398,9 +398,9 @@ get_block_dist(qty, myId, numP, &dist_data);
       } else {
         mallocCounts(r_counts, numP);
       }	
-print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 1, "Children P ");
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 0, "Children P ");
     }
-print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 1, "Parents ");
+//print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 0, "Parents ");
   }
 }
 

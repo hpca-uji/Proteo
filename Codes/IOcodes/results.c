@@ -100,6 +100,7 @@ void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr)
  */
 void reset_results_index(results_data *results) {
   results->iter_index = 0;
+  results->iters_async = 0;
 }
 
 //=============================================================== FIXME BORRAR?

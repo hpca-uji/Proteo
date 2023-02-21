@@ -25,7 +25,7 @@ void get_malleability_user_comm(MPI_Comm *comm);
 void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant);
 void malleability_modify_data(void *data, size_t index, size_t total_qty, int type, int is_replicated, int is_constant);
 void malleability_get_entries(size_t *entries, int is_replicated, int is_constant);
-void malleability_get_data(void **data, int index, int is_replicated, int is_constant);
+void malleability_get_data(void **data, size_t index, int is_replicated, int is_constant);
 
 void set_benchmark_configuration(configuration *config_file);
 void get_benchmark_configuration(configuration **config_file);

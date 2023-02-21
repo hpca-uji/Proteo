@@ -42,9 +42,9 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH("general", "Granularity")) {
         pconfig->granularity = atoi(value);
     } else if (MATCH("general", "SDR")) { // TODO Refactor a nombre manual
-        pconfig->sdr = atoi(value);
+        pconfig->sdr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
-        pconfig->adr = atoi(value);
+        pconfig->adr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
 
