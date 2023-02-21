@@ -12,6 +12,8 @@
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
 
+#define DR_MAX_SIZE 1000000000
+
 int work();
 double iterate(int async_comm);
 double iterate_relaxed(double *time, double *times_stages);
@@ -37,6 +39,7 @@ int main(int argc, char *argv[]) {
     int numP, myId, res;
     int req;
     int im_child;
+    int i;
 
     int num_cpus, num_nodes;
     char *nodelist = NULL;
@@ -66,19 +69,23 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
-      set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
       set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
 	config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
+      set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
       malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
       malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
       malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
 
       if(config_file->sdr) {
-        malleability_add_data(group->sync_array, config_file->sdr, MAL_CHAR, 0, 1);
+	for(i=0; i<group->sync_data_groups; i++) {
+          malleability_add_data(group->sync_array[i], group->sync_qty[i], MAL_CHAR, 0, 1);
+	}
       }
       if(config_file->adr) {
-        malleability_add_data(group->async_array, config_file->adr, MAL_CHAR, 0, 0);
+	for(i=0; i<group->async_data_groups; i++) {
+          malleability_add_data(group->async_array[i], group->async_qty[i], MAL_CHAR, 0, 0);
+	}
       }
 
       MPI_Barrier(comm);
@@ -92,6 +99,7 @@ int main(int argc, char *argv[]) {
       // TODO Refactor - Que sea una unica funcion
       // Obtiene las variables que van a utilizar los hijos
       void *value = NULL;
+      size_t entries;
       malleability_get_data(&value, 0, 1, 1);
       group->grp = *((int *)value);
 
@@ -102,12 +110,20 @@ int main(int argc, char *argv[]) {
       group->iter_start = *((int *)value);
 
       if(config_file->sdr) {
-        malleability_get_data(&value, 0, 0, 1);
-        group->sync_array = (char *)value;
+        malleability_get_entries(&entries, 0, 1);
+        group->sync_array = (char **) malloc(entries * sizeof(char *));
+	for(i=0; i<entries; i++) {
+          malleability_get_data(&value, i, 0, 1);
+          group->sync_array[i] = (char *)value;
+	}
       }
       if(config_file->adr) {
-        malleability_get_data(&value, 0, 0, 0);
-        group->async_array = (char *)value;
+        malleability_get_entries(&entries, 0, 0);
+        group->async_array = (char **) malloc(entries * sizeof(char *));
+	for(i=0; i<entries; i++) {
+          malleability_get_data(&value, i, 0, 0);
+          group->async_array[i] = (char *)value;
+	}
       }
 
       group->grp = group->grp + 1;
@@ -124,8 +140,9 @@ int main(int argc, char *argv[]) {
       MPI_Comm_rank(comm, &(group->myId));
       group->grp = group->grp + 1;
       set_benchmark_grp(group->grp);
+
       if(group->grp != 0) {
-        obtain_op_times(1); //Obtener los nuevos valores de tiempo para el computo
+        obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
         set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
       }
 
@@ -143,9 +160,10 @@ int main(int argc, char *argv[]) {
       if(res == MALL_ZOMBIE) break;
 
       if(res==1) { // Se ha llegado al final de la aplicacion
-        MPI_Barrier(comm); // TODO Posible error al utilizar SHRINK
+        MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
       }
+
       print_local_results();
       reset_results_index(results);
     } while(config_file->n_groups > group->grp + 1 && config_file->groups[group->grp+1].sm == MALL_SPAWN_MERGE);
@@ -199,7 +217,7 @@ int work() {
     state = malleability_checkpoint();
 
   iter = 0;
-  while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE) {
+  while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE || state == MALL_SPAWN_ADAPT_PENDING) {
     if(iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
@@ -414,6 +432,8 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
  * se comunican con los padres para inicializar sus datos.
  */
 void init_application() {
+  int i, last_index;
+
   if(group->argc < 2) {
     printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
@@ -426,10 +446,29 @@ void init_application() {
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   if(config_file->sdr) {
-    malloc_comm_array(&(group->sync_array), config_file->sdr , group->myId, group->numP);
+    group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
+    group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int));
+    group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *));
+    last_index = group->sync_data_groups-1; 
+    for(i=0; i<last_index; i++) {
+      group->sync_qty[i] = DR_MAX_SIZE;
+      malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], group->myId, group->numP);
+    }
+    group->sync_qty[last_index] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
+    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], group->myId, group->numP);
   }
+
   if(config_file->adr) {
-    malloc_comm_array(&(group->async_array), config_file->adr , group->myId, group->numP);
+    group->async_data_groups = config_file->adr % DR_MAX_SIZE ? config_file->adr/DR_MAX_SIZE+1 : config_file->adr/DR_MAX_SIZE;
+    group->async_qty = (int *) malloc(group->async_data_groups * sizeof(int));
+    group->async_array = (char **) malloc(group->async_data_groups * sizeof(char *));
+    last_index = group->async_data_groups-1; 
+    for(i=0; i<last_index; i++) {
+      group->async_qty[i] = DR_MAX_SIZE;
+      malloc_comm_array(&(group->async_array[i]), group->async_qty[i], group->myId, group->numP);
+    }
+    group->async_qty[last_index] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
+    malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], group->myId, group->numP);
   }
 
   obtain_op_times(1);
@@ -459,8 +498,8 @@ void obtain_op_times(int compute) {
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
-	// FIXME ERROR para grupo 1 en adelante (0 Guay)
-                                        if (group->grp==0){
+	// FIXME Arreglar para que se liberen estos datos
+                                        if (group->grp==1000){
   if(config_file->sdr && group->sync_array != NULL) {
     free(group->sync_array);
     group->sync_array = NULL;

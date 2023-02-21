@@ -159,7 +159,7 @@ void free_config(configuration *user_config) {
 void print_config(configuration *user_config) {
   if(user_config != NULL) {
     size_t i;
-    printf("Config loaded: R=%zu, S=%zu, granularity=%d, SDR=%d, ADR=%d\n",
+    printf("Config loaded: R=%zu, S=%zu, granularity=%d, SDR=%zu, ADR=%zu\n",
         user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr);
     for(i=0; i<user_config->n_stages; i++) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
@@ -191,7 +191,7 @@ void print_config_group(configuration *user_config, size_t grp) {
       sons = user_config->groups[grp+1].procs;
     }
 
-    printf("Config: granularity=%d, SDR=%d, ADR=%d\n",
+    printf("Config: granularity=%d, SDR=%zu, ADR=%zu\n",
         user_config->granularity, user_config->sdr, user_config->adr);
     for(i=0; i<user_config->n_stages; i++) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
