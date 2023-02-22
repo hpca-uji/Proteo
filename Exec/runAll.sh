@@ -4,7 +4,10 @@ exclude="c00,c01,c02"
 procs=(2 10 20 40 80 120 160)
 cores=20
 
-
+#Runs in a given current directory all .ini files that contains 
+# in the name an element of the array "procs".
+# Parameter 1(Optional) - Amount of executions per file. Must be a positive number
+# Parameter 2(Optional) - Index to use for the resulting files of the execution. Must be a number.
 #====== Do not modify these values =======
 
 codeDir="/Codes/build"
