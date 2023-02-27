@@ -13,11 +13,11 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
  *
  * The struct should be freed with freeCounts
  */
-void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Counts *counts) {
+void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int init_struct, struct Counts *counts) {
   int i, *idS;
   struct Dist_data dist_data, dist_target;
  
-  mallocCounts(counts, numP_other);
+  if(init_struct) mallocCounts(counts, numP_other);
 
   get_block_dist(n, myId, numP, &dist_data);
   get_util_ids(dist_data, numP_other, &idS);
@@ -36,6 +36,17 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Cou
     counts->displs[i] = counts->displs[i-1] + counts->counts[i-1];
   }
   free(idS);
+
+  for(i=0; i<numP_other; i++) {
+    if(counts->counts[i] < 0) {
+      fprintf(stderr, "Counts value [i=%d] is negative for rank %d/%d", i, myId, numP);
+      MPI_Abort(MPI_COMM_WORLD, -3);
+    }
+    if(counts->displs[i] < 0) {
+      fprintf(stderr, "Displs value [i=%d] is negative for rank %d/%d", i, myId, numP);
+      MPI_Abort(MPI_COMM_WORLD, -3);
+    }
+  }
 }
 
 /*
@@ -191,18 +202,14 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS) {
  * El vector displs indica los desplazamientos necesarios para cada comunicacion
  * con el proceso "i" del otro grupo.
  *
- * El vector zero_arr se utiliza cuando se quiere indicar un vector incializado
- * a 0 en todos sus elementos. Sirve para indicar que no hay comunicacion.
  */
 void mallocCounts(struct Counts *counts, size_t numP) {
+
     counts->counts = calloc(numP, sizeof(int)); 
     if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
     counts->displs = calloc(numP, sizeof(int));
     if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
-
-    counts->zero_arr = calloc(numP, sizeof(int)); // TODO Deprecate
-    if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);} // TODO Deprecate
 
     counts->len = numP;
     counts->idI = -1;
@@ -218,19 +225,17 @@ void mallocCounts(struct Counts *counts, size_t numP) {
  * de forma dinamica.
  */
 void freeCounts(struct Counts *counts) {
-    if(counts != NULL) {
-      if(counts->counts != NULL) {
-        free(counts->counts);
-        counts->counts = NULL;
-      }
-      if(counts->displs != NULL) {
-        free(counts->displs);
-        counts->displs = NULL;
-      }
-      if(counts->zero_arr != NULL) {
-        free(counts->zero_arr);
-        counts->zero_arr = NULL;
-      }
+    if(counts == NULL) {
+      return;
+    }
+
+    if(counts->counts != NULL) {
+      free(counts->counts);
+      counts->counts = NULL;
+    }
+    if(counts->displs != NULL) {
+      free(counts->displs);
+      counts->displs = NULL;
     }
 }
 

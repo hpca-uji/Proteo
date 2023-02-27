@@ -373,11 +373,12 @@ void async_point2point(char *send, char *recv, struct Counts s_counts, struct Co
  *
  */
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
+  int init_struct = 1;
   struct Dist_data dist_data;
 
   if(is_children_group) {
     mallocCounts(s_counts, numO);
-    prepare_comm_alltoall(myId, numP, numO, qty, r_counts);
+    prepare_comm_alltoall(myId, numP, numO, qty, init_struct, r_counts);
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * sizeof(char));
@@ -385,19 +386,26 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
 //print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 0, "Children C ");
   } else {
 //get_block_dist(qty, myId, numP, &dist_data);
-    prepare_comm_alltoall(myId, numP, numO, qty, s_counts);
 
     if(is_intercomm) {
       mallocCounts(r_counts, numO);
+      prepare_comm_alltoall(myId, numP, numO, qty, init_struct, s_counts);
     } else {
       if(myId < numO) {
-        prepare_comm_alltoall(myId, numO, numP, qty, r_counts);
+        prepare_comm_alltoall(myId, numO, numP, qty, init_struct, r_counts);
         // Obtener distribución para este hijo
         get_block_dist(qty, myId, numO, &dist_data);
         *recv = malloc(dist_data.tamBl * sizeof(char));
       } else {
         mallocCounts(r_counts, numP);
-      }	
+      }
+
+      if(numP > numO) { // Shrink
+        mallocCounts(s_counts, numP);
+	init_struct = 0;
+      }
+      prepare_comm_alltoall(myId, numP, numO, qty, init_struct, s_counts);
+
 //print_counts(dist_data, r_counts->counts, r_counts->displs, numP, 0, "Children P ");
     }
 //print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 0, "Parents ");
