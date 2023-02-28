@@ -215,6 +215,7 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
     init_spawn_state();
   }
 
+  spawn_data->mapping = MPI_INFO_NULL;
   if(spawn_data->myId == spawn_data->root) {
     physical_struct_create(target_qty, spawn_data->already_created, num_cpus, num_nodes, nodelist, type_dist, MALL_DIST_STRING, &(spawn_data->dist));
 
@@ -225,7 +226,6 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
 
   } else {
     spawn_data->cmd = malloc(1 * sizeof(char));
-    spawn_data->mapping = MPI_INFO_NULL; //It is only needed for the root process
   }
 }
 
@@ -293,7 +293,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
   int local_state;
 
   // WORK
-  if(spawn_data->myId == spawn_data->root) { //SET MAPPING
+  if(spawn_data->myId == spawn_data->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
     processes_dist(spawn_data->dist, &(spawn_data->mapping));
   }
   switch(spawn_data->spawn_method) {
