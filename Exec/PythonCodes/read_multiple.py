@@ -71,11 +71,15 @@ def process_line(line, data):
     for i in range(len(value)):
       try:
         value[i] = float(value[i])
+        if value[i] == int(value[i]):
+            value[i] = int(value[i])
       except ValueError:
         print("Unable to convert to float - Not a fatal error")
   else:
     try:
       value = float(value)
+      if value == int(value):
+        value = int(value)
     except ValueError:
       print("Unable to convert to float - Not a fatal error")
     

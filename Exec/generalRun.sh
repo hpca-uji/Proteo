@@ -11,6 +11,7 @@ echo "START TEST"
 #$2 == configFile
 #$3 == use_extrae
 #$4 == outFileIndex
+#$5 == qty
 
 echo $@
 if [ $# -lt 3 ]
@@ -23,6 +24,11 @@ dir=$1
 configFile=$2
 use_extrae=$3
 outFileIndex=$4
+qty=1
+if [ $# -ge 5 ]
+then
+  qty=$5
+fi
 
 aux=$(grep "\[resize0\]" -n $configFile | cut -d ":" -f1)
 read -r ini fin <<<$(echo $aux)
@@ -32,9 +38,15 @@ numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut 
 echo "Nodes=$SLURM_JOB_NODELIST"
 if [ $use_extrae -ne 1 ]
 then
-  mpirun -np $numP $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES 
+  for ((i=0; i<qty; i++))
+  do
+    mpirun -np $numP $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES 
+  done
 else
+  for ((i=0; i<qty; i++))
+  do
   srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES
+  done
 fi
 
 
