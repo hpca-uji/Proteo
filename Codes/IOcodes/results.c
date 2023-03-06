@@ -163,15 +163,15 @@ void compute_results_stages(results_data *results, int myId, int numP, int root,
   int i;
   if(myId == root) {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
-      for(size_t j=0; j<results->iter_index; j++) {
+      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+     /* for(size_t j=0; j<results->iter_index; j++) {
         results->stage_times[i][j] = results->stage_times[i][j] / numP;
-      }
+      }*/
     }
   }
   else {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
     }
   }
 }
@@ -281,20 +281,24 @@ void realloc_results_iters(results_data *results, size_t stages, size_t needed) 
   int error = 0;
   double *time_aux;
   size_t i;
+
+  if(results->iters_size >= needed) return;
+
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
+  if(time_aux == NULL) error = 1;
 
   for(i=0; i<stages; i++) { //TODO Comprobar que no da error el realloc
     results->stage_times[i] = (double *) realloc(results->stage_times[i], needed * sizeof(double));
     if(results->stage_times[i] == NULL) error = 1;
   }
 
-  if(time_aux == NULL) error = 1;
   if(error) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
   results->iters_time = time_aux;
+  results->iters_size = needed;
 }
 
 /*

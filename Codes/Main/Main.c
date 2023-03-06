@@ -127,6 +127,7 @@ int main(int argc, char *argv[]) {
       }
 
       group->grp = group->grp + 1;
+      realloc_results_iters(results, config_file->n_stages, config_file->groups[group->grp].iters);
     }
 
     //
@@ -264,6 +265,7 @@ double iterate(int async_comm) {
     results->iters_async += 1;
   }
 
+  // TODO Pasar el resto de este código a results.c
   if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
     realloc_results_iters(results, config_file->n_stages, results->iters_size + 100);
   }
@@ -272,6 +274,7 @@ double iterate(int async_comm) {
     results->stage_times[i][results->iter_index] = times_stages_aux[i];
   }
   results->iter_index = results->iter_index + 1;
+  // TODO Pasar hasta aqui
 
   free(times_stages_aux);
 
