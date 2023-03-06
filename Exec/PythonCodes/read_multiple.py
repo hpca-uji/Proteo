@@ -182,6 +182,7 @@ def correct_adr(general_dataset):
     adr_percentage = general_dataset[Config_section.P_ADR.value]
     if (adr_percentage != 0):
         general_dataset[Config_section.P_ADR.value] = sdr * (adr_percentage/100)
+        general_dataset[Config_section.P_SDR.value] = sdr * ((100-adr_percentage)/100)
 
 
 def create_output_files(common_output_name, general_data, resize_data, stage_data):
