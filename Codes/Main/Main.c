@@ -159,7 +159,6 @@ int main(int argc, char *argv[]) {
 
       res = work();
       if(res == MALL_ZOMBIE) break;
-
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;

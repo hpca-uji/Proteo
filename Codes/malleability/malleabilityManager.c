@@ -653,9 +653,10 @@ int start_redistribution() {
  */
 int check_redistribution() {
   int is_intercomm, req_qty, completed, local_completed, all_completed, test_err;
-  size_t i;
+  size_t i, j;
   MPI_Request *req_completed;
   local_completed = 1;
+  test_err = 0;
 
   //FIXME Modificar para que se tenga en cuenta rep_a_data
   for(i=0; i<dist_a_data->entries; i++) {
@@ -663,10 +664,14 @@ int check_redistribution() {
     req_qty = dist_a_data->request_qty[i];
     if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
       test_err = MPI_Test(&(req_completed[req_qty-1]), &completed, MPI_STATUS_IGNORE);
+      local_completed = local_completed && completed;
     } else {
-      test_err = MPI_Testall(req_qty, req_completed, &completed, MPI_STATUSES_IGNORE);
+      for(j=0; j<req_qty; j++) {
+	test_err = MPI_Test(&(req_completed[j]), &completed, MPI_STATUS_IGNORE);
+	local_completed = local_completed && completed;
+      }
+//      test_err = MPI_Testall(req_qty, req_completed, &completed, MPI_STATUSES_IGNORE);
     }
-    local_completed = local_completed && completed;
   }
  
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
