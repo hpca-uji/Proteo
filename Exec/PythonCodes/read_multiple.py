@@ -74,14 +74,14 @@ def process_line(line, data):
         if value[i] == int(value[i]):
             value[i] = int(value[i])
       except ValueError:
-        print("Unable to convert to float - Not a fatal error")
+        print("Unable to convert to number - Not a fatal error")
   else:
     try:
       value = float(value)
       if value == int(value):
         value = int(value)
     except ValueError:
-      print("Unable to convert to float - Not a fatal error")
+      print("Unable to convert to number - Not a fatal error")
     
 
   data[key]=value
@@ -177,12 +177,11 @@ def check_sections_assumptions(datasets):
                 return False
     return True
 
-def correct_adr(general_dataset):
-    sdr = general_dataset[Config_section.P_SDR.value]
-    adr_percentage = general_dataset[Config_section.P_ADR.value]
+def correct_adr(sdr, adr_percentage, w_general_dataset):
+    #TODO Tener en cuenta que tanto sdr como adr pueden tener diferentes valores
     if (adr_percentage != 0):
-        general_dataset[Config_section.P_ADR.value] = sdr * (adr_percentage/100)
-        general_dataset[Config_section.P_SDR.value] = sdr * ((100-adr_percentage)/100)
+        w_general_dataset[Config_section.P_ADR.value] = sdr * (adr_percentage/100)
+    w_general_dataset[Config_section.P_SDR.value] = sdr * ((100.0-adr_percentage)/100)
 
 
 def create_output_files(common_output_name, general_data, resize_data, stage_data):
@@ -206,6 +205,12 @@ def create_output_files(common_output_name, general_data, resize_data, stage_dat
         if(key == Config_section.P_RESIZE_PROCS.value):
             original_dictionary = datasets[ds_indexes[level_index]]
             dictionary[Config_section.P_RESIZE_FACTORS.value] = original_dictionary[Config_section.P_RESIZE_FACTORS.value][index]
+        elif(key == Config_section.P_SDR.value or key == Config_section.P_ADR.value):
+            original_dictionary = datasets[ds_indexes[level_index]]
+            sdr = original_dictionary[Config_section.P_SDR.value]
+            adr_percentage = original_dictionary[Config_section.P_ADR.value][index]
+            correct_adr(sdr, adr_percentage, dictionary)
+
         indexes[level_index] = index + 1
         return finished
 
@@ -224,11 +229,12 @@ def create_output_files(common_output_name, general_data, resize_data, stage_dat
     os.mkdir(path, mode=0o775)
     os.chdir(path)
 
-    lists=[]
-    keys=[]
-    indexes=[]
-    mindexes=[]
-    ds_indexes=[]
+    lists=[] # Stores lists of those variables with multiple values
+    keys=[] # Stores keys of those variables with multiple values
+    indexes=[] # Stores actual index for each variable with multiple values
+    mindexes=[] # Stores len of lists of each variable with multiple values
+    ds_indexes=[] # Stores the index of the dataset where the variable is stored
+    #For each variable with a list of elements
     for i in range(len(datasets)):
         values_aux = list(datasets[i].values())
         keys_aux = list(datasets[i].keys())
@@ -240,16 +246,25 @@ def create_output_files(common_output_name, general_data, resize_data, stage_dat
                 indexes.append(0)
                 mindexes.append(len(values_aux[j]))
 
+
+    #Get the first set of values
     for i in range(len(lists)):
         read_parameter(i)
+
+    #FIXME Deberia hacerse en otra parte
+    if (type(datasets[0][Config_section.P_SDR.value]) != list or type(datasets[0][Config_section.P_ADR.value]) != list):
+        sdr = datasets[0][Config_section.P_SDR.value]
+        adr_percentage = datasets[0][Config_section.P_ADR.value]
+        correct_adr(sdr, adr_percentage, write_datasets[0])
+
     output_index=0
+    adr_corrected=False
     while True:
         if(check_sections_assumptions(write_datasets)):
-            correct_adr(write_datasets[0])
             write_output_file(write_datasets, common_output_name, output_index)
 #            for i in range(len(write_datasets)):
 #                print(write_datasets[i])
-#            print("\n\n\n------------------------------------------" + str(output_index))
+#            print("\n\n\n------------------------------------------" + str(output_index) + " ADR=" + str(adr_corrected))
             output_index+=1
         finished = read_parameter(0)
         if finished:
