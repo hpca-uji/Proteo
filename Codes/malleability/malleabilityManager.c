@@ -652,8 +652,8 @@ int start_redistribution() {
  * los hijos han terminado de recibir.
  */
 int check_redistribution() {
-  int is_intercomm, req_qty, completed, local_completed, all_completed, test_err;
-  size_t i, j;
+  int is_intercomm, completed, local_completed, all_completed, test_err;
+  size_t i, j, req_qty;
   MPI_Request *req_completed;
   local_completed = 1;
   test_err = 0;
@@ -769,6 +769,7 @@ int end_redistribution() {
 int shrink_redistribution() {
     double time_extra = MPI_Wtime();
 
+    //TODO Create new state before collecting zombies. Processes can perform tasks before that. Then call again Malleability to commit the change
     zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall_conf->config_file->n_stages);
     
     if(mall->myId < mall->numC) {

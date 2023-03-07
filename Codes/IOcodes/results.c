@@ -174,7 +174,7 @@ void compute_results_stages(results_data *results, int myId, int numP, int root,
       MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
     }
   }
-  MPI_Barrier(comm);
+  MPI_Barrier(comm); //FIXME Esto debería de borrarse
 }
 
 //======================================================||
