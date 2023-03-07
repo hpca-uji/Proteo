@@ -39,11 +39,11 @@ void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int init_s
 
   for(i=0; i<numP_other; i++) {
     if(counts->counts[i] < 0) {
-      fprintf(stderr, "Counts value [i=%d] is negative for rank %d/%d", i, myId, numP);
+      fprintf(stderr, "Counts value [i=%d/%d] is negative for rank %d/%d ", i, numP_other, myId, numP);
       MPI_Abort(MPI_COMM_WORLD, -3);
     }
     if(counts->displs[i] < 0) {
-      fprintf(stderr, "Displs value [i=%d] is negative for rank %d/%d", i, myId, numP);
+      fprintf(stderr, "Displs value [i=%d/%d] is negative for rank %d/%d ", i, numP_other, myId, numP);
       MPI_Abort(MPI_COMM_WORLD, -3);
     }
   }
