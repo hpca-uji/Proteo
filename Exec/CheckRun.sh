@@ -180,7 +180,8 @@ do
 
       #3 - Launch execution
       echo "Run$run lacks $diff repetitions"
-      echo "sbatch -N $node_qty $dir$execDir./singleRun.sh config$run.ini $run $diff"
+      use_extrae=0
+      sbatch -N $node_qty $dir$execDir./generalRun.sh $dir $config_file $use_extrae $run $diff
     fi
   else
     echo "File R${run}_Global.out does not exist -- Could it be it must still be executed?"

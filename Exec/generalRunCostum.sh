@@ -1,11 +1,6 @@
 #!/bin/bash
 #This script should only be called by others scripts, do not call it directly
-
-#SBATCH --exclude=c02,c01,c00
-#SBATCH -p P1
 codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
 
 echo "START TEST"
 
@@ -25,9 +20,20 @@ fi
 #READ PARAMETERS AND ENSURE CORRECTNESS
 dir=$1
 configFile=$2
-use_extrae=$3
-outFileIndex=$4
+use_extrae=0
+outFileIndex=0
 qty=1
+
+if [ $# -ge 4 ]
+then
+  use_extrae=$3
+fi
+
+if [ $# -ge 5 ]
+then
+  outFileIndex=$4
+fi
+
 if [ $# -ge 6 ]
 then
   qty=$5
@@ -37,8 +43,7 @@ nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
 if [ -z "$nodelist" ];
 then
-  echo "Internal ERROR in generalRun.sh - Nodelist not provided"
-  exit -1
+  nodelist="localhost"
 fi
 if [ -z "$nodes" ];
 then
@@ -64,10 +69,8 @@ else
   cp $dir$execDir/Extrae/trace_worker.sh .
   for ((i=0; i<qty; i++))
   do
-    srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes
+    mpirun -np $numP ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
   done
 fi
 
 echo "END TEST"
-sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
-sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
