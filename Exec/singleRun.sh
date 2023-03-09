@@ -50,6 +50,7 @@ done
 
 echo "END TEST"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
+sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
 
 if [ $# -gt 3 ]
 then

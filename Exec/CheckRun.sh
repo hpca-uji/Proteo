@@ -1,150 +1,196 @@
 #!/bin/bash
 
 dir="/home/martini/malleability_benchmark/"
+cores=20
+
+# Checks if all the runs in the current working directory performed under a 
+# Slurm manager have been performed correctly and if some runs can be corrected 
+# they are launched again
+# Parameter 1 - Maximum index of the runs
+# Parameter 2 - Amount of repetitions per index/run
+# Parameter 3 - Total stages in all runs. #FIXME The amount of stages must be equal across all the runs, must be modified in the future.
+# Parameter 4 - Total groups of processes in all runs #FIXME The amount of groups must be equal across all the runs, must be modified in the future.
+# Parameter 5 - Maximum valid iteration time across all runs. If an iteration time
+#               is higher, that particular repetition inside the run is cleaned and
+#               launched again.
+#====== Do not modify the following values =======
+
 codeDir="Codes/"
 execDir="Exec/"
 ResultsDir="Results/"
 
-ResultsDirName=$1
-maxIndex=$2
-cantidadGrupos=$3 #Contando a los padres
-totalEjGrupo=$4 #Total de ejecuciones por grupo
+maxIndex=$1
+totalEjGrupo=$2 #Total de ejecuciones por grupo
+total_stages=$3
+total_groups=$4
 maxTime=$5 #Maximo tiempo que se considera válido
 
-if [ $# -lt 3 ]
+exec_lines_basic=6
+iter_lines_basic=3
+exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
+iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
+exec_remove=$(($exec_lines_basic+$total_stages+$total_groups-1))
+iter_remove=$(($iter_lines_basic+$total_stages-1))
+
+if [ "$#" -lt "6" ]
 then
-  echo "Faltan argumentos"
-  echo "Uso -> bash CheckRun NombreDirectorio IndiceMaximo Grupos"
+  echo "Not enough arguments"
+  echo "Usage -> bash CheckRun maxIndes total_repetitions total_groups total_stages max_iteration_time"
   exit -1
 fi
 
-cd $dir$ResultsDir
-if [ ! -d $ResultsDirName ]
-then
-  echo "La carpeta de resultados $ResultsDirName no existe. Abortando"
-  exit -1
-fi
-cd $ResultsDirName
-
-#Comprobar si hay errores
-#Si los hay, salir
-grep -i -e fatal -e error -e abort -e == */slurm* > errores2.txt
+#Check if there are fatal errors during executions
+grep -i -e fatal -e error -e abort -e == slurm* > errores2.txt
 qty=$(wc -l errores2.txt | cut -d ' ' -f1)
-
-if [ $qty -gt 0 ]
+if [ "$qty" -gt "0" ]
 then
-  echo "Se han encontrado errores de ejecución graves. Abortando"
-  echo "Revisar archivo errores2.txt en el directorio $ResultsDirName"
+  echo "Found Fatal errors during execution. Aborting"
+  echo "Read file errors2 to see the errors and in which files"
   exit -2
 fi
-rm errores2.txt
 
-#Comprobar que el número de archivos es correcto
-#Pueden estar todos los archivos pero no estar los archivos
-#completos -- Esto se comprueba más tarde
-qtyG=$(ls R*/R*_Global.out | wc -l)
+#Check if the number of output files is correct.
+#If the number is not correct is a fatal error and the user
+# is informed in which runs the amount does not match, and
+# then the scripts exit.
+#The user must figure out what to do with those runs.
+qtyG=$(ls R*_Global.out | wc -l)
 qtyG=$(($qtyG * 2))
-qtyL=$(ls R*/R*_G?N*.out | wc -l)
-if [ $qtyG == $qtyL ]
+qtyL=$(ls R*_G*N*.out | wc -l)
+if [ "$qtyG" == "$qtyL" ]
 then
-  echo "El numero de ficheros G($qtyG) y L($qtyL) coincide"
+  echo "Number of G($qtyG) and L($qtyL) files match"
 else
-  #Si faltan archivos, se indican cuales faltan
-  echo "Faltan ejecuciones Locales o globales"
-  for ((i=1; i<$maxIndex; i++))
+  echo "Lacking Local($qtyL) or global($qtyG) files. Aborting"
+  echo "Lacking Local($qtyL) or global($qtyG) files. Aborting" > errores2.txt
+  for ((i=0; i<$maxIndex; i++))
   do
-    qtyEx=$(grep Tex -r Run$i | wc -l)
-    qtyIt=$(grep Top -r Run$i | wc -l)
+    qtyEx=$(grep T_total R"$i"_Global.out | wc -l)
+    qtyIt=$(grep T_iter R"$i"_G*N*.out | wc -l)
     qtyEx=$(($qtyEx * 2))
-    if [ $qtyEx -ne $qtyIt ] 
+    if [ "$qtyEx" -ne "$qtyIt" ] 
     then
       diff=$(($totalEjGrupo-$qtyEx))
-      echo "Faltan archivos en Run$i"
+      echo "Files do not match at Run $i -- diff=$diff"
+      echo "Files do not match at Run $i -- diff=$diff" >> errores2.txt
     fi
   done
   exit -1
 fi
+rm errores2.txt
 
-#grep -rn "2.\." R* TODO Testear que el tiempo teorico maximo es valido?
+# Check if there is any negative execution time
+# Only invalid IDs are stored
+rm -f errores.txt
+touch errores.txt
+exec_ids=($(grep -n "T_total" R*_Global.out | grep - | cut -d '_' -f1 | cut -d 'R' -f2))
+exec_line=($(grep -n "T_total" R*_Global.out | grep - | cut -d ':' -f2))
+for ((i=${#exec_ids[@]}-1; i>=0; i--))
+do
+  first_line=$((${exec_line[$i]}-$exec_remove))
+  last_line=$(($first_line+$exec_total_lines-1))
+  echo "${exec_ids[$i]}:$first_line:$last_line" >> errores.txt
+done
 
-#Comprobar si hay runs con tiempo negativos
-#Si los hay, reejecutar e informar de cuales son
-grep - */R* | grep Tex > errores.txt
+# Check if there is any iter time higher than expected
+# Only invalid IDs are stored
+iter_times=($(grep "T_iter" R*_G*N*.out | cut -d ' ' -f2))
+iter_ids=($(grep "T_iter" R*_G*N*.out | cut -d '_' -f1 | cut -d 'R' -f2))
+iter_line=($(grep -n "T_iter" R*_G*N*.out | cut -d ':' -f2))
+for ((i=${#iter_times[@]}-1; i>=0; i--))
+do
+  is_invalid=$(echo ${iter_times[$i]}'>'$maxTime | bc -l)
+  if [ $is_invalid -eq 1 ]
+  then
+    first_line=$((${iter_line[$i]}-$iter_remove))
+    # Translate line number to Global file
+    first_line=$(($first_line/$iter_total_lines))
+    first_line=$(($first_line*$exec_total_lines+1))
+    last_line=$(($first_line+$exec_total_lines-1))
+    echo "${iter_ids[$i]}:$first_line:$last_line" >> errores.txt
+  fi
+done
+
+#Clean data from collected erroneous executions
 qty=$(wc -l errores.txt | cut -d ' ' -f1)
-if [ $qty -gt 0 ]
+if [ "$qty" -gt 0 ];
 then
   echo "Se han encontrado errores de ejecución leves. Volviendo a ejecutar"
 
   while IFS="" read -r lineRun || [ -n "$lineRun" ]
   do
-    #Obtener datos de una ejecución erronea
-    run=$(echo $lineRun | cut -d 'R' -f3 | cut -d '_' -f1)
-    if [ $run -gt $maxIndex ]
-    then #Indice de ejecuciones posteriores echas a mano -- FIXME Eliminar?
-      realRun=$(($run - $maxIndex))
-      index=$run
-    else # Indice de las primeras ejecuciones
-      realRun=$run
-      index=$(($run + $maxIndex))
-    fi
+    #Obtain data of erroneous execution
+    run=$(echo $lineRun | cut -d ':' -f1)
+    echo "Run $run had an erroneous execution, cleaning bad data."
 
-    echo "Run $run"
-    cd Run$realRun
+    #1 - Delete erroneous lines in Global file
+    first_line=$(echo $lineRun | cut -d ':' -f2)
+    last_line=$(echo $lineRun | cut -d ':' -f3)
+    sed -i ''$first_line','$last_line'd' R${run}_Global.out
 
-    #Arreglar ejecuccion
-
-    #1 - Borrar lineas erroneas
-    qty=$(grep -n - R* | grep Tex | wc -l)
-    for ((i=0; i<qty; i++))
-    do 
-      fin=$(grep -n - R* | grep Tex | cut -d ':' -f2 | head -n1)
-      init=$(($fin - 7))
-      sed -i ''$init','$fin'd' R${realRun}_Global.out
-
-      #Se borran las lineas de los ficheros locales asociados
-      aux=$(($fin / 8)) #Utilizado para saber de entre las ejecuciones del fichero, cual es la erronea
-      fin=$(($aux * 5))
-      init=$(($fin - 4))
-      for ((j=0; j<cantidadGrupos; j++)); do
-        sed -i ''$init','$fin'd' R${realRun}_G${j}*
-      done
+    #2 - Translate line numbers to Local files type
+    first_line=$(($first_line/$exec_total_lines))
+    first_line=$(($first_line*$iter_total_lines+1))
+    last_line=$(($first_line+$iter_total_lines-1))
+    #3 - Delete erroneous lines in Local files
+    for ((j=0; j<total_groups; j++)); 
+    do
+      sed -i ''$first_line','$last_line'd' R${run}_G${j}*
     done
 
-    #2 - Reelanzar ejecucion
-    proc_list=$(grep Procs R${realRun}_Global.out | cut -d '=' -f3 | cut -d ',' -f1)
-    proc_parents=$(echo $proc_list | cut -d ' ' -f1)
-    proc_children=$(echo $proc_list | cut -d ' ' -f2)
-    nodes=8 # Maximo actual
-    if [ $proc_parents -gt $proc_children ]
-    then
-      nodes=$(($proc_parents / 20))
-    else
-      nodes=$(($proc_children / 20))
-    fi
-
-    sbatch -N $nodes $dir$execDir./singleRun.sh config$realRun.ini $index
-    cd $dir$ResultsDir$ResultsDirName
-
   done < errores.txt
-  exit 0
 fi
 
-#Comprobar que todas las ejecuciones tienen todas las ejecucciones que tocan
-#Solo es necesario comprobar el global.
+#Check if all repetitions for each Run have been executed
+#If any run lacks repetitions, the job is automatically launched again
+#If a run has even executed a repetition, is not launched as it could be in the waiting queue
 qty_missing=0
-cd $dir$ResultsDir$ResultsDirName
-for ((i=1; i<$maxIndex; i++))
+for ((run=0; run<$maxIndex; run++))
 do
-  qtyEx=$(grep Tex -r Run$i | wc -l)
-  if [ $qtyEx -ne $totalEjGrupo ]
+  if [ -f "R${run}_Global.out" ]
   then
-    diff=$(($totalEjGrupo-$qtyEx))
-    qty_missing=$(($qty_missing+1))
-    echo "Faltan en $i, $diff ejecuciones"
+    qtyEx=$(grep T_total R"$run"_Global.out | wc -l)
+    if [ "$qtyEx" -ne "$totalEjGrupo" ];
+    then
+      diff=$(($totalEjGrupo-$qtyEx))
+      qty_missing=$(($qty_missing+$diff))
+      config_file="config$run.ini"
+
+      #1 - Obtain maximum number of processes for the run
+      max_numP=-1
+      for ((j=0; j<total_groups; j++)); 
+      do
+        resize_info=$(grep "\[resize$j\]" -n $config_file | cut -d ":" -f1)
+        first_line=$(echo $resize_info | cut -d " " -f1)
+        last_line=$(echo $resize_info | cut -d " " -f2)
+        range_lines=$(( last_line - first_line ))
+        numP=$(head -$last_line $config_file | tail -$range_lines | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
+	if [ "$numP" -gt "$max_numP" ];
+	then
+	  max_numP=$numP
+	fi
+      done
+
+      #3 - Obtain needed nodes for the number of processes
+      node_qty=$(($max_numP / $cores))
+      if [ "$node_qty" -eq "0" ];
+      then
+        node_qty=1
+      fi
+
+      #3 - Launch execution
+      echo "Run$run lacks $diff repetitions"
+      echo "sbatch -N $node_qty $dir$execDir./singleRun.sh config$run.ini $run $diff"
+    fi
+  else
+    echo "File R${run}_Global.out does not exist -- Could it be it must still be executed?"
   fi
 done
 
-if [ $qty_missing -eq 0 ]
+
+if [ "$qty_missing" -eq "0" ];
 then
-  echo "Todos los archivos tienen $totalEjGrupo ejecuciones"
+  echo "SUCCESS"
+else
+  echo "REPEATING - A total of $qty_missing executions are being repeated"
 fi

@@ -45,7 +45,7 @@ then
 else
   for ((i=0; i<qty; i++))
   do
-  srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES
+    srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $SLURM_JOB_NODELIST $SLURM_JOB_NUM_NODES
   done
 fi
 
