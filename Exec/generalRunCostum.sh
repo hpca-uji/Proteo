@@ -1,6 +1,8 @@
 #!/bin/bash
 #This script should only be called by others scripts, do not call it directly
 codeDir="/Codes/build"
+execDir="/Exec"
+ResultsDir="/Results"
 
 echo "START TEST"
 
@@ -24,17 +26,17 @@ use_extrae=0
 outFileIndex=0
 qty=1
 
-if [ $# -ge 4 ]
+if [ $# -gt 3 ]
 then
   use_extrae=$3
 fi
 
-if [ $# -ge 5 ]
+if [ $# -gt 4 ]
 then
   outFileIndex=$4
 fi
 
-if [ $# -ge 6 ]
+if [ $# -gt 5 ]
 then
   qty=$5
 fi
