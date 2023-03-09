@@ -55,7 +55,7 @@ fi
 
 #1 - Obtain maximum number of processes for the run
 max_numP=-1
-total_groups=$(grep Total_Resizes config2.ini | cut -d '=' -f2)
+total_groups=$(grep Total_Resizes $config_file | cut -d '=' -f2)
 for ((j=0; j<total_groups; j++)); 
 do
   resize_info=$(grep "\[resize$j\]" -n $config_file | cut -d ":" -f1)
