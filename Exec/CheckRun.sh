@@ -32,7 +32,7 @@ iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
 exec_remove=$(($exec_lines_basic+$total_stages+$total_groups-1))
 iter_remove=$(($iter_lines_basic+$total_stages-1))
 
-if [ "$#" -lt "6" ]
+if [ "$#" -lt "5" ]
 then
   echo "Not enough arguments"
   echo "Usage -> bash CheckRun maxIndes total_repetitions total_groups total_stages max_iteration_time"

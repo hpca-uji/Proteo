@@ -28,7 +28,7 @@ configFile=$2
 use_extrae=$3
 outFileIndex=$4
 qty=1
-if [ $# -gt 5 ]
+if [ $# -ge 5 ]
 then
   qty=$5
 fi

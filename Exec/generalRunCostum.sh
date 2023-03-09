@@ -26,17 +26,17 @@ use_extrae=0
 outFileIndex=0
 qty=1
 
-if [ $# -gt 3 ]
+if [ $# -ge 3 ]
 then
   use_extrae=$3
 fi
 
-if [ $# -gt 4 ]
+if [ $# -ge 4 ]
 then
   outFileIndex=$4
 fi
 
-if [ $# -gt 5 ]
+if [ $# -ge 5 ]
 then
   qty=$5
 fi

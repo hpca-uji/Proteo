@@ -14,14 +14,12 @@ codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
 
-if [ $# -lt 2 ]
+if [ $# -lt 1 ]
 then
   echo "Not enough arguments. Usage:"
   echo "singleRunCostum.sh config.ini [outFileIndex] [Qty] [Use Extrae] [Output path]"
   exit 1
 fi
-
-echo "START TEST"
 
 #$1 == configFile
 #$2 == outFileIndex
@@ -34,19 +32,19 @@ outFileIndex=0
 qty=1
 use_extrae=0
 
-if [ $# -gt 2 ]
+if [ $# -ge 2 ]
 then
   outFileIndex=$2
 fi
-if [ $# -gt 3 ]
+if [ $# -ge 3 ]
 then
   qty=$3
 fi
-if [ $# -gt 4 ]
+if [ $# -ge 4 ]
 then
   use_extrae=$4
 fi
-if [ $# -gt 5 ]
+if [ $# -ge 5 ]
 then
   output=$5
 fi
