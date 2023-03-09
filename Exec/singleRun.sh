@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark"
+dir="/home/usuario/Documentos/malleability_benchmark"
 partition="P1"
 exclude="c00,c01,c02"
 cores=20
@@ -18,7 +18,7 @@ codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
 
-if [ $# -lt 2 ]
+if [ $# -lt 1 ]
 then
   echo "Not enough arguments. Usage:"
   echo "bash singleRun.sh config.ini [outFileIndex] [Qty] [Use extrae] [Output path]"
@@ -36,26 +36,26 @@ outFileIndex=0
 qty=1
 use_extrae=0
 
-if [ $# -gt 2 ]
+if [ $# -ge 2 ]
 then
   outFileIndex=$2
 fi
-if [ $# -gt 3 ]
+if [ $# -ge 3 ]
 then
   qty=$3
 fi
-if [ $# -gt 4 ]
+if [ $# -ge 4 ]
 then
   use_extrae=$4
 fi
-if [ $# -gt 5 ]
+if [ $# -ge 5 ]
 then
   output=$5
 fi
 
 #1 - Obtain maximum number of processes for the run
 max_numP=-1
-total_groups=$(grep Total_Resizes config2.ini | cut -d '=' -f2)
+total_groups=$(grep Total_Resizes $config_file | cut -d '=' -f2)
 for ((j=0; j<total_groups; j++)); 
 do
   resize_info=$(grep "\[resize$j\]" -n $config_file | cut -d ":" -f1)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark/"
+dir="/home/usuario/Documentos/malleability_benchmark"
 codeDir="Codes/"
 execDir="Exec/"
 ResultsDir="Results/"
