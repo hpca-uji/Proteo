@@ -41,19 +41,24 @@ columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
             "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
 
-columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
-            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR"] #24
-
+#-----------------------------------------------
 # Obtains the value of a given index in a splited line
 # and returns it as a float values if possible, string otherwise
-def get_value(line, index):
-  value = line[index].split('=')[1].split(',')[0]
+def get_value(line, index, separator=True):
+  if separator:
+    value = line[index].split('=')[1].split(',')[0]
+  else:
+    value = line[index]
+
   try:
-    return float(value)
+    value = float(value)
+    if value.is_integer():
+      value = int(value)
   except ValueError:
     return value
+  return value
 
+#-----------------------------------------------
 # Obtains the general parameters of an execution and
 # stores them for creating a global dataframe
 def record_config_line(lineS, dataG_it):
@@ -62,8 +67,6 @@ def record_config_line(lineS, dataG_it):
   offset_line = 2
   for i in range(len(ordered_indexes)):
     value = get_value(lineS, i+offset_line)
-    if value.is_integer():
-      value = int(value)
     index = ordered_indexes[i]
     dataG_it[index] = value
 
@@ -74,14 +77,15 @@ def record_config_line(lineS, dataG_it):
 
   # Init lists for each column
   array_groups = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
-          G_enum.ASYNCH_ITERS.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
-  array_resizes = [G_enum.REDISTRIBUTION_METHOD.value, G_enum.REDISTRIBUTION_METHOD.value,
-          G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, \
-          G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value]
+          G_enum.ASYNCH_ITERS.value, G_enum.T_ITER.value, G_enum.T_STAGES.value, G_enum.RED_METHOD.value, \
+          G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value,]
+  array_resizes = [ G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value]
   array_stages = [G_enum.STAGE_TYPES.value, \
           G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   for index in array_groups:
     dataG_it[index] = [None]*dataG_it[G_enum.TOTAL_GROUPS.value]
+  for group in range(dataG_it[G_enum.TOTAL_GROUPS.value]): #FIXME Modificar orden, Async Iters antes que T_iter. Asi es posible descubrir el tamanyo al crearlo
+    dataG_it[G_enum.T_ITER.value][group] = []
 
   for index in array_resizes:
     dataG_it[index] = [None]*dataG_it[G_enum.TOTAL_RESIZES.value]
@@ -89,6 +93,7 @@ def record_config_line(lineS, dataG_it):
   for index in array_stages:
     dataG_it[index] = [None]*dataG_it[G_enum.TOTAL_STAGES.value]
 
+#-----------------------------------------------
 # Obtains the parameters of a stage line 
 # and stores it in the dataframe
 # Is needed to indicate in which stage is
@@ -99,116 +104,121 @@ def record_stage_line(lineS, dataG_it, stage):
   offset_lines = 2
   for i in range(len(array_stages)):
     value = get_value(lineS, i+offset_lines)
-    if value.is_integer():
-        value = int(value)
     index = array_stages[i]
     dataG_it[index][stage] = value
 
+#-----------------------------------------------
 # Obtains the parameters of a resize line
 # and stores them in the dataframe
 # Is needed to indicate to which group refers
 # the resize line
-def record_resize_line(lineS, dataG_it, group):
+def record_group_line(lineS, dataG_it, group):
   array_groups = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
-          G_enum.REDISTRIBUTION_METHOD.value, G_enum.REDISTRIBUTION_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
+          G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
   offset_lines = 2
   for i in range(len(array_groups)):
     value = get_value(lineS, i+offset_lines)
-    if value.is_integer():
-        value = int(value)
-    index = array_stage[i]
+    index = array_groups[i]
     dataG_it[index][group] = value
 
+#-----------------------------------------------
 def record_time_line(lineS, dataG_it):
   T_names = ["T_spawn:", "T_spawn_real:", "T_SR:", "T_AR:", "T_total:"]
   T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_TOTAL.value]
   if not (lineS[0] in T_names): # Execute only if line represents a Time
       return
 
-  index = T_names.index(linesS[0])
+  index = T_names.index(lineS[0])
   index = T_values[index]
   offset_lines = 1
-  for i in range(len(dataG_it[index])):
-    dataG_it[index][i] = get_value(lineS, i+offset_lines)
 
-def record_multiple_times_line(lineS, dataG_it, ):
-  T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_TOTAL.value]
+  len_index = 1
+  if dataG_it[index] != None:
+    len_index = len(dataG_it[index])
+    for i in range(len_index):
+      dataG_it[index][i] = get_value(lineS, i+offset_lines, False)
+  else:
+      dataG_it[index] = get_value(lineS, offset_lines, False)
+
+#-----------------------------------------------
+def record_multiple_times_line(lineS, dataG_it, group):
+  T_names = ["T_iter:", "T_stage"]
+  T_values = [G_enum.T_ITER.value, G_enum.T_STAGES.value]
   if not (lineS[0] in T_names): # Execute only if line represents a Time
       return
 
-  groups = dataG_it[G_enum.TOTAL_GROUPS.value]
-  index = T_names.index(linesS[0])
+  index = T_names.index(lineS[0])
   index = T_values[index]
+
   offset_lines = 1
-  for i in range(len(dataG_it[index])):
-  
+  if index == G_enum.T_STAGES.value:
+    offset_lines += 1
+    total_iters = len(lineS)-offset_lines
+    stage = int(lineS[1].split(":")[0])
+    if stage == 0:
+      dataG_it[index][group] = [None] * total_iters
+      for i in range(total_iters):
+        dataG_it[index][group][i] = [None] * dataG_it[G_enum.TOTAL_STAGES.value]
+    for i in range(total_iters):
+        dataG_it[index][group][i][stage] = get_value(lineS, i+offset_lines, False)
+  else:
+    total_iters = len(lineS)-offset_lines
+    for i in range(total_iters): #FIXME Modificar orden T_iter y Async_iters. Crear lista de total_iters aqui
+      dataG_it[index][group].append(get_value(lineS, i+offset_lines, False))
   
 #-----------------------------------------------
-def read_local_file(f, dataG, it):
-  resizes = 0
-  timer = 0
-  previousNP = 0
+def read_local_file(f, dataG, it, runs_in_file):
+  offset = 0
+  real_it = 0
+  group = 0
 
   for line in f: 
     lineS = line.split()
 
     if len(lineS) > 0:
-      if lineS[0] == "Config": # CONFIG LINE
-        it += 1
-        record_config(lineS, dataG[it], dataM[it])
-        resize = 0
-        stage = 0
-
-      elif lineS[0] == "Stage":
-        record_stage_line(lineS, dataG[it], stage)
-        stage+=1
-      elif lineS[0] == "Resize":
-        record_resize_line(lineS, dataG[it], resize)
-        resize+=1
-      elif lineS[0] == "T_total:":
-        value = get_value(lineS, 1)
-        dataG[it][G_enum.T_TOTAL.value] = value
+      if lineS[0] == "Group": # GROUP number
+        offset += 1
+        real_it = it - (runs_in_file-offset)
+        group = int(lineS[1].split(":")[0])
+      if lineS[0] == "Async_Iters:":
+        offset_lines = 1
+        dataG[real_it][G_enum.ASYNCH_ITERS.value][group] = get_value(lineS, offset_lines, False)
       else:
-        record_time_line(lineS, dataG[it])
-          
-  return it
+        record_multiple_times_line(lineS, dataG[real_it], group)
 
 #-----------------------------------------------
 def read_global_file(f, dataG, it):
-  run = -1
-
+  runs_in_file=0
   for line in f: 
     lineS = line.split()
 
     if len(lineS) > 0:
       if lineS[0] == "Config": # CONFIG LINE
         it += 1
-        nonlocal columnsG
-        dataG.append([None]*len(columnsG))
-        record_config(lineS, dataG[it])
-        resize = 0
+        runs_in_file += 1
+        group = 0
         stage = 0
-        run += 1
+
+        dataG.append([None]*len(columnsG))
+        record_config_line(lineS, dataG[it])
 
       elif lineS[0] == "Stage":
         record_stage_line(lineS, dataG[it], stage)
         stage+=1
-      elif lineS[0] == "Resize":
-        record_resize_line(lineS, dataG[it], resize)
-        resize+=1
+      elif lineS[0] == "Group":
+        record_group_line(lineS, dataG[it], group)
+        group+=1
       else:
         record_time_line(lineS, dataG[it])
 
-  
-  read_local_file(dataG[it])
-          
-  return it
+  return it,runs_in_file
 
 #-----------------------------------------------
 if len(sys.argv) < 2:
     print("The files name is missing\nUsage: python3 MallTimes.py resultsName directory csvOutName")
     exit(1)
 
+common_name = sys.argv[1]
 if len(sys.argv) >= 3:
     BaseDir = sys.argv[2]
     print("Searching in directory: "+ BaseDir)
@@ -222,28 +232,34 @@ else:
 print("Csv name will be: " + name + "G.csv & " + name + "M.csv")
 
 insideDir = "Run"
-lista = glob.glob("./" + BaseDir + insideDir + "*/" + sys.argv[1]+ "*Global.o*")
-lista += (glob.glob("./" + BaseDir + sys.argv[1]+ "*Global.o*")) # Se utiliza cuando solo hay un nivel de directorios
+lista = glob.glob(BaseDir + insideDir + "*/" + common_name + "*_Global.out")
+lista += (glob.glob(BaseDir + common_name + "*_Global.out")) # Se utiliza cuando solo hay un nivel de directorios
 print("Number of files found: "+ str(len(lista)));
 
 it = -1
 dataG = []
-dataM = []
-columnsG = ["N", "%Async", "Groups", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TE"] #13
-columnsM = ["N", "%Async", "NP", "NS", "Dist", "Matrix", "CommTam", "Cst", "Css", "Time", "Iters", "TC", "TH", "TS", "TA"] #15
 
 for elem in lista:
   f = open(elem, "r")
-  it = read_file(f, dataG, dataM, it)
-  f.close()
+  id_run = elem.split("_Global.out")[0].split(common_name)[1] 
+  path_to_run = elem.split(common_name)[0]
+  lista_local = glob.glob(path_to_run + common_name + id_run + "_G*NP*.out")
 
-#print(data)
+  it,runs_in_file = read_global_file(f, dataG, it)
+  f.close()
+  for elem_local in lista_local:
+    f_local = open(elem_local, "r")
+    read_local_file(f_local, dataG, it, runs_in_file)
+    f_local.close()
+
+
 dfG = pd.DataFrame(dataG, columns=columnsG)
 dfG.to_csv(name + 'G.csv')
+dfG.to_excel(name + 'G.xlsx')
 
-dfM = pd.DataFrame(dataM, columns=columnsM)
+#dfM = pd.DataFrame(dataM, columns=columnsM)
 
 #Poner en TC el valor real y en TH el necesario para la app
-cond = dfM.TH != 0
-dfM.loc[cond, ['TC', 'TH']] = dfM.loc[cond, ['TH', 'TC']].values
-dfM.to_csv(name + 'M.csv')
+#cond = dfM.TH != 0
+#dfM.loc[cond, ['TC', 'TH']] = dfM.loc[cond, ['TH', 'TC']].values
+#dfM.to_csv(name + 'M.csv')

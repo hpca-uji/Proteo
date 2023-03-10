@@ -3,18 +3,16 @@ import glob
 import numpy as numpy
 import pandas as pd
 
-
-
 if len(sys.argv) < 3:
     print("The files name is missing\nUsage: python3 joinDf.py resultsName1.csv resultsName2.csv csvOutName")
     exit(1)
 
 if len(sys.argv) >= 4:
-  print("Csv name will be: " + sys.argv[3] + ".csv")
   name = sys.argv[3]
 else:
   name = "dataJOINED"
 
+print("Csv name will be: " + name + ".csv")
 df1 = pd.read_csv( sys.argv[1] )
 df2 = pd.read_csv( sys.argv[2] )
 frames = [df1, df2]
