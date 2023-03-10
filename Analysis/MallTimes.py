@@ -12,33 +12,47 @@ class G_enum(Enum):
     SDR = 4
     ADR = 5
     DR = 6
-    ASYNCH_REDISTRIBUTION_TYPE = 7
-    SPAWN_METHOD = 8
-    SPAWN_STRATEGY = 9
-    GROUPS = 10
-    FACTOR_S = 11
-    DIST = 12
-    STAGE_TYPES = 13
-    STAGE_TIMES = 14
-    STAGE_BYTES = 15
-    ITERS = 16
-    ASYNCH_ITERS = 17
-    T_ITER = 18
-    T_STAGES = 19
-    T_SPAWN = 20
-    T_SPAWN_REAL = 21
-    T_SR = 22
-    T_AR = 23
-    T_TOTAL = 24
+    RED_METHOD = 7
+    RED_STRATEGY = 8
+    SPAWN_METHOD = 9
+    SPAWN_STRATEGY = 10
+    GROUPS = 11
+    FACTOR_S = 12
+    DIST = 13
+    STAGE_TYPES = 14
+    STAGE_TIMES = 15
+    STAGE_BYTES = 16
+    ITERS = 17
+    ASYNCH_ITERS = 18
+    T_ITER = 19
+    T_STAGES = 20
+    T_SPAWN = 21
+    T_SPAWN_REAL = 22
+    T_SR = 23
+    T_AR = 24
+    T_TOTAL = 25
+    #Malleability specific
+    NP = 0
+    NC = 1
+    BAR = 11 # Extract 1 from index
 
-columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Asynch_Redistribution_Type", \
-            "Spawn_Method", "Spawn_Strategy", "Groups", "Factor_S", "Dist", "Stage_Types", "Stage_Times", "Stage_Bytes", \
-            "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #25
+
+columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
+            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
+
+columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
+            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR"] #24
 
 # Obtains the value of a given index in a splited line
-# and returns it as a float values
+# and returns it as a float values if possible, string otherwise
 def get_value(line, index):
-  return float(line[index].split('=')[1].split(',')[0])
+  value = line[index].split('=')[1].split(',')[0]
+  try:
+    return float(value)
+  except ValueError:
+    return value
 
 # Obtains the general parameters of an execution and
 # stores them for creating a global dataframe
@@ -53,8 +67,7 @@ def record_config_line(lineS, dataG_it):
     index = ordered_indexes[i]
     dataG_it[index] = value
 
-  dataG_it[G_enum.TOTAL_GROUPS.value] = dataG_it[G_enum.TOTAL_RESIZES.value]
-  dataG_it[G_enum.TOTAL_RESIZES.value] -=1 #FIXME Modificar en App sintetica
+  dataG_it[G_enum.TOTAL_GROUPS.value] = dataG_it[G_enum.TOTAL_RESIZES.value]+1
 
   #FIXME Modificar cuando ADR ya no sea un porcentaje
   dataG_it[G_enum.DR.value] = dataG_it[G_enum.SDR.value] + dataG_it[G_enum.ADR.value]
@@ -62,9 +75,9 @@ def record_config_line(lineS, dataG_it):
   # Init lists for each column
   array_groups = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
           G_enum.ASYNCH_ITERS.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
-  array_resizes = [G_enum.ASYNCH_REDISTRIBUTION_TYPE.value, G_enum.SPAWN_METHOD.value, \
-          G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, \
-          G_enum.T_SR.value, G_enum.T_AR.value]
+  array_resizes = [G_enum.REDISTRIBUTION_METHOD.value, G_enum.REDISTRIBUTION_METHOD.value,
+          G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, \
+          G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value]
   array_stages = [G_enum.STAGE_TYPES.value, \
           G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   for index in array_groups:
@@ -88,7 +101,7 @@ def record_stage_line(lineS, dataG_it, stage):
     value = get_value(lineS, i+offset_lines)
     if value.is_integer():
         value = int(value)
-    index = array_stage[i]
+    index = array_stages[i]
     dataG_it[index][stage] = value
 
 # Obtains the parameters of a resize line
@@ -96,10 +109,10 @@ def record_stage_line(lineS, dataG_it, stage):
 # Is needed to indicate to which group refers
 # the resize line
 def record_resize_line(lineS, dataG_it, group):
-  array_stages = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
-          G_enum.ASYNCH_REDISTRIBUTION_TYPE.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
+  array_groups = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
+          G_enum.REDISTRIBUTION_METHOD.value, G_enum.REDISTRIBUTION_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
   offset_lines = 2
-  for i in range(len(array_stages)):
+  for i in range(len(array_groups)):
     value = get_value(lineS, i+offset_lines)
     if value.is_integer():
         value = int(value)
@@ -113,43 +126,23 @@ def record_time_line(lineS, dataG_it):
       return
 
   index = T_names.index(linesS[0])
+  index = T_values[index]
   offset_lines = 1
   for i in range(len(dataG_it[index])):
-    value = get_value(lineS, i+offset_lines)
-    dataG_it[index][i] = value
+    dataG_it[index][i] = get_value(lineS, i+offset_lines)
 
-#-----------------------------------------------
-def read_global_file(f, dataG, it):
-  resizes = 0
-  timer = 0
-  previousNP = 0
+def record_multiple_times_line(lineS, dataG_it, ):
+  T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_TOTAL.value]
+  if not (lineS[0] in T_names): # Execute only if line represents a Time
+      return
 
-  for line in f: 
-    lineS = line.split()
-
-    if len(lineS) > 0:
-      if lineS[0] == "Config": # CONFIG LINE
-        it += 1
-        dataG.append([None]*(25+1))
-        #dataG[it][-1] = None Indicates if local data has been recorded(1) or not(None)
-        record_config(lineS, dataG[it])
-        resize = 0
-        stage = 0
-
-      elif lineS[0] == "Stage":
-        record_stage_line(lineS, dataG[it], stage)
-        stage+=1
-      elif lineS[0] == "Resize":
-        record_resize_line(lineS, dataG[it], resize)
-        resize+=1
-      elif lineS[0] == "T_total:":
-        value = get_value(lineS, 1)
-        dataG[it][G_enum.T_TOTAL.value] = value
-      else:
-        record_time_line(lineS, dataG[it])
-          
-  return it
-
+  groups = dataG_it[G_enum.TOTAL_GROUPS.value]
+  index = T_names.index(linesS[0])
+  index = T_values[index]
+  offset_lines = 1
+  for i in range(len(dataG_it[index])):
+  
+  
 #-----------------------------------------------
 def read_local_file(f, dataG, it):
   resizes = 0
@@ -180,26 +173,53 @@ def read_local_file(f, dataG, it):
           
   return it
 
-#columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Asynch_Redistribution_Type", \\
-#            "Spawn_Method", "Spawn_Strategy", "Groups", "Dist",   "Stage_Types", "Stage_Times", "Stage_Bytes", \\
-#            "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #24
+#-----------------------------------------------
+def read_global_file(f, dataG, it):
+  run = -1
+
+  for line in f: 
+    lineS = line.split()
+
+    if len(lineS) > 0:
+      if lineS[0] == "Config": # CONFIG LINE
+        it += 1
+        nonlocal columnsG
+        dataG.append([None]*len(columnsG))
+        record_config(lineS, dataG[it])
+        resize = 0
+        stage = 0
+        run += 1
+
+      elif lineS[0] == "Stage":
+        record_stage_line(lineS, dataG[it], stage)
+        stage+=1
+      elif lineS[0] == "Resize":
+        record_resize_line(lineS, dataG[it], resize)
+        resize+=1
+      else:
+        record_time_line(lineS, dataG[it])
+
+  
+  read_local_file(dataG[it])
+          
+  return it
 
 #-----------------------------------------------
 if len(sys.argv) < 2:
-    print("The files name is missing\nUsage: python3 iterTimes.py resultsName directory csvOutName")
+    print("The files name is missing\nUsage: python3 MallTimes.py resultsName directory csvOutName")
     exit(1)
 
 if len(sys.argv) >= 3:
     BaseDir = sys.argv[2]
     print("Searching in directory: "+ BaseDir)
 else:
-    BaseDir = sys.argv[2]
+    BaseDir = "./"
 
 if len(sys.argv) >= 4:
-  print("Csv name will be: " + sys.argv[3] + "G.csv & " + sys.argv[3] + "M.csv")
   name = sys.argv[3]
 else:
   name = "data"
+print("Csv name will be: " + name + "G.csv & " + name + "M.csv")
 
 insideDir = "Run"
 lista = glob.glob("./" + BaseDir + insideDir + "*/" + sys.argv[1]+ "*Global.o*")
@@ -225,5 +245,5 @@ dfM = pd.DataFrame(dataM, columns=columnsM)
 
 #Poner en TC el valor real y en TH el necesario para la app
 cond = dfM.TH != 0
-dfM.loc[cond, ['TC', 'TH']] = dfB.loc[cond, ['TH', 'TC']].values
+dfM.loc[cond, ['TC', 'TH']] = dfM.loc[cond, ['TH', 'TC']].values
 dfM.to_csv(name + 'M.csv')
