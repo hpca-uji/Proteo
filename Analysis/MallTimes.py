@@ -34,7 +34,6 @@ class G_enum(Enum):
     #Malleability specific
     NP = 0
     NC = 1
-    BAR = 11 # Extract 1 from index
 
 
 columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
@@ -254,8 +253,7 @@ for elem in lista:
 
 
 dfG = pd.DataFrame(dataG, columns=columnsG)
-dfG.to_csv(name + 'G.csv')
-dfG.to_excel(name + 'G.xlsx')
+dfG.to_pickle(name + 'G.pkl')
 
 #dfM = pd.DataFrame(dataM, columns=columnsM)
 

@@ -36,8 +36,8 @@ class G_enum(Enum):
     NC = 1
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
-            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
+#            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
+#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
 
 columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "FactorS", "Dist", "Stage_Type", "Stage_Time", \
@@ -45,8 +45,8 @@ columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redi
 
 def copy_resize(row, dataM_it, resize):
   basic_indexes = [G_enum.TOTAL_STAGES.value, G_enum.GRANULARITY.value, G_enum.SDR.value, \
-          G_enum.ADR.value, G_enum.DR.value, G_enum.STAGE_TYPES.value, \
-          G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
+          G_enum.ADR.value, G_enum.DR.value]
+  basic_group = [G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   array_actual_group = [G_enum.FACTOR_S.value, G_enum.ITERS.value, G_enum.ASYNCH_ITERS.value, \
           G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
           G_enum.T_AR.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
@@ -55,12 +55,15 @@ def copy_resize(row, dataM_it, resize):
 
   dataM_it[G_enum.NP.value] = row[G_enum.GROUPS.value][resize]
   dataM_it[G_enum.NC.value] = row[G_enum.GROUPS.value][resize+1]
-  dataM_it[G_enum.DIST.value] = [None, None]
-  dataM_it[G_enum.DIST.value][0] = row[G_enum.DIST.value][resize]
-  dataM_it[G_enum.DIST.value][1] = row[G_enum.DIST.value][resize+1]
+  dataM_it[G_enum.DIST.value-1] = [None, None]
+  dataM_it[G_enum.DIST.value-1][0] = row[G_enum.DIST.value][resize]
+  dataM_it[G_enum.DIST.value-1][1] = row[G_enum.DIST.value][resize+1]
 
   for index in basic_indexes:
     dataM_it[index] = row[index]
+    
+  for index in basic_group:
+    dataM_it[index-1] = row[index]
 
   for index in array_actual_group:
     dataM_it[index-1] = row[index][resize] 
@@ -73,11 +76,13 @@ def copy_resize(row, dataM_it, resize):
 
 def create_resize_dataframe(dfG, dataM):
   it = -1
-  for row in dfG.itertuples(index=False, name=None):
+  for row_index in range(len(dfG)):
+    row = dfG.iloc[row_index]
     resizes = row[G_enum.TOTAL_RESIZES.value]
+
     for resize in range(resizes):
       it += 1
-      dataM[it].append( [None] * len(columnsM) )
+      dataM.append( [None] * len(columnsM) )
       copy_resize(row, dataM[it], resize)
 
 #-----------------------------------------------
@@ -90,16 +95,13 @@ if len(sys.argv) > 2:
   name = sys.argv[2]
 else:
   name = "dataM"
-print("Csv name will be: " + name + ".csv")
+print("Csv name will be: " + name + ".pkl")
 
 
-dfG = pd.read_csv(input_name)
+dfG = pd.read_pickle(input_name)
 dataM = []
 create_resize_dataframe(dfG, dataM)
 
-#dfM = pd.DataFrame(dataM, columns=columnsM)
-
-#Poner en TC el valor real y en TH el necesario para la app
-#cond = dfM.TH != 0
-#dfM.loc[cond, ['TC', 'TH']] = dfM.loc[cond, ['TH', 'TC']].values
-#dfM.to_csv(name + 'M.csv')
+dfM = pd.DataFrame(dataM, columns=columnsM)
+dfM.to_pickle(name + '.pkl')
+dfM.to_excel(name + '.xlsx')
