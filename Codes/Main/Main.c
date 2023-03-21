@@ -57,6 +57,8 @@ int main(int argc, char *argv[]) {
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
+      fflush(stdout);
+      MPI_Abort(MPI_COMM_WORLD, -50);
     }
 
     init_group_struct(argv, argc, myId, numP);
