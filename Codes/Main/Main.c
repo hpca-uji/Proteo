@@ -220,7 +220,7 @@ int work() {
 
   iter = 0;
   while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE || state == MALL_SPAWN_ADAPT_PENDING) {
-    if(iter < config_file->groups[group->grp+1].iters) {
+    if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;

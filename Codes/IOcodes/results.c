@@ -191,12 +191,12 @@ void compute_results_stages(results_data *results, int myId, int numP, int root,
 void print_iter_results(results_data results) {
   size_t i;
 
+  printf("Async_Iters: %ld\n", results.iters_async);
   printf("T_iter: ");
   for(i=0; i< results.iter_index; i++) {
     printf("%lf ", results.iters_time[i]);
   }
-
-  printf("\nAsync_Iters: %ld\n", results.iters_async);
+  printf("\n");
 }
 
 /*
