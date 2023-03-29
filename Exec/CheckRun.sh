@@ -1,43 +1,55 @@
 #!/bin/bash
 
 dir="/home/martini/malleability_benchmark/"
-cores=20
+partition="P1"
 
 # Checks if all the runs in the current working directory performed under a 
 # Slurm manager have been performed correctly and if some runs can be corrected 
 # they are launched again
-# Parameter 1 - Maximum index of the runs
-# Parameter 2 - Amount of repetitions per index/run
-# Parameter 3 - Total stages in all runs. #FIXME The amount of stages must be equal across all the runs, must be modified in the future.
-# Parameter 4 - Total groups of processes in all runs #FIXME The amount of groups must be equal across all the runs, must be modified in the future.
-# Parameter 5 - Maximum valid iteration time across all runs. If an iteration time
+# Parameter 1 - Common name of the configuration files
+# Parameter 2 - Maximum index of the runs
+# Parameter 3 - Amount of repetitions per index/run
+# Parameter 4 - Total stages in all runs. #FIXME The amount of stages must be equal across all the runs, must be modified in the future.
+# Parameter 5 - Total groups of processes in all runs #FIXME The amount of groups must be equal across all the runs, must be modified in the future.
+# Parameter 6 - Maximum valid iteration time across all runs. If an iteration time
 #               is higher, that particular repetition inside the run is cleaned and
 #               launched again.
+# Parameter 7(Optional) - Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. 
+#               Must be a positive integer.
 #====== Do not modify the following values =======
 
 codeDir="Codes/"
 execDir="Exec/"
 ResultsDir="Results/"
+cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
 
-maxIndex=$1
-totalEjGrupo=$2 #Total de ejecuciones por grupo
-total_stages=$3
-total_groups=$4
-maxTime=$5 #Maximo tiempo que se considera válido
+if [ "$#" -lt "6" ]
+then
+  echo "Not enough arguments"
+  echo "Usage -> bash CheckRun Common_Name maxIndex total_repetitions total_groups total_stages max_iteration_time [limit_time]"
+  exit -1
+fi
+
+common_name=$1
+maxIndex=$2
+totalEjGrupo=$3 #Total de ejecuciones por grupo
+total_stages=$4
+total_groups=$5
+maxTime=$6 #Maximo tiempo que se considera válido
+
+limit_time=$((0))
+if [ $# -ge 7 ] #Max time per execution in seconds
+then
+  limit_time=$(($7*$qty/60+1))
+fi
 
 exec_lines_basic=6
 iter_lines_basic=3
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
 iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
 exec_remove=$(($exec_lines_basic+$total_stages+$total_groups-1))
-iter_remove=$(($iter_lines_basic+$total_stages-1))
+iter_remove=$(($iter_lines_basic+$total_stages))
 
-if [ "$#" -lt "5" ]
-then
-  echo "Not enough arguments"
-  echo "Usage -> bash CheckRun maxIndes total_repetitions total_groups total_stages max_iteration_time"
-  exit -1
-fi
 
 #Check if there are fatal errors during executions
 grep -i -e fatal -e error -e abort -e == slurm* > errores2.txt
@@ -46,13 +58,14 @@ if [ "$qty" -gt "0" ]
 then
   echo "Found Fatal errors during execution. Aborting"
   echo "Read file errors2 to see the errors and in which files"
+  echo "FAILURE"
   exit -2
 fi
 
 #Check if the number of output files is correct.
 #If the number is not correct is a fatal error and the user
 # is informed in which runs the amount does not match, and
-# then the scripts exit.
+# then the scripts exits.
 #The user must figure out what to do with those runs.
 qtyG=$(ls R*_Global.out | wc -l)
 qtyG=$(($qtyG * 2))
@@ -75,21 +88,22 @@ else
       echo "Files do not match at Run $i -- diff=$diff" >> errores2.txt
     fi
   done
+  echo "FAILURE"
   exit -1
 fi
 rm errores2.txt
 
 # Check if there is any negative execution time
 # Only invalid IDs are stored
-rm -f errores.txt
-touch errores.txt
+rm -f tmp.txt
+touch tmp.txt
 exec_ids=($(grep -n "T_total" R*_Global.out | grep - | cut -d '_' -f1 | cut -d 'R' -f2))
 exec_line=($(grep -n "T_total" R*_Global.out | grep - | cut -d ':' -f2))
 for ((i=${#exec_ids[@]}-1; i>=0; i--))
 do
   first_line=$((${exec_line[$i]}-$exec_remove))
   last_line=$(($first_line+$exec_total_lines-1))
-  echo "${exec_ids[$i]}:$first_line:$last_line" >> errores.txt
+  echo "${exec_ids[$i]}:$first_line:$last_line" >> tmp.txt
 done
 
 # Check if there is any iter time higher than expected
@@ -107,25 +121,29 @@ do
     first_line=$(($first_line/$iter_total_lines))
     first_line=$(($first_line*$exec_total_lines+1))
     last_line=$(($first_line+$exec_total_lines-1))
-    echo "${iter_ids[$i]}:$first_line:$last_line" >> errores.txt
+    echo "${iter_ids[$i]}:$first_line:$last_line" >> tmp.txt
   fi
 done
 
 #Clean data from collected erroneous executions
-qty=$(wc -l errores.txt | cut -d ' ' -f1)
+qty=$(wc -l tmp.txt | cut -d ' ' -f1)
 if [ "$qty" -gt 0 ];
 then
-  echo "Se han encontrado errores de ejecución leves. Volviendo a ejecutar"
+  echo "Found minor execution errors. Executing again. Review file errores.txt."
+  echo "CHECKRUN -- Found errors" >> errores.txt
 
   while IFS="" read -r lineRun || [ -n "$lineRun" ]
   do
     #Obtain data of erroneous execution
     run=$(echo $lineRun | cut -d ':' -f1)
     echo "Run $run had an erroneous execution, cleaning bad data."
+    echo "Run$run----------------------------------------------" >> errores.txt
 
     #1 - Delete erroneous lines in Global file
     first_line=$(echo $lineRun | cut -d ':' -f2)
     last_line=$(echo $lineRun | cut -d ':' -f3)
+
+    sed -n ''$first_line','$last_line'p' R${run}_Global.out >> errores.txt
     sed -i ''$first_line','$last_line'd' R${run}_Global.out
 
     #2 - Translate line numbers to Local files type
@@ -135,10 +153,12 @@ then
     #3 - Delete erroneous lines in Local files
     for ((j=0; j<total_groups; j++)); 
     do
+      sed -n ''$first_line','$last_line'p' R${run}_G${j}* >> errores.txt
       sed -i ''$first_line','$last_line'd' R${run}_G${j}*
     done
+    echo "--------------------------------------------------" >> errores.txt
 
-  done < errores.txt
+  done < tmp.txt
 fi
 
 #Check if all repetitions for each Run have been executed
@@ -152,42 +172,23 @@ do
     qtyEx=$(grep T_total R"$run"_Global.out | wc -l)
     if [ "$qtyEx" -ne "$totalEjGrupo" ];
     then
+      #1 - Obtain config file name and repetitions to perform
       diff=$(($totalEjGrupo-$qtyEx))
       qty_missing=$(($qty_missing+$diff))
-      config_file="config$run.ini"
+      config_file="$common_name$run.ini"
 
-      #1 - Obtain maximum number of processes for the run
-      max_numP=-1
-      for ((j=0; j<total_groups; j++)); 
-      do
-        resize_info=$(grep "\[resize$j\]" -n $config_file | cut -d ":" -f1)
-        first_line=$(echo $resize_info | cut -d " " -f1)
-        last_line=$(echo $resize_info | cut -d " " -f2)
-        range_lines=$(( last_line - first_line ))
-        numP=$(head -$last_line $config_file | tail -$range_lines | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
-	if [ "$numP" -gt "$max_numP" ];
-	then
-	  max_numP=$numP
-	fi
-      done
-
-      #3 - Obtain needed nodes for the number of processes
-      node_qty=$(($max_numP / $cores))
-      if [ "$node_qty" -eq "0" ];
-      then
-        node_qty=1
-      fi
+      #2 - Obtain number of nodes needed
+      node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 
       #3 - Launch execution
       echo "Run$run lacks $diff repetitions"
       use_extrae=0
-      sbatch -N $node_qty $dir$execDir./generalRun.sh $dir $config_file $use_extrae $run $diff
+      sbatch -p $partition -N $node_qty -t $limit_time $dir$execDir./generalRun.sh $dir $cores $config_file $use_extrae $run $diff
     fi
   else
     echo "File R${run}_Global.out does not exist -- Could it be it must still be executed?"
   fi
 done
-
 
 if [ "$qty_missing" -eq "0" ];
 then
