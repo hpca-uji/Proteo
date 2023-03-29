@@ -20,7 +20,11 @@ then
   initial_node_qty=1
 fi
 
-common_node_name=$(echo $nodelist | cut -d '[' -f1)
+common_node_name="n" #FIXME What if it uses another type of node?
+if [[ $nodelist == *"["* ]]; then
+  common_node_name=$(echo $nodelist | cut -d '[' -f1)
+fi
+
 node_array=($(echo $nodelist | sed -e 's/[\[n]//g' -e 's/\]/ /g' -e 's/,/ /g'))
 actual_node_qty=0
 for ((i=0; $actual_node_qty<$initial_node_qty; i++))

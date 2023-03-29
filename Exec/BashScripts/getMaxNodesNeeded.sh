@@ -1,17 +1,25 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark" #FIXME Obtain from another way
-
-# Runs in a given current directory all .ini files
-# Parameter 1(Optional) - Amount of executions per file. Must be a positive number
+# Obtains for a given configuration file how many nodes will be needed
+# Parameter 1 - Configuration file name for the emulation.
+# Parameter 2 - Base directory of the malleability benchmark
+# Parameter 3 - Number of cores in the machines. The machines must be homogenous. Must be a positive number.
 #====== Do not modify these values =======
 
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
 
+if [ "$#" -lt "3" ]
+then
+  echo "Not enough arguments"
+  echo "Usage -> bash getMaxNodesNeeded.sh Configuration.ini BaseDirectory NumCores"
+  exit -1
+fi
+
 config_file=$1
-cores=$2
+dir=$2
+cores=$3
 
 max_numP=-1
 total_resizes=$(grep Total_Resizes $config_file | cut -d '=' -f2)
