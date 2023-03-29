@@ -168,7 +168,7 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   int tamBl, remainder;
 
   tamBl = dist.num_cpus / dist.num_nodes;
-  asigCores = 0;
+  asigCores = dist.already_created;
   i = *used_nodes = dist.already_created / tamBl;
   remainder = dist.already_created % tamBl;
 
@@ -181,7 +181,7 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
     (*used_nodes)++;
   }
 
-  //Assing tamBl to each node
+  //Assign tamBl to each node
   while(asigCores+tamBl <= dist.target_qty) {
     asigCores += tamBl;
     procs[i] += tamBl;
