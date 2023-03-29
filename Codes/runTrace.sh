@@ -15,10 +15,7 @@ outIndex=$2
 
 echo "MPICH"
 
-aux=$(grep "\[resize0\]" -n $configFile | cut -d ":" -f1)
-read -r ini fin <<<$(echo $aux)
-diff=$(( fin - ini ))
-numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
+numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 
 name_res="Extrae_"$nodes"_Test_"$numP
 dir_name_res=$dir$resultsDir"/"$name_res
@@ -28,6 +25,7 @@ srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outIndex $nod
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
+sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
 rm hostfile.o$SLURM_JOB_ID
 
 echo "MOVING DATA"
