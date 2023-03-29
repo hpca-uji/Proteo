@@ -3,7 +3,6 @@
 dir="/home/martini/malleability_benchmark"
 partition="P1"
 exclude="c00,c01,c02"
-cores=20
 
 # Executes a given configuration file with the aid of
 # the RMS Slurm.
@@ -11,12 +10,14 @@ cores=20
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
 # Parameter 4(Optional): Use Extrae(1) or not(0).
-# Parameter 5(Optional): Path where the output files should be saved. 
+# Parameter 5(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
+# Parameter 6(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
+cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
 
 if [ $# -lt 1 ]
 then
@@ -29,7 +30,8 @@ fi
 #$2 == outFileIndex
 #$3 == Qty of repetitions
 #$4 == Use extrae NO(0) YES(1)
-#$5 == Output path
+#$5 == Max time per execution(s)
+#$6 == Output path
 
 config_file=$1
 outFileIndex=0
@@ -48,36 +50,20 @@ if [ $# -ge 4 ]
 then
   use_extrae=$4
 fi
-if [ $# -ge 5 ]
+limit_time=$((0))
+if [ $# -ge 5 ] #Max time per execution in seconds
 then
-  output=$5
+  limit_time=$(($5 * $qty / 60 + 1))
+fi
+if [ $# -ge 6 ]
+then
+  output=$6
 fi
 
-#1 - Obtain maximum number of processes for the run
-max_numP=-1
-total_groups=$(grep Total_Resizes $config_file | cut -d '=' -f2)
-for ((j=0; j<total_groups; j++)); 
-do
-  resize_info=$(grep "\[resize$j\]" -n $config_file | cut -d ":" -f1)
-  first_line=$(echo $resize_info | cut -d " " -f1)
-  last_line=$(echo $resize_info | cut -d " " -f2)
-  range_lines=$(( last_line - first_line ))
-  numP=$(head -$last_line $config_file | tail -$range_lines | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
-  if [ "$numP" -gt "$max_numP" ];
-  then
-    max_numP=$numP
-  fi
-done
-
-#2 - Obtain needed nodes for the number of processes
-node_qty=$(($max_numP / $cores))
-if [ "$node_qty" -eq "0" ];
-then
-  node_qty=1
-fi
-
-#3 - Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty $dir$execDir/generalRun.sh $dir $config_file $use_extrae $outFileIndex $qty
+#Obtain amount of nodes neeeded
+node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
+#Run with the expected amount of nodes
+sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_extrae $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then
