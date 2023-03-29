@@ -36,13 +36,13 @@ totalEjGrupo=$3 #Total de ejecuciones por grupo
 total_stages=$4
 total_groups=$5
 maxTime=$6 #Maximo tiempo que se considera válido
-
-limit_time=$((0))
+limit_time_exec=0
 if [ $# -ge 7 ] #Max time per execution in seconds
 then
-  limit_time=$(($7*$qty/60+1))
+  limit_time_exec=$7
 fi
 
+limit_time=0
 exec_lines_basic=6
 iter_lines_basic=3
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
@@ -176,9 +176,13 @@ do
       diff=$(($totalEjGrupo-$qtyEx))
       qty_missing=$(($qty_missing+$diff))
       config_file="$common_name$run.ini"
+      if [ $limit_time_exec -ne 0 ] #Max time per execution in seconds
+      then
+        limit_time=$(($limit_time_exec*$diff/60+1))
+      fi
 
       #2 - Obtain number of nodes needed
-      node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+      node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
 
       #3 - Launch execution
       echo "Run$run lacks $diff repetitions"
