@@ -20,7 +20,7 @@ ResultsDir="/Results"
 echo "START TEST"
 
 #$1 == baseDir
-#$1 == cores
+#$2 == cores
 #$3 == configFile
 #$4 == use_extrae
 #$5 == outFileIndex
