@@ -180,8 +180,8 @@ def read_local_file(f, dataG, it, runs_in_file):
         real_it = it - (runs_in_file-offset)
         group = int(lineS[1].split(":")[0])
       if lineS[0] == "Async_Iters:":
-        offset_lines = 1
-        dataG[real_it][G_enum.ASYNCH_ITERS.value][group] = get_value(lineS, offset_lines, False)
+        offset_line = 1
+        dataG[real_it][G_enum.ASYNCH_ITERS.value][group] = get_value(lineS, offset_line, False)
       else:
         record_multiple_times_line(lineS, dataG[real_it], group)
 
