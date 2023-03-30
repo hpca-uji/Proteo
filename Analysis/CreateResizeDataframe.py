@@ -87,7 +87,7 @@ def create_resize_dataframe(dfG, dataM):
 
 #-----------------------------------------------
 if len(sys.argv) < 2:
-    print("The files name is missing\nUsage: python3 CreateResizeDataframe.py input_file.csv output_name.csv")
+    print("The files name is missing\nUsage: python3 CreateResizeDataframe.py input_file.pkl output_name")
     exit(1)
 
 input_name = sys.argv[1]
@@ -95,7 +95,7 @@ if len(sys.argv) > 2:
   name = sys.argv[2]
 else:
   name = "dataM"
-print("Csv name will be: " + name + ".pkl")
+print("File name will be: " + name + ".pkl")
 
 
 dfG = pd.read_pickle(input_name)

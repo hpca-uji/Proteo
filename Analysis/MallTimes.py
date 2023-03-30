@@ -213,8 +213,38 @@ def read_global_file(f, dataG, it):
   return it,runs_in_file
 
 #-----------------------------------------------
+
+
+#-----------------------------------------------
+def convert_to_tuples(dfG):
+  array_list_items = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
+          G_enum.ASYNCH_ITERS.value, G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, \
+          G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
+          G_enum.T_AR.value, G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
+  array_multiple_list_items = [G_enum.T_ITER.value, G_enum.T_STAGES.value]
+  for item in array_list_items:
+    name = columnsG[item]
+    values = dfG[name].copy()
+    for index in range(len(values)):
+      values[index] = tuple(values[index])
+    dfG[name] = values
+
+  for item in array_multiple_list_items:
+    name = columnsG[item]
+    values = dfG[name].copy()
+    for i in range(len(values)):
+      for j in range(len(values[i])):
+        if(type(values[i][j][0]) == list):
+          for r in range(len(values[i][j])):
+            values[i][j][r] = tuple(values[i][j][r])
+        values[i][j] = tuple(values[i][j])
+      values[i] = tuple(values[i])
+    dfG[name] = values
+
+#-----------------------------------------------
+
 if len(sys.argv) < 2:
-    print("The files name is missing\nUsage: python3 MallTimes.py resultsName directory csvOutName")
+    print("The files name is missing\nUsage: python3 MallTimes.py commonName directory OutName")
     exit(1)
 
 common_name = sys.argv[1]
@@ -228,7 +258,7 @@ if len(sys.argv) >= 4:
   name = sys.argv[3]
 else:
   name = "data"
-print("Csv name will be: " + name + "G.csv & " + name + "M.csv")
+print("File name will be: " + name + "G.pkl")
 
 insideDir = "Run"
 lista = glob.glob(BaseDir + insideDir + "*/" + common_name + "*_Global.out")
@@ -253,6 +283,8 @@ for elem in lista:
 
 
 dfG = pd.DataFrame(dataG, columns=columnsG)
+convert_to_tuples(dfG)
+print(dfG)
 dfG.to_pickle(name + 'G.pkl')
 
 #dfM = pd.DataFrame(dataM, columns=columnsM)
