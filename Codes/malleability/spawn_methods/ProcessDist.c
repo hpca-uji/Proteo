@@ -176,7 +176,8 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
   //First nodes could already have existing procs
   //Start from the first with free spaces
   if (remainder) {
-    procs[i] = asigCores = tamBl - remainder;
+    procs[i] = tamBl - remainder;
+    asigCores += procs[i];
     i = (i+1) % dist.num_nodes;
     (*used_nodes)++;
   }
