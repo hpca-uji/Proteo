@@ -34,6 +34,8 @@ class G_enum(Enum):
     #Malleability specific
     NP = 0
     NC = 1
+    #Iteration specific
+    IS_DYNAMIC = 11
 
 
 columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
@@ -83,7 +85,7 @@ def record_config_line(lineS, dataG_it):
           G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   for index in array_groups:
     dataG_it[index] = [None]*dataG_it[G_enum.TOTAL_GROUPS.value]
-  for group in range(dataG_it[G_enum.TOTAL_GROUPS.value]): #FIXME Modificar orden, Async Iters antes que T_iter. Asi es posible descubrir el tamanyo al crearlo
+  for group in range(dataG_it[G_enum.TOTAL_GROUPS.value]):
     dataG_it[G_enum.T_ITER.value][group] = []
 
   for index in array_resizes:
@@ -162,7 +164,7 @@ def record_multiple_times_line(lineS, dataG_it, group):
         dataG_it[index][group][i][stage] = get_value(lineS, i+offset_lines, False)
   else:
     total_iters = len(lineS)-offset_lines
-    for i in range(total_iters): #FIXME Modificar orden T_iter y Async_iters. Crear lista de total_iters aqui
+    for i in range(total_iters):
       dataG_it[index][group].append(get_value(lineS, i+offset_lines, False))
   
 #-----------------------------------------------

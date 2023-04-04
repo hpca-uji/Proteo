@@ -17,6 +17,5 @@ df1 = pd.read_pickle( sys.argv[1] )
 df2 = pd.read_pickle( sys.argv[2] )
 frames = [df1, df2]
 df3 = pd.concat(frames)
-df3 = df3.drop(columns=df3.columns[0])
 
 df3.to_pickle(name + '.pkl')

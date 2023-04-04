@@ -34,6 +34,8 @@ class G_enum(Enum):
     #Malleability specific
     NP = 0
     NC = 1
+    #Iteration specific
+    IS_DYNAMIC = 11
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
 #            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
@@ -105,3 +107,6 @@ create_resize_dataframe(dfG, dataM)
 dfM = pd.DataFrame(dataM, columns=columnsM)
 dfM.to_pickle(name + '.pkl')
 dfM.to_excel(name + '.xlsx')
+
+print(dfG)
+print(dfM)
