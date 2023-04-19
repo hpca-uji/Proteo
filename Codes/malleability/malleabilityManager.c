@@ -555,7 +555,7 @@ void Children_init() {
     malleability_comms_update(mall->intercomm);
   }
 
-  MPI_Comm_disconnect(&(mall->intercomm));
+  MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
 }
 
 //======================================================||
@@ -740,7 +740,7 @@ int end_redistribution() {
   }
 
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
-    MPI_Comm_disconnect(&(mall->intercomm));
+    MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
   }
 
   return local_state;

@@ -7,6 +7,7 @@
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes/build"
 resultsDir="/Results"
+execDir="/Exec"
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES

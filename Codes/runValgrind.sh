@@ -6,6 +6,7 @@
 
 dir="/home/martini/malleability_benchmark"
 codeDir="/Codes"
+execDir="/Exec"
 
 nodelist="localhost"
 nodes=1
