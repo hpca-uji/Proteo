@@ -173,7 +173,7 @@ def read_local_file(f, dataG, it, runs_in_file):
   real_it = 0
   group = 0
 
-  for line in f: 
+  for line in f:
     lineS = line.split()
 
     if len(lineS) > 0:
@@ -181,7 +181,7 @@ def read_local_file(f, dataG, it, runs_in_file):
         offset += 1
         real_it = it - (runs_in_file-offset)
         group = int(lineS[1].split(":")[0])
-      if lineS[0] == "Async_Iters:":
+      elif lineS[0] == "Async_Iters:":
         offset_line = 1
         dataG[real_it][G_enum.ASYNCH_ITERS.value][group] = get_value(lineS, offset_line, False)
       else:

@@ -36,6 +36,7 @@ class G_enum(Enum):
     NC = 1
     #Iteration specific
     IS_DYNAMIC = 11
+    N_PARENTS = 17
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
 #            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
@@ -47,7 +48,7 @@ class G_enum(Enum):
 
 columnsL = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Is_Dynamic", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-            "Stage_Bytes", "Asynch_Iters", "T_iter", "T_stages"] #20
+            "Stage_Bytes", "N_Parents", "Asynch_Iters", "T_iter", "T_stages"] #20
 
 
 def copy_iteration(row, dataL_it, group, iteration, is_asynch):
@@ -55,29 +56,37 @@ def copy_iteration(row, dataL_it, group, iteration, is_asynch):
           G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   basic_asynch = [G_enum.SDR.value, G_enum.ADR.value, G_enum.DR.value]
   array_asynch_group = [G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, \
-          G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
+          G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value, G_enum.DIST.value]
 
   dataL_it[G_enum.FACTOR_S.value] = row[G_enum.FACTOR_S.value][group]
   dataL_it[G_enum.NP.value] = row[G_enum.GROUPS.value][group]
-  dataL_it[G_enum.DIST.value] = [None, None]
-  dataL_it[G_enum.DIST.value][0] = row[G_enum.DIST.value][group]
 
-  dataL_it[G_enum.ASYNCH_ITERS.value-1] = is_asynch
-  dataL_it[G_enum.T_ITER.value-1] = row[G_enum.T_ITER.value][group][iteration]
-  dataL_it[G_enum.T_STAGES.value-1] = row[G_enum.T_STAGES.value][group][iteration]
+  dataL_it[G_enum.ASYNCH_ITERS.value] = is_asynch
+  dataL_it[G_enum.T_ITER.value] = row[G_enum.T_ITER.value][group][iteration]
+  dataL_it[G_enum.T_STAGES.value] = list(row[G_enum.T_STAGES.value][group][iteration])
   dataL_it[G_enum.IS_DYNAMIC.value] = True if group > 0 else False
 
   for index in basic_indexes:
     dataL_it[index] = row[index]
 
+  for index in array_asynch_group:
+    dataL_it[index] = [None, -1]
+    dataL_it[index][0] = row[index][group]
+
+  dataL_it[G_enum.N_PARENTS.value] = -1
+  if group > 0:
+    dataL_it[G_enum.N_PARENTS.value] = row[G_enum.GROUPS.value][group-1]
+
   if is_asynch:
     dataL_it[G_enum.NC.value] = row[G_enum.GROUPS.value][group+1]
-    dataL_it[G_enum.DIST.value][1] = row[G_enum.DIST.value][group+1]
 
     for index in basic_asynch:
       dataL_it[index] = row[index]
     for index in array_asynch_group:
-      dataL_it[index] = row[index][group+1]
+      dataL_it[index][1] = row[index][group+1]
+
+  for index in array_asynch_group: # Convert to tuple
+    dataL_it[index] = tuple(dataL_it[index])
 
 
 #-----------------------------------------------

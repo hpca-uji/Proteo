@@ -106,7 +106,6 @@ create_resize_dataframe(dfG, dataM)
 
 dfM = pd.DataFrame(dataM, columns=columnsM)
 dfM.to_pickle(name + '.pkl')
-dfM.to_excel(name + '.xlsx')
 
 print(dfG)
 print(dfM)
