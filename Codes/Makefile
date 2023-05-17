@@ -1,7 +1,7 @@
 CC = gcc
 MCC = mpicc
 #C_FLAGS_ALL = -Wconversion -Wpedantic
-C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors -g
+C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
 LD_FLAGS = -lm -pthread
 DEF =
 
