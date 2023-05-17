@@ -40,17 +40,17 @@ qty=1
 
 if [ $# -ge 4 ]
 then
-  use_extrae=$3
+  use_extrae=$4
 fi
 
 if [ $# -ge 5 ]
 then
-  outFileIndex=$4
+  outFileIndex=$5
 fi
 
 if [ $# -ge 6 ]
 then
-  qty=$5
+  qty=$6
 fi
 
 numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
