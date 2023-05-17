@@ -182,6 +182,7 @@ int malleability_checkpoint() {
       break;
     case MALL_NOT_STARTED:
       // Comprobar si se tiene que realizar un redimensionado
+      mall_conf->results->malleability_time[mall_conf->grp] = MPI_Wtime();
       //if(CHECK_RMS()) {return MALL_DENIED;}
 
       state = spawn_step();
@@ -236,6 +237,7 @@ int malleability_checkpoint() {
       break;
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
+      mall_conf->results->malleability_end = MPI_Wtime();
       state = MALL_COMPLETED;
       break;
   }
@@ -548,7 +550,8 @@ void Children_init() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
   }
-
+  mall_conf->results->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
+  
   // Guardar los resultados de esta transmision
   comm_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
   if(!is_intercomm) {
@@ -633,7 +636,6 @@ int start_redistribution() {
 
 
 /*
- * @deprecated
  * Comprueba si la redistribucion asincrona ha terminado. 
  * Si no ha terminado la funcion termina indicandolo, en caso contrario,
  * se continua con la comunicacion sincrona, el envio de resultados y

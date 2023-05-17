@@ -43,7 +43,7 @@ then
 fi
 
 limit_time=0
-exec_lines_basic=6
+exec_lines_basic=7
 iter_lines_basic=3
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
 iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
