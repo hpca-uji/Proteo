@@ -129,7 +129,8 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
  *
  */
 void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
-    int i, init, end;
+    int i, j, init, end, total_sends;
+    MPI_Request *sends;
 
     init = s_counts.idI;
     end = s_counts.idE;
@@ -140,8 +141,15 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
       else end = s_counts.idE-1;
     }
 
+    total_sends = end - init;
+    j = 0;
+    if(total_sends > 0) {
+      sends = (MPI_Request *) malloc(total_sends * sizeof(MPI_Request));
+    }
     for(i=init; i<end; i++) {
-      MPI_Send(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm);
+      sends[j] = MPI_REQUEST_NULL;
+      MPI_Isend(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm, &(sends[j]));
+      j++;
     }
 
     init = r_counts.idI;
@@ -150,8 +158,13 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
       if(r_counts.idI == myId) init = r_counts.idI+1;
       else if(r_counts.idE == myId + 1) end = r_counts.idE-1;
     }
+
     for(i=init; i<end; i++) {
       MPI_Recv(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, 99, comm, MPI_STATUS_IGNORE);
+    }
+
+    if(total_sends > 0) {
+      MPI_Waitall(total_sends, sends, MPI_STATUSES_IGNORE);
     }
 }
 

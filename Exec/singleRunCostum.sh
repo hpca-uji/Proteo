@@ -1,8 +1,10 @@
 #!/bin/bash
 
-dir="/home/usuario/Documentos/malleability_benchmark"
+dir="/home/martini/malleability_benchmark"
+cores=20
 
-# Executes a given configuration file
+# Executes a given configuration file. This script can be called with Slurm commands to 
+#   choose the desired user configuration.
 # Parameter 1: Configuration file name for the emulation.
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
@@ -49,7 +51,7 @@ then
   output=$5
 fi
 
-bash $dir$execDir/generalRunCostum.sh $dir $config_file $use_extrae $outFileIndex $qty
+bash $dir$execDir/generalRunCostum.sh $dir $cores $config_file $use_extrae $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then
