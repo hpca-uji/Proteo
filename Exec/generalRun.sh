@@ -1,8 +1,18 @@
 #!/bin/bash
-#This script should only be called by others scripts, do not call it directly
 
 #SBATCH --exclude=c02,c01,c00
 #SBATCH -p P1
+
+# !!!!This script should only be called by others scripts, do not call it directly!!!
+# Runs a given configuration file with the indicated parameters with the aid of the RMS Slurm.
+# Parameter 1 - Base directory of the malleability benchmark
+# Parameter 2 - Number of cores in a single machine
+# Parameter 3 - Configuration file name for the emulation.
+# Parameter 4 - Use Extrae(1) or not(0).
+# Parameter 5 - Index to use for the output files. Must be a positive integer.
+# Parameter 6 - Amount of executions per file. Must be a positive number.
+#====== Do not modify these values =======
+
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
@@ -10,13 +20,14 @@ ResultsDir="/Results"
 echo "START TEST"
 
 #$1 == baseDir
-#$2 == configFile
-#$3 == use_extrae
-#$4 == outFileIndex
-#$5 == qty
+#$2 == cores
+#$3 == configFile
+#$4 == use_extrae
+#$5 == outFileIndex
+#$6 == qty
 
 echo $@
-if [ $# -lt 3 ]
+if [ $# -lt 4 ]
 then
   echo "Internal ERROR generalRun.sh - Not enough arguments were given"
   exit -1
@@ -24,13 +35,14 @@ fi
 
 #READ PARAMETERS AND ENSURE CORRECTNESS
 dir=$1
-configFile=$2
-use_extrae=$3
-outFileIndex=$4
+cores=$2
+configFile=$3
+use_extrae=$4
+outFileIndex=$5
 qty=1
 if [ $# -ge 5 ]
 then
-  qty=$5
+  qty=$6
 fi
 
 nodelist=$SLURM_JOB_NODELIST
@@ -45,10 +57,8 @@ then
   nodes=1
 fi
 
-aux=$(grep "\[resize0\]" -n $configFile | cut -d ":" -f1)
-read -r ini fin <<<$(echo $aux)
-diff=$(( fin - ini ))
-numP=$(head -$fin $configFile | tail -$diff | cut -d ';' -f1 | grep Procs | cut -d '=' -f2)
+numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
+initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
 
 #EXECUTE RUN
 echo "Nodes=$nodelist"
@@ -56,7 +66,7 @@ if [ $use_extrae -ne 1 ]
 then
   for ((i=0; i<qty; i++))
   do
-    mpirun -np $numP $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
+    mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
   done
 else
   cp $dir$execDir/Extrae/extrae.xml .
@@ -64,6 +74,7 @@ else
   cp $dir$execDir/Extrae/trace_worker.sh .
   for ((i=0; i<qty; i++))
   do
+    #FIXME Extrae not tested keeping in mind the initial nodelist - Could have some errors
     srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes
   done
 fi

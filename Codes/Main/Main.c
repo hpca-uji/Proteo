@@ -57,6 +57,8 @@ int main(int argc, char *argv[]) {
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
+      fflush(stdout);
+      MPI_Abort(MPI_COMM_WORLD, -50);
     }
 
     init_group_struct(argv, argc, myId, numP);
@@ -218,7 +220,7 @@ int work() {
 
   iter = 0;
   while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE || state == MALL_SPAWN_ADAPT_PENDING) {
-    if(iter < config_file->groups[group->grp+1].iters) {
+    if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;

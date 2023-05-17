@@ -30,6 +30,7 @@ int thread_check();
 void* thread_async_work();
 
 void print_comms_state();
+void malleability_comms_update(MPI_Comm comm);
 
 typedef struct {
   int spawn_method;
@@ -181,6 +182,7 @@ int malleability_checkpoint() {
       break;
     case MALL_NOT_STARTED:
       // Comprobar si se tiene que realizar un redimensionado
+      mall_conf->results->malleability_time[mall_conf->grp] = MPI_Wtime();
       //if(CHECK_RMS()) {return MALL_DENIED;}
 
       state = spawn_step();
@@ -235,6 +237,7 @@ int malleability_checkpoint() {
       break;
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
+      mall_conf->results->malleability_end = MPI_Wtime();
       state = MALL_COMPLETED;
       break;
   }
@@ -547,20 +550,15 @@ void Children_init() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
   }
-
+  mall_conf->results->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
+  
   // Guardar los resultados de esta transmision
   comm_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
   if(!is_intercomm) {
-    if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-    if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-    if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
-
-    MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
-    MPI_Comm_dup(mall->intercomm, &(mall->comm));
-    MPI_Comm_dup(mall->intercomm, &(mall->user_comm)); 
+    malleability_comms_update(mall->intercomm);
   }
 
-  MPI_Comm_disconnect(&(mall->intercomm));
+  MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
 }
 
 //======================================================||
@@ -638,7 +636,6 @@ int start_redistribution() {
 
 
 /*
- * @deprecated
  * Comprueba si la redistribucion asincrona ha terminado. 
  * Si no ha terminado la funcion termina indicandolo, en caso contrario,
  * se continua con la comunicacion sincrona, el envio de resultados y
@@ -738,24 +735,14 @@ int end_redistribution() {
   local_state = MALL_DIST_COMPLETED;
   if(!is_intercomm) { // Merge Spawn
     if(mall->numP < mall->numC) { // Expand
-      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-      if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-      if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
-
-      MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
-      MPI_Comm_dup(mall->intercomm, &(mall->comm));
-      MPI_Comm_dup(mall->intercomm, &(mall->user_comm));
-
-      MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
-      MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
-      MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
+      malleability_comms_update(mall->intercomm);
     } else { // Shrink || Merge Shrink requiere de mas tareas
       local_state = MALL_SPAWN_ADAPT_PENDING;
     }
   }
 
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
-    MPI_Comm_disconnect(&(mall->intercomm));
+    MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
   }
 
   return local_state;
@@ -773,7 +760,7 @@ int shrink_redistribution() {
     zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall_conf->config_file->n_stages);
     
     if(mall->myId < mall->numC) {
-      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); //FIXME Modificar a que se pida pro el usuario el cambio y se llama a comms_update
       if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
       mall->dup_user_comm = 1;
 
@@ -918,4 +905,18 @@ void print_comms_state() {
     printf("P%d Comm=%d Name=%s\n", mall->myId, mall->intercomm, test);
   }
   free(test);
+}
+
+void malleability_comms_update(MPI_Comm comm) {
+  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+  if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
+
+  MPI_Comm_dup(comm, &(mall->thread_comm));
+  MPI_Comm_dup(comm, &(mall->comm));
+  MPI_Comm_dup(comm, &(mall->user_comm)); 
+
+  MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
+  MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
+  MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
 }
