@@ -30,20 +30,22 @@ class G_enum(Enum):
     T_SPAWN_REAL = 22
     T_SR = 23
     T_AR = 24
-    T_TOTAL = 25
+    T_MALLEABILITY = 25
+    T_TOTAL = 26
     #Malleability specific
     NP = 0
     NC = 1
     #Iteration specific
     IS_DYNAMIC = 11
+    N_PARENTS = 17
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
 #            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
+#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
 
 columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "FactorS", "Dist", "Stage_Type", "Stage_Time", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR"] #24
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability"] #25
 
 def copy_resize(row, dataM_it, resize):
   basic_indexes = [G_enum.TOTAL_STAGES.value, G_enum.GRANULARITY.value, G_enum.SDR.value, \
@@ -51,7 +53,7 @@ def copy_resize(row, dataM_it, resize):
   basic_group = [G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   array_actual_group = [G_enum.FACTOR_S.value, G_enum.ITERS.value, G_enum.ASYNCH_ITERS.value, \
           G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
-          G_enum.T_AR.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
+          G_enum.T_AR.value, G_enum.T_MALLEABILITY.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
   array_next_group = [G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, \
           G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
 

@@ -30,17 +30,19 @@ class G_enum(Enum):
     T_SPAWN_REAL = 22
     T_SR = 23
     T_AR = 24
-    T_TOTAL = 25
+    T_MALLEABILITY = 25
+    T_TOTAL = 26
     #Malleability specific
     NP = 0
     NC = 1
     #Iteration specific
     IS_DYNAMIC = 11
+    N_PARENTS = 17
 
 
 columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_total"] #26
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
 
 #-----------------------------------------------
 # Obtains the value of a given index in a splited line
@@ -80,7 +82,7 @@ def record_config_line(lineS, dataG_it):
   array_groups = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
           G_enum.ASYNCH_ITERS.value, G_enum.T_ITER.value, G_enum.T_STAGES.value, G_enum.RED_METHOD.value, \
           G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value,]
-  array_resizes = [ G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value]
+  array_resizes = [ G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value]
   array_stages = [G_enum.STAGE_TYPES.value, \
           G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   for index in array_groups:
@@ -124,8 +126,8 @@ def record_group_line(lineS, dataG_it, group):
 
 #-----------------------------------------------
 def record_time_line(lineS, dataG_it):
-  T_names = ["T_spawn:", "T_spawn_real:", "T_SR:", "T_AR:", "T_total:"]
-  T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_TOTAL.value]
+  T_names = ["T_spawn:", "T_spawn_real:", "T_SR:", "T_AR:", "T_Malleability:", "T_total:"]
+  T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value, G_enum.T_TOTAL.value]
   if not (lineS[0] in T_names): # Execute only if line represents a Time
       return
 
