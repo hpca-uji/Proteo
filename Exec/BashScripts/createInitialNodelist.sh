@@ -51,6 +51,7 @@ do
   do
     index=$((10#${element[0]} + $j))
     index=0$index # FIXME What if there are more than 9 nodes?
+    #FIXME What if less than $cores have to be spawned?
     for ((core=0; core<$cores; core++)) # FIXME What if the user asks for a spread distribution
     do
       initial_nodelist="${initial_nodelist:+$initial_nodelist,}"$common_node_name$index

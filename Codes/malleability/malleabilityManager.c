@@ -493,7 +493,6 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 //=====================CHILDREN=========================||
 //======================================================||
 //======================================================||
-
 /*
  * Inicializacion de los datos de los hijos.
  * En la misma se reciben datos de los padres: La configuracion
@@ -535,7 +534,6 @@ void Children_init() {
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
-
     mall_conf->results->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
 
     // TODO Crear funcion especifica y anyadir para Asinc
@@ -622,7 +620,7 @@ int start_redistribution() {
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
-	  //FIXME No se envian los datos replicados (rep_a_data)
+    //FIXME No se envian los datos replicados (rep_a_data)
     mall_conf->results->async_time[mall_conf->grp] = MPI_Wtime();
     if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       return thread_creation();
@@ -684,7 +682,6 @@ int check_redistribution() {
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }
-
 
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only

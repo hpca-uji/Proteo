@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include "block_distribution.h"
 
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts);
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts);
 void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
 
 /*
@@ -13,26 +13,29 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
  *
  * The struct should be freed with freeCounts
  */
-void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int init_struct, struct Counts *counts) {
-  int i, *idS;
+void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int offset_ids, struct Counts *counts) {
+  int i, *idS, first_id = 0;
   struct Dist_data dist_data, dist_target;
  
-  if(init_struct) mallocCounts(counts, numP_other);
+  if(counts == NULL) { 
+    fprintf(stderr, "Counts is NULL for rank %d/%d ", myId, numP);
+    MPI_Abort(MPI_COMM_WORLD, -3);
+  } 
 
   get_block_dist(n, myId, numP, &dist_data);
   get_util_ids(dist_data, numP_other, &idS);
 
-  counts->idI = idS[0];
-  counts->idE = idS[1];
-  get_block_dist(n, idS[0], numP_other, &dist_target); // RMA Specific operation
+  counts->idI = idS[0] + offset_ids;
+  counts->idE = idS[1] + offset_ids;
+  get_block_dist(n, idS[0], numP_other, &dist_target); // RMA Specific operation -- uses idS[0], not idI
   counts->first_target_displs = dist_data.ini - dist_target.ini; // RMA Specific operation
 
-  if(idS[0] == 0) {
-    set_interblock_counts(0, numP_other, dist_data, counts->counts);
-    idS[0]++;
+  if(idS[0] == 0) { // Uses idS[0], not idI
+    set_interblock_counts(counts->idI, numP_other, dist_data, offset_ids, counts->counts);
+    first_id++;
   }
-  for(i=idS[0]; i<idS[1]; i++) {
-    set_interblock_counts(i, numP_other, dist_data, counts->counts);
+  for(i=counts->idI + first_id; i<counts->idE; i++) {
+    set_interblock_counts(i, numP_other, dist_data, offset_ids, counts->counts);
     counts->displs[i] = counts->displs[i-1] + counts->counts[i-1];
   }
   free(idS);
@@ -116,11 +119,11 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
  * Obtiene para el Id de un proceso dado, cuantos elementos
  * enviara o recibira desde el proceso indicado en Dist_data.
  */
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts) {
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts) {
   struct Dist_data other;
   int biggest_ini, smallest_end;
 
-  get_block_dist(data_dist.qty, id, numP, &other);
+  get_block_dist(data_dist.qty, id - offset_ids, numP, &other);
 
   // Si el rango de valores no coincide, se pasa al siguiente proceso
   if(data_dist.ini >= other.fin || data_dist.fin <= other.ini) {

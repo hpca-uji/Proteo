@@ -386,50 +386,39 @@ void async_point2point(char *send, char *recv, struct Counts s_counts, struct Co
  *
  */
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
-  int array_size, init_struct = 1;
+  int array_size = numO;
+  int offset_ids = 0;
   struct Dist_data dist_data;
 
-  array_size = numO;
-  if(!is_intercomm) {
+  if(is_intercomm) {
+    //offset_ids = numP; //FIXME Modify only if active?
+  } else {
     array_size = numP > numO ? numP : numO;
   }
+  mallocCounts(s_counts, array_size+offset_ids);
+  mallocCounts(r_counts, array_size+offset_ids);
 
   if(is_children_group) {
-    if(is_intercomm) { 
-      mallocCounts(s_counts, numO);
-    } else { // Merge method needs an array equal to the number of processes
-      mallocCounts(s_counts, array_size);
-      mallocCounts(r_counts, array_size);
-      init_struct = 0;
-    }
-    prepare_comm_alltoall(myId, numP, numO, qty, init_struct, r_counts);
+    offset_ids = 0;
+    prepare_comm_alltoall(myId, numP, numO, qty, offset_ids, r_counts);
+    
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * sizeof(char));
 //get_block_dist(qty, myId, numP, &dist_data);
-//print_counts(dist_data, r_counts->counts, r_counts->displs, numO, 0, "Children C ");
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Children C ");
   } else {
 //get_block_dist(qty, myId, numP, &dist_data);
 
-    if(is_intercomm) {
-      mallocCounts(r_counts, numO);
-      prepare_comm_alltoall(myId, numP, numO, qty, init_struct, s_counts);
-    } else {
-      mallocCounts(s_counts, array_size);
-      mallocCounts(r_counts, array_size);
-      init_struct = 0;
-
-      prepare_comm_alltoall(myId, numP, numO, qty, init_struct, s_counts);
-      if(myId < numO) {
-        prepare_comm_alltoall(myId, numO, numP, qty, init_struct, r_counts);
-        // Obtener distribución para este hijo
+    prepare_comm_alltoall(myId, numP, numO, qty, offset_ids, s_counts);
+    if(!is_intercomm && myId < numO) {
+        prepare_comm_alltoall(myId, numO, numP, qty, offset_ids, r_counts);
+        // Obtener distribución para este hijo y reservar vector de recibo
         get_block_dist(qty, myId, numO, &dist_data);
         *recv = malloc(dist_data.tamBl * sizeof(char));
-      }
-
 //print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Children P ");
     }
-//print_counts(dist_data, s_counts->counts, s_counts->displs, numO, 0, "Parents ");
+//print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Parents ");
   }
 }
 
