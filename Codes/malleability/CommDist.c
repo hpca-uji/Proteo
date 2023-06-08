@@ -315,7 +315,7 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
     if(is_children_group) { 
       MPI_Waitall(*request_qty, *requests, MPI_STATUSES_IGNORE); 
     }
-    if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
+    if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
       MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
       if(is_children_group) { MPI_Wait(&((*requests)[*request_qty-1]), MPI_STATUS_IGNORE); }
     }
@@ -571,13 +571,12 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, int red_stra
 
   sum = (size_t) s_counts.idE - s_counts.idI;
   sum += (size_t) r_counts.idE - r_counts.idI;
-  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
+  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
     sum++;
   }
 
   if (*requests != NULL && sum <= *request_qty) return; // Expected amount of requests
 
-  // FIXME Si es la estrategia Ibarrier como se tiene en cuenta en el total??
   if (*requests == NULL) {
     *requests = (MPI_Request *) malloc(sum * sizeof(MPI_Request));
   } else { // Array exists, but is too small

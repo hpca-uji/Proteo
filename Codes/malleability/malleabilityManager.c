@@ -273,6 +273,11 @@ void set_malleability_configuration(int spawn_method, int spawn_strategies, int 
   mall_conf->spawn_dist = spawn_dist;
   mall_conf->red_method = red_method;
   mall_conf->red_strategies = red_strategies;
+
+  if(!malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL) && 
+	(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL)) {
+    malleability_red_add_strat(&(mall_conf->red_strategies), MALL_RED_IBARRIER);
+  }
 }
 
 /*
@@ -332,10 +337,11 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
     } else {
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->red_method  == MALL_RED_IBARRIER) { //TODO This is a strategy, not a method
-        total_reqs = 2;
-      } else if(mall_conf->red_method  == MALL_RED_POINT) {
+      } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
+      }
+      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
+        total_reqs++;
       }
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
@@ -367,10 +373,11 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, int ty
     } else {    
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->red_method  == MALL_RED_IBARRIER) { //TODO This is a strategy, not a method
-        total_reqs = 2;
-      } else if(mall_conf->red_method  == MALL_RED_POINT) {
+      } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
+      }
+      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
+        total_reqs++;
       }
       
       modify_data(data, index, total_qty, type, total_reqs, dist_a_data);
@@ -448,8 +455,6 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-//      async_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
-//		      &(data_struct->requests[i]), &(data_struct->request_qty[i])); FIXME BORRAR
       async_communication_start(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
@@ -476,8 +481,6 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-//      async_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
-//		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
       async_communication_start(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       data_struct->arrays[i] = (void *) aux;
@@ -656,28 +659,7 @@ int check_redistribution() {
   MPI_Request *req_completed;
   MPI_Win window;
   local_completed = 1;
-  //test_err = 0;
-  /*
-  for(i=0; i<dist_a_data->entries; i++) {
-    req_completed = dist_a_data->requests[i];
-    req_qty = dist_a_data->request_qty[i];
-    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
-      test_err = MPI_Test(&(req_completed[req_qty-1]), &completed, MPI_STATUS_IGNORE);
-      local_completed = local_completed && completed;
-    } else {
-      for(j=0; j<req_qty; j++) {
-	test_err = MPI_Test(&(req_completed[j]), &completed, MPI_STATUS_IGNORE);
-	local_completed = local_completed && completed;
-      }
-//      test_err = MPI_Testall(req_qty, req_completed, &completed, MPI_STATUSES_IGNORE);
-    }
-  }
- 
-  if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
-    printf("P%d aborting -- Test Async\n", mall->myId);
-    MPI_Abort(MPI_COMM_WORLD, test_err);
-  }
-  */
+
   for(i=0; i<dist_a_data->entries; i++) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
@@ -695,13 +677,6 @@ int check_redistribution() {
     async_communication_end(MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
   }
 
-  /*
-  if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
-    MPI_Waitall(req_qty, req_completed, MPI_STATUSES_IGNORE);
-    //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
-    //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
-  }
-  */
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
