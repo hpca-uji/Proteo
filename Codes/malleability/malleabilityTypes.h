@@ -20,6 +20,7 @@ typedef struct {
   // la comunicacion de ese dato
   size_t *request_qty;
   MPI_Request **requests; 
+  MPI_Win *windows;
   void **arrays; // Cada subvector es una serie de datos a comunicar
 
 } malleability_data_t;

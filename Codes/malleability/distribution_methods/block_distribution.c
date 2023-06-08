@@ -104,12 +104,8 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
     dist_data->fin = (id+1) * dist_data->tamBl + rem;
   }
   
-  if(dist_data->fin > qty) {
-    dist_data->fin = qty;
-  }
-  if(dist_data->ini > dist_data->fin) {
-    dist_data->ini = dist_data->fin;
-  }
+  if(dist_data->fin > qty) { dist_data->fin = qty; }
+  if(dist_data->ini > dist_data->fin) { dist_data->ini = dist_data->fin; }
 
   dist_data->tamBl = dist_data->fin - dist_data->ini;
 }
@@ -131,18 +127,10 @@ void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int off
   }
 
   // Obtiene el proceso con mayor ini entre los dos procesos
-  if(data_dist.ini > other.ini) { 
-    biggest_ini = data_dist.ini;
-  } else {
-    biggest_ini = other.ini;
-  }
-
+  biggest_ini = (data_dist.ini > other.ini) ? data_dist.ini : other.ini;
   // Obtiene el proceso con menor fin entre los dos procesos
-  if(data_dist.fin < other.fin) {
-    smallest_end = data_dist.fin;
-  } else {
-    smallest_end = other.fin;
-  }
+  smallest_end = (data_dist.fin < other.fin) ? data_dist.fin : other.fin;
+
   sendcounts[id] = smallest_end - biggest_ini; // Numero de elementos a enviar/recibir del proceso Id
 }
 

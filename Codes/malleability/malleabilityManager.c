@@ -435,7 +435,6 @@ void malleability_get_data(void **data, size_t index, int is_replicated, int is_
 //======================================================||
 //======================================================||
 
-
 /*
  * Funcion generalizada para enviar datos desde los hijos.
  * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
@@ -449,8 +448,10 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
       aux_recv = NULL;
-      async_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
-		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
+//      async_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
+//		      &(data_struct->requests[i]), &(data_struct->request_qty[i])); FIXME BORRAR
+      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
+		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
     }
   } else {
@@ -475,8 +476,10 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      async_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
-		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
+//      async_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, mall->intercomm, 
+//		      &(data_struct->requests[i]), &(data_struct->request_qty[i]));
+      async_communication_start(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
+		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       data_struct->arrays[i] = (void *) aux;
     }
   } else {
@@ -549,7 +552,7 @@ void Children_init() {
     } 
   }
   mall_conf->results->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
-  
+
   // Guardar los resultados de esta transmision
   comm_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
   if(!is_intercomm) {
@@ -645,15 +648,16 @@ int start_redistribution() {
  * terminada cuando los padres terminan de enviar.
  * Si se utiliza el modo "MAL_USE_IBARRIER", se considera terminada cuando
  * los hijos han terminado de recibir.
+ * //FIXME Modificar para que se tenga en cuenta rep_a_data
  */
 int check_redistribution() {
-  int is_intercomm, completed, local_completed, all_completed, test_err;
-  size_t i, j, req_qty;
+  int is_intercomm, completed, local_completed, all_completed;
+  size_t i, req_qty;
   MPI_Request *req_completed;
+  MPI_Win window;
   local_completed = 1;
-  test_err = 0;
-
-  //FIXME Modificar para que se tenga en cuenta rep_a_data
+  //test_err = 0;
+  /*
   for(i=0; i<dist_a_data->entries; i++) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
@@ -673,16 +677,31 @@ int check_redistribution() {
     printf("P%d aborting -- Test Async\n", mall->myId);
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
+  */
+  for(i=0; i<dist_a_data->entries; i++) {
+    req_completed = dist_a_data->requests[i];
+    req_qty = dist_a_data->request_qty[i];
+    completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, req_completed, req_qty);
+    local_completed = local_completed && completed;
+  }
 
   MPI_Allreduce(&local_completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
-  
+
+  for(i=0; i<dist_a_data->entries; i++) {
+    req_completed = dist_a_data->requests[i];
+    req_qty = dist_a_data->request_qty[i];
+    window = dist_a_data->windows[i];
+    async_communication_end(MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
+  }
+
+  /*
   if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { //FIXME Strategy not fully implemented
     MPI_Waitall(req_qty, req_completed, MPI_STATUSES_IGNORE);
     //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
     //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   }
-
+  */
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();

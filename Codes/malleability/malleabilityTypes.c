@@ -97,7 +97,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
-  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) {
+  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) { //FIXME Que pasa si ambos valores son 0?
     init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
     init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
@@ -145,6 +145,7 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
   data_struct->types = (int *) malloc(size * sizeof(int));
   data_struct->request_qty = (size_t *) malloc(size * sizeof(size_t));
   data_struct->requests = (MPI_Request **) malloc(size * sizeof(MPI_Request *));
+  data_struct->windows = (MPI_Win *) malloc(size * sizeof(MPI_Win));
   data_struct->arrays = (void **) malloc(size * sizeof(void *));
 
   for(i=0; i<size; i++) { //calloc and memset does not ensure a NULL value
@@ -161,6 +162,7 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
 void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t qty_to_add) {
   size_t i, needed, *qty_aux, *request_qty_aux;
   int *types_aux;
+  MPI_Win *windows_aux;
   MPI_Request **requests_aux;
   void **arrays_aux;
 
@@ -169,14 +171,15 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t q
   types_aux = (int *) realloc(data_struct->types, needed * sizeof(int));
   request_qty_aux = (size_t *) realloc(data_struct->request_qty, needed * sizeof(int));
   requests_aux = (MPI_Request **) realloc(data_struct->requests, needed * sizeof(MPI_Request *));
+  windows_aux = (MPI_Win *) realloc(data_struct->windows, needed * sizeof(MPI_Win));
   arrays_aux = (void **) realloc(data_struct->arrays, needed * sizeof(void *));
 
-  if(qty_aux == NULL || arrays_aux == NULL || requests_aux == NULL || types_aux == NULL || request_qty_aux == NULL) {
+  if(qty_aux == NULL || arrays_aux == NULL || requests_aux == NULL || types_aux == NULL || request_qty_aux == NULL || windows_aux == NULL) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria constante de datos a redistribuir/comunicar\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
-  for(i=data_struct->max_entries; i<needed; i++) { //calloc and memset does not ensure a NULL value
+  for(i=data_struct->max_entries; i<needed; i++) { //realloc does not ensure a NULL value
     requests_aux[i] = NULL;
     arrays_aux[i] = NULL;
   }
@@ -185,6 +188,7 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t q
   data_struct->types = types_aux;
   data_struct->request_qty = request_qty_aux;
   data_struct->requests = requests_aux;
+  data_struct->windows = windows_aux;
   data_struct->arrays = arrays_aux;
   data_struct->max_entries = needed;
 }
@@ -218,6 +222,10 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
       }
       free(data_struct->request_qty);
       free(data_struct->requests);  
+    }
+
+    if(data_struct->windows != NULL) {
+      free(data_struct->windows);
     }
 
     if(data_struct->arrays != NULL) {
