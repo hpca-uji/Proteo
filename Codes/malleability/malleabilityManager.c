@@ -531,7 +531,14 @@ void Children_init() {
     if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
     } else {
-      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
+      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
+
+      for(i=0; i<dist_a_data->entries; i++) {
+        async_communication_wait(mall_conf->red_strategies, mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i]);
+      }
+      for(i=0; i<dist_a_data->entries; i++) {
+        async_communication_end(mall_conf->red_method, mall_conf->red_strategies, dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
+      }
     }
 
     mall_conf->results->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
@@ -663,7 +670,7 @@ int check_redistribution() {
   for(i=0; i<dist_a_data->entries; i++) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
-    completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, req_completed, req_qty);
+    completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
     local_completed = local_completed && completed;
   }
 
@@ -674,7 +681,7 @@ int check_redistribution() {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
     window = dist_a_data->windows[i];
-    async_communication_end(MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
+    async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
   }
 
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);

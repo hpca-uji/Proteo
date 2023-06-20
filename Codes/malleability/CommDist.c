@@ -312,19 +312,16 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
     }
 
     /* POST REQUESTS CHECKS */
-    if(is_children_group) { 
-      MPI_Waitall(*request_qty, *requests, MPI_STATUSES_IGNORE); 
-    }
     if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
-      MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
-      if(is_children_group) { MPI_Wait(&((*requests)[*request_qty-1]), MPI_STATUS_IGNORE); }
+      if(!is_children_group && (is_intercomm || myId >= numO)) {
+        MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
+      }
     }
-    if(is_children_group && (red_method == MALL_RED_RMA_LOCKALL || red_method == MALL_RED_RMA_LOCK)) { MPI_Win_free(win); }
-
 
     if(aux_comm_used) {
       MPI_Comm_free(&aux_comm);
     } 
+
     freeCounts(&s_counts);
     freeCounts(&r_counts);
     return 0; //FIXME In this case is always false...
@@ -341,16 +338,31 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE).
  */
-int async_communication_check(int myId, int is_children_group, int red_strategies, MPI_Request *requests, size_t request_qty) {
-  int completed, req_completed, test_err;
+int async_communication_check(int myId, int is_children_group, int red_strategies, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
+  int completed, req_completed, all_req_null, test_err, aux_condition;
   size_t i;
   completed = 1;
+  all_req_null = 1;
   test_err = MPI_SUCCESS;
 
   if (is_children_group) return 1;
 
   if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
+
+    // The Ibarrier should only be posted at this point if the process
+    // has other requests which has not confirmed as completed yet,
+    // but are confirmed now.
+    if (requests[request_qty-1] == MPI_REQUEST_NULL) {
+      for(i=0; i<request_qty; i++) {
+	aux_condition = requests[i] == MPI_REQUEST_NULL;
+	all_req_null  = all_req_null && aux_condition;
+        test_err = MPI_Test(&(requests[i]), &req_completed, MPI_STATUS_IGNORE);
+        completed = completed && req_completed;
+      }
+      if(completed && !all_req_null) { MPI_Ibarrier(comm, &(requests[request_qty-1])); }
+    }
     test_err = MPI_Test(&(requests[request_qty-1]), &completed, MPI_STATUS_IGNORE);
+
   } else {
     for(i=0; i<request_qty; i++) {
       test_err = MPI_Test(&(requests[i]), &req_completed, MPI_STATUS_IGNORE);
@@ -367,24 +379,40 @@ int async_communication_check(int myId, int is_children_group, int red_strategie
   return completed;
 }
 
+
+/*
+ * Waits until the completion of a set of requests. If the Ibarrier strategy
+ * is being used, the corresponding ibarrier is posted.
+ *
+ * - red_strategies (IN):
+ * - comm (IN): Communicator to use to confirm finalizations of redistribution
+ * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
+ * - request_qty (IN): Quantity of requests in "requests".
+ */
+void async_communication_wait(int red_strategies, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
+  MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); 
+  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { 
+    MPI_Ibarrier(comm, &(requests[request_qty-1]) );
+    MPI_Wait(&(requests[request_qty-1]), MPI_STATUS_IGNORE); //TODO Is it really needed? It will be ensured later
+  }
+}
+
 /*
  * Frees Requests/Windows associated to a particular redistribution.
  * Should be called for each output result of calling "async_communication_start".
  *
- * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
  * - red_method (IN):
  * - red_strategies (IN):
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
  * - win (IN): Window to free.
  */
-void async_communication_end(int is_children_group, int red_method, int red_strategies, MPI_Request *requests, size_t request_qty, MPI_Win *win) {
-
-  if (is_children_group) return;
+void async_communication_end(int red_method, int red_strategies, MPI_Request *requests, size_t request_qty, MPI_Win *win) {
 
   //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
   //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
+
   if(red_method == MALL_RED_RMA_LOCKALL || red_method == MALL_RED_RMA_LOCK) { MPI_Win_free(win); }
 }
 
