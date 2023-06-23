@@ -225,6 +225,7 @@ def convert_to_tuples(dfG):
           G_enum.ASYNCH_ITERS.value, G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, \
           G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
           G_enum.T_AR.value, G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
+            #TODO Falta T_malleability?
   array_multiple_list_items = [G_enum.T_ITER.value, G_enum.T_STAGES.value]
   for item in array_list_items:
     name = columnsG[item]
