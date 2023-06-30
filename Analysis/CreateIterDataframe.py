@@ -85,11 +85,21 @@ def copy_iteration(row, dataL_it, group, iteration, is_asynch):
   for index in array_asynch_group: # Convert to tuple
     dataL_it[index] = tuple(dataL_it[index])
 
+#-----------------------------------------------
+def write_iter_dataframe(dataL, name, i, first=False):
+  dfL = pd.DataFrame(dataL, columns=columnsL)
+  dfL.to_pickle(name + str(i) + '.pkl')
+  if first:
+    print(dfL)
 
 #-----------------------------------------------
 
-def create_iter_dataframe(dfG, dataL):
+def create_iter_dataframe(dfG, name, max_it_L):
   it = -1
+  file_i = 0
+  first = True
+  dataL = []
+
   for row_index in range(len(dfG)):
     row = dfG.iloc[row_index]
     groups = row[G_enum.TOTAL_GROUPS.value]
@@ -107,12 +117,22 @@ def create_iter_dataframe(dfG, dataL):
             it += 1
             dataL.append( [None] * len(columnsL) )
             copy_iteration(row, dataL[it], group, iteration, is_asynch)
+    if it >= max_it_L-1: #Var "it" starts at -1, so one more must be extracted for precise cut
+        write_iter_dataframe(dataL, name, file_i, first)
+        dataL = []
+        file_i += 1
+        first = False
+        it = -1
+
+  if it != -1:
+    write_iter_dataframe(dataL, name, file_i)
+
 
 
 #-----------------------------------------------
 
 if len(sys.argv) < 2:
-    print("The files name is missing\nUsage: python3 CreateIterDataframe.py input_file.pkl output_name")
+    print("The files name is missing\nUsage: python3 CreateIterDataframe.py input_file.pkl output_name [max_rows_per_file]")
     exit(1)
 
 input_name = sys.argv[1]
@@ -120,16 +140,14 @@ if len(sys.argv) > 2:
   name = sys.argv[2]
 else:
   name = "dataL"
-print("File name will be: " + name + ".pkl")
+print("File names will be: " + name + ".pkl")
 
+if len(sys.argv) > 3:
+  max_it_L = int(sys.argv[3])
+else:
+  max_it_L = 100000
 
 dfG = pd.read_pickle(input_name)
-dataL = []
-create_iter_dataframe(dfG, dataL)
-
-dfL = pd.DataFrame(dataL, columns=columnsL)
-dfL.to_pickle(name + '.pkl')
-#dfL.to_excel(name + '.xlsx')
-
 print(dfG)
-print(dfL)
+create_iter_dataframe(dfG, name, max_it_L)
+
