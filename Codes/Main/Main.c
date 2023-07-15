@@ -71,23 +71,25 @@ int main(int argc, char *argv[]) {
       set_benchmark_configuration(config_file);
       set_benchmark_results(results);
 
-      set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-	config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-      set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
+      if(config_file->n_groups > 1) {
+        set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
+  	  config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
+        set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
-      malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
-      malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
-      malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
+        malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
+        malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
+        malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
 
-      if(config_file->sdr) {
-	for(i=0; i<group->sync_data_groups; i++) {
-          malleability_add_data(group->sync_array[i], group->sync_qty[i], MAL_CHAR, 0, 1);
-	}
-      }
-      if(config_file->adr) {
-	for(i=0; i<group->async_data_groups; i++) {
-          malleability_add_data(group->async_array[i], group->async_qty[i], MAL_CHAR, 0, 0);
-	}
+        if(config_file->sdr) {
+	  for(i=0; i<group->sync_data_groups; i++) {
+            malleability_add_data(group->sync_array[i], group->sync_qty[i], MAL_CHAR, 0, 1);
+	  }
+        }
+        if(config_file->adr) {
+	  for(i=0; i<group->async_data_groups; i++) {
+            malleability_add_data(group->async_array[i], group->async_qty[i], MAL_CHAR, 0, 0);
+	  }
+        }
       }
 
       MPI_Barrier(comm);
@@ -502,17 +504,29 @@ void obtain_op_times(int compute) {
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
-	// FIXME Arreglar para que se liberen estos datos
-                                        if (group->grp==1000){
+  size_t i;
+
   if(config_file->sdr && group->sync_array != NULL) {
+    for(i=0; i<group->sync_data_groups; i++) {
+      free(group->sync_array[i]);
+      group->sync_array[i] = NULL;
+    }
+    free(group->sync_qty);
+    group->sync_qty = NULL;
     free(group->sync_array);
     group->sync_array = NULL;
+
   }
   if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
     free(group->async_array);
     group->async_array = NULL;
   }
-                                        } 
   free_malleability();
 
   free_results_data(results, config_file->n_stages);
