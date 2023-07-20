@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include "block_distribution.h"
 
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts);
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts);
 void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
 
 /*
@@ -13,21 +13,42 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
  *
  * The struct should be freed with freeCounts
  */
-void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Counts *counts) {
-  int i, *idS;
-  struct Dist_data dist_data;
+void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int offset_ids, struct Counts *counts) {
+  int i, *idS, first_id = 0;
+  struct Dist_data dist_data, dist_target;
+ 
+  if(counts == NULL) { 
+    fprintf(stderr, "Counts is NULL for rank %d/%d ", myId, numP);
+    MPI_Abort(MPI_COMM_WORLD, -3);
+  } 
 
   get_block_dist(n, myId, numP, &dist_data);
-  mallocCounts(counts, numP_other);
   get_util_ids(dist_data, numP_other, &idS);
 
-  if(idS[0] == 0) {
-    set_interblock_counts(0, numP_other, dist_data, counts->counts);
-    idS[0]++;
+  counts->idI = idS[0] + offset_ids;
+  counts->idE = idS[1] + offset_ids;
+  get_block_dist(n, idS[0], numP_other, &dist_target); // RMA Specific operation -- uses idS[0], not idI
+  counts->first_target_displs = dist_data.ini - dist_target.ini; // RMA Specific operation
+
+  if(idS[0] == 0) { // Uses idS[0], not idI
+    set_interblock_counts(counts->idI, numP_other, dist_data, offset_ids, counts->counts);
+    first_id++;
   }
-  for(i=idS[0]; i<idS[1]; i++) {
-    set_interblock_counts(i, numP_other, dist_data, counts->counts);
+  for(i=counts->idI + first_id; i<counts->idE; i++) {
+    set_interblock_counts(i, numP_other, dist_data, offset_ids, counts->counts);
     counts->displs[i] = counts->displs[i-1] + counts->counts[i-1];
+  }
+  free(idS);
+
+  for(i=0; i<numP_other; i++) {
+    if(counts->counts[i] < 0) {
+      fprintf(stderr, "Counts value [i=%d/%d] is negative for rank %d/%d ", i, numP_other, myId, numP);
+      MPI_Abort(MPI_COMM_WORLD, -3);
+    }
+    if(counts->displs[i] < 0) {
+      fprintf(stderr, "Displs value [i=%d/%d] is negative for rank %d/%d ", i, numP_other, myId, numP);
+      MPI_Abort(MPI_COMM_WORLD, -3);
+    }
   }
 }
 
@@ -83,12 +104,8 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
     dist_data->fin = (id+1) * dist_data->tamBl + rem;
   }
   
-  if(dist_data->fin > qty) {
-    dist_data->fin = qty;
-  }
-  if(dist_data->ini > dist_data->fin) {
-    dist_data->ini = dist_data->fin;
-  }
+  if(dist_data->fin > qty) { dist_data->fin = qty; }
+  if(dist_data->ini > dist_data->fin) { dist_data->ini = dist_data->fin; }
 
   dist_data->tamBl = dist_data->fin - dist_data->ini;
 }
@@ -98,11 +115,11 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
  * Obtiene para el Id de un proceso dado, cuantos elementos
  * enviara o recibira desde el proceso indicado en Dist_data.
  */
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int *sendcounts) {
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts) {
   struct Dist_data other;
   int biggest_ini, smallest_end;
 
-  get_block_dist(data_dist.qty, id, numP, &other);
+  get_block_dist(data_dist.qty, id - offset_ids, numP, &other);
 
   // Si el rango de valores no coincide, se pasa al siguiente proceso
   if(data_dist.ini >= other.fin || data_dist.fin <= other.ini) {
@@ -110,18 +127,10 @@ void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int *se
   }
 
   // Obtiene el proceso con mayor ini entre los dos procesos
-  if(data_dist.ini > other.ini) { 
-    biggest_ini = data_dist.ini;
-  } else {
-    biggest_ini = other.ini;
-  }
-
+  biggest_ini = (data_dist.ini > other.ini) ? data_dist.ini : other.ini;
   // Obtiene el proceso con menor fin entre los dos procesos
-  if(data_dist.fin < other.fin) {
-    smallest_end = data_dist.fin;
-  } else {
-    smallest_end = other.fin;
-  }
+  smallest_end = (data_dist.fin < other.fin) ? data_dist.fin : other.fin;
+
   sendcounts[id] = smallest_end - biggest_ini; // Numero de elementos a enviar/recibir del proceso Id
 }
 
@@ -184,18 +193,19 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS) {
  * El vector displs indica los desplazamientos necesarios para cada comunicacion
  * con el proceso "i" del otro grupo.
  *
- * El vector zero_arr se utiliza cuando se quiere indicar un vector incializado
- * a 0 en todos sus elementos. Sirve para indicar que no hay comunicacion.
  */
 void mallocCounts(struct Counts *counts, size_t numP) {
+
     counts->counts = calloc(numP, sizeof(int)); 
     if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
     counts->displs = calloc(numP, sizeof(int));
     if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
-    counts->zero_arr = calloc(numP, sizeof(int));
-    if(counts->zero_arr == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
+    counts->len = numP;
+    counts->idI = -1;
+    counts->idE = -1;
+    counts->first_target_displs = -1;
 }
 
 
@@ -206,12 +216,18 @@ void mallocCounts(struct Counts *counts, size_t numP) {
  * de forma dinamica.
  */
 void freeCounts(struct Counts *counts) {
-    free(counts->counts);
-    free(counts->displs);
-    free(counts->zero_arr);
-    counts->counts = NULL;
-    counts->displs = NULL;
-    counts->zero_arr = NULL;
+    if(counts == NULL) {
+      return;
+    }
+
+    if(counts->counts != NULL) {
+      free(counts->counts);
+      counts->counts = NULL;
+    }
+    if(counts->displs != NULL) {
+      free(counts->displs);
+      counts->displs = NULL;
+    }
 }
 
 /*

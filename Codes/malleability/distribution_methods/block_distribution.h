@@ -18,12 +18,13 @@ struct Dist_data {
 };
 
 struct Counts {
+  int len, idI, idE;
+  int first_target_displs; // RMA. Indicates displacement for first target when performing a Get.
   int *counts;
   int *displs;
-  int *zero_arr;
 };
 
-void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, struct Counts *counts);
+void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int offset_ids, struct Counts *counts);
 void prepare_comm_allgatherv(int numP, int n, struct Counts *counts);
 void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data);
 

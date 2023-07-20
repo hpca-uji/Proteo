@@ -15,13 +15,14 @@ typedef struct {
   unsigned int grp;
   int iter_start;
   int argc;
+  size_t sync_data_groups, async_data_groups;
 
-  int numS; // Cantidad de procesos hijos
   MPI_Comm children, parents;
 
   char *compute_comm_array, *compute_comm_recv;
   char **argv;
-  char *sync_array, *async_array;
+  char **sync_array, **async_array;
+  int *sync_qty, *async_qty;
 } group_data;
 
 
@@ -48,7 +49,7 @@ typedef struct
 typedef struct
 {
   int iters, procs;
-  int sm, ss, phy_dist, at;
+  int sm, ss, phy_dist, rm, rs;
   float factor;
 } group_config_t;
 
@@ -57,7 +58,8 @@ typedef struct
     size_t n_groups, n_resizes, n_stages; // n_groups==n_resizes+1
     size_t actual_group, actual_stage;
     int rigid_times;
-    int granularity, sdr, adr;
+    int granularity;
+    size_t sdr, adr;
 
     MPI_Datatype config_type, group_type, iter_stage_type;
     iter_stage_t *stages;

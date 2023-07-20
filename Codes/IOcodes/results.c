@@ -41,14 +41,14 @@ void comm_results(results_data *results, int root, size_t resizes, MPI_Comm inte
  * En concreto son tres escalares y dos vectores de tamaño "resizes"
  */
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
-  int i, counts = 6;
-  int blocklengths[] = {1, 1, 1, 1, 1, 1};
+  int i, counts = 7;
+  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
-  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = resizes;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_DOUBLE;
+  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = blocklengths[6] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
@@ -59,6 +59,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(results->async_time, &displs[3]);
   MPI_Get_address(results->spawn_real_time, &displs[4]);
   MPI_Get_address(results->spawn_time, &displs[5]);
+  MPI_Get_address(results->malleability_time, &displs[6]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -87,6 +88,7 @@ void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr)
   } else {
     results->async_time[grp-1]  = 0;
   }
+  results->malleability_time[grp-1]  = results->malleability_end - results->malleability_time[grp-1];
 }
 
 /*
@@ -100,6 +102,7 @@ void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr)
  */
 void reset_results_index(results_data *results) {
   results->iter_index = 0;
+  results->iters_async = 0;
 }
 
 //=============================================================== FIXME BORRAR?
@@ -162,17 +165,18 @@ void compute_results_stages(results_data *results, int myId, int numP, int root,
   int i;
   if(myId == root) {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
-      for(size_t j=0; j<results->iter_index; j++) {
+      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+     /* for(size_t j=0; j<results->iter_index; j++) {
         results->stage_times[i][j] = results->stage_times[i][j] / numP;
-      }
+      }*/
     }
   }
   else {
     for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
     }
   }
+  //MPI_Barrier(comm); //FIXME Esto debería de borrarse
 }
 
 //======================================================||
@@ -189,12 +193,12 @@ void compute_results_stages(results_data *results, int myId, int numP, int root,
 void print_iter_results(results_data results) {
   size_t i;
 
+  printf("Async_Iters: %ld\n", results.iters_async);
   printf("T_iter: ");
   for(i=0; i< results.iter_index; i++) {
     printf("%lf ", results.iters_time[i]);
   }
-
-  printf("\nAsync_Iters: %ld\n", results.iters_async);
+  printf("\n");
 }
 
 /*
@@ -240,6 +244,11 @@ void print_global_results(results_data results, size_t resizes) {
     printf("%lf ", results.async_time[i]);
   }
 
+  printf("\nT_Malleability: ");
+  for(i=0; i < resizes; i++) {
+    printf("%lf ", results.malleability_time[i]);
+  }
+
   printf("\nT_total: %lf\n", results.exec_time);
 }
 
@@ -262,6 +271,7 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
   results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
+  results->malleability_time = calloc(resizes, sizeof(double));
   results->wasted_time = 0;
 
   results->iters_size = iters_size + RESULTS_EXTRA_SIZE;
@@ -280,20 +290,24 @@ void realloc_results_iters(results_data *results, size_t stages, size_t needed) 
   int error = 0;
   double *time_aux;
   size_t i;
+
+  if(results->iters_size >= needed) return;
+
   time_aux = (double *) realloc(results->iters_time, needed * sizeof(double));
+  if(time_aux == NULL) error = 1;
 
   for(i=0; i<stages; i++) { //TODO Comprobar que no da error el realloc
     results->stage_times[i] = (double *) realloc(results->stage_times[i], needed * sizeof(double));
     if(results->stage_times[i] == NULL) error = 1;
   }
 
-  if(time_aux == NULL) error = 1;
   if(error) {
     fprintf(stderr, "Fatal error - No se ha podido realojar la memoria de resultados\n");
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
   results->iters_time = time_aux;
+  results->iters_size = needed;
 }
 
 /*
@@ -317,6 +331,10 @@ void free_results_data(results_data *results, size_t stages) {
     if(results->async_time != NULL) {
       free(results->async_time);
       results->async_time = NULL;
+    }
+    if(results->malleability_time != NULL) {
+      free(results->malleability_time);
+      results->malleability_time = NULL;
     }
 
     if(results->iters_time != NULL) {

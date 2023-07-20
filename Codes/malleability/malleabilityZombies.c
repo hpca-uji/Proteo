@@ -40,13 +40,12 @@ void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int 
   free(pids_counts);
   free(pids_displs);
 
-  // FIXME No deberia estar aqui
-  // Needed to ensure iteration times are collected before suspending these processes
-  results_data *results = (results_data *) results_void;
-  compute_results_iter(results, myId, numP,root, comm); 
-  compute_results_stages(results, myId, numP, n_stages, root, comm);
-
   if(myId >= numC) {
+    // FIXME No deberia estar aqui
+    // Needed to ensure iteration times are collected before suspending these processes
+    results_data *results = (results_data *) results_void;
+    compute_results_iter(results, myId, numP,root, comm); 
+    compute_results_stages(results, myId, numP, n_stages, root, comm);
     zombies_suspend();
   }
 }
