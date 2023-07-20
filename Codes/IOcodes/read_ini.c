@@ -42,9 +42,9 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH("general", "Granularity")) {
         pconfig->granularity = atoi(value);
     } else if (MATCH("general", "SDR")) { // TODO Refactor a nombre manual
-        pconfig->sdr = atoi(value);
+        pconfig->sdr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
-        pconfig->adr = atoi(value);
+        pconfig->adr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
 
@@ -72,8 +72,10 @@ static int handler(void* user, const char* section, const char* name,
           aux_value = MALL_DIST_SPREAD;
   	}
         pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
-    } else if (MATCH(resize_name, "Asynch_Redistribution_Type") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].at = atoi(value);
+    } else if (MATCH(resize_name, "Redistribution_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].rm = atoi(value);
+    } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[pconfig->actual_group].rs = atoi(value);
     } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
         pconfig->groups[pconfig->actual_group].sm = atoi(value);
     } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {

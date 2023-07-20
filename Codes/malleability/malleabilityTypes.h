@@ -13,13 +13,14 @@
 typedef struct {
   size_t entries; // Indica numero de vectores a comunicar (replicated data)
   size_t max_entries;
-  MPI_Request request_ibarrier; // Request para indicar que los padres esperan a que los hijos terminen de recibir
   size_t *qty; // Indica numero de elementos en cada subvector de sync_array
   int *types;
 
   // Vector de vectores de request. En cada elemento superior se indican los requests a comprobar para dar por finalizada 
   // la comunicacion de ese dato
+  size_t *request_qty;
   MPI_Request **requests; 
+  MPI_Win *windows;
   void **arrays; // Cada subvector es una serie de datos a comunicar
 
 } malleability_data_t;
