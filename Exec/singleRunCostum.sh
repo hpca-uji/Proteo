@@ -1,28 +1,25 @@
 #!/bin/bash
 
 dir="/home/martini/malleability_benchmark"
-partition="P1"
-exclude="c00,c01,c02"
+cores=20
 
-# Executes a given configuration file with the aid of
-# the RMS Slurm.
+# Executes a given configuration file. This script can be called with Slurm commands to 
+#   choose the desired user configuration.
 # Parameter 1: Configuration file name for the emulation.
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
 # Parameter 4(Optional): Use Extrae(1) or not(0).
-# Parameter 5(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
-# Parameter 6(Optional): Path where the output files should be saved. 
+# Parameter 5(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
-cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
 
 if [ $# -lt 1 ]
 then
   echo "Not enough arguments. Usage:"
-  echo "bash singleRun.sh config.ini [outFileIndex] [Qty] [Use extrae] [Output path]"
+  echo "singleRunCostum.sh config.ini [outFileIndex] [Qty] [Use Extrae] [Output path]"
   exit 1
 fi
 
@@ -30,8 +27,7 @@ fi
 #$2 == outFileIndex
 #$3 == Qty of repetitions
 #$4 == Use extrae NO(0) YES(1)
-#$5 == Max time per execution(s)
-#$6 == Output path
+#$5 == Output path
 
 config_file=$1
 outFileIndex=0
@@ -50,20 +46,12 @@ if [ $# -ge 4 ]
 then
   use_extrae=$4
 fi
-limit_time=$((0))
-if [ $# -ge 5 ] #Max time per execution in seconds
+if [ $# -ge 5 ]
 then
-  limit_time=$(($5 * $qty / 60 + 1))
-fi
-if [ $# -ge 6 ]
-then
-  output=$6
+  output=$5
 fi
 
-#Obtain amount of nodes neeeded
-node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
-#Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_extrae $outFileIndex $qty
+bash $dir$execDir/generalRunCostum.sh $dir $cores $config_file $use_extrae $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

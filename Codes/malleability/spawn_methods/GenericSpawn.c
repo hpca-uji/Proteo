@@ -215,6 +215,7 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
     init_spawn_state();
   }
 
+  spawn_data->mapping = MPI_INFO_NULL;
   if(spawn_data->myId == spawn_data->root) {
     physical_struct_create(target_qty, spawn_data->already_created, num_cpus, num_nodes, nodelist, type_dist, MALL_DIST_STRING, &(spawn_data->dist));
 
@@ -225,7 +226,6 @@ void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodel
 
   } else {
     spawn_data->cmd = malloc(1 * sizeof(char));
-    spawn_data->mapping = MPI_INFO_NULL; //It is only needed for the root process
   }
 }
 
@@ -290,10 +290,10 @@ void deallocate_spawn_data() {
  * Cuando termina, modifica la variable global para indicar este cambio
  */
 void generic_spawn(MPI_Comm *child, int data_stage) {
-  int local_state;
+  int local_state, aux_state;
 
   // WORK
-  if(spawn_data->myId == spawn_data->root) { //SET MAPPING
+  if(spawn_data->myId == spawn_data->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
     processes_dist(spawn_data->dist, &(spawn_data->mapping));
   }
   switch(spawn_data->spawn_method) {
@@ -306,7 +306,10 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
   }
   // END WORK
   end_time = MPI_Wtime();
-  set_spawn_state(local_state, spawn_data->spawn_is_async);
+  aux_state = get_spawn_state(spawn_data->spawn_is_async);
+  if(!(aux_state == MALL_SPAWN_PENDING && local_state == MALL_SPAWN_ADAPT_POSTPONE)) {
+    set_spawn_state(local_state, spawn_data->spawn_is_async);
+  }
 }
 
 
@@ -345,7 +348,7 @@ void* thread_work() {
   generic_spawn(returned_comm, MALL_NOT_STARTED);
 
   local_state = get_spawn_state(MALL_SPAWN_PTHREAD);
-  if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
+  if(local_state == MALL_SPAWN_ADAPT_POSTPONE || local_state == MALL_SPAWN_PENDING) {
     // El grupo de procesos se terminara de juntar tras la redistribucion de datos
 
     local_state = wait_wakeup();
