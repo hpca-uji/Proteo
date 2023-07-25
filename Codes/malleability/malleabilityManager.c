@@ -755,7 +755,7 @@ int shrink_redistribution() {
     double time_extra = MPI_Wtime();
 
     //TODO Create new state before collecting zombies. Processes can perform tasks before that. Then call again Malleability to commit the change
-    zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall_conf->config_file->n_stages);
+    zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall_conf->config_file->n_stages, mall_conf->config_file->capture_method);
     
     if(mall->myId < mall->numC) {
       if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); //FIXME Modificar a que se pida pro el usuario el cambio y se llama a comms_update

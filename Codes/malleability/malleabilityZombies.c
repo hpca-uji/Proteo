@@ -17,7 +17,7 @@ int offset_pids, *pids = NULL;
 
 void gestor_usr2() {}
 
-void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void, int n_stages) {
+void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void, size_t n_stages, int capture_method) {
   int pid = getpid();
   int *pids_counts = malloc(numP * sizeof(int));
   int *pids_displs = malloc(numP * sizeof(int));
@@ -44,8 +44,7 @@ void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int 
     // FIXME No deberia estar aqui
     // Needed to ensure iteration times are collected before suspending these processes
     results_data *results = (results_data *) results_void;
-    compute_results_iter(results, myId, numP,root, comm); 
-    compute_results_stages(results, myId, numP, n_stages, root, comm);
+    compute_results_iter(results, myId, numP, root, n_stages, capture_method, comm); 
     zombies_suspend();
   }
 }

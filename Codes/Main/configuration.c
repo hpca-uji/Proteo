@@ -10,6 +10,8 @@
 void malloc_config_resizes(configuration *user_config);
 void malloc_config_stages(configuration *user_config);
 
+void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids);
+
 void def_struct_config_file(configuration *config_file);
 void def_struct_groups(configuration *config_file);
 void def_struct_iter_stage(configuration *config_file);
@@ -96,12 +98,14 @@ void malloc_config_stages(configuration *user_config) {
       user_config->stages[i].array = NULL;
       user_config->stages[i].full_array = NULL;
       user_config->stages[i].double_array = NULL;
+      user_config->stages[i].reqs = NULL;
       user_config->stages[i].counts.counts = NULL;
       user_config->stages[i].bytes = 0;
       user_config->stages[i].my_bytes = 0;
       user_config->stages[i].real_bytes = 0;
       user_config->stages[i].operations = 0;
       user_config->stages[i].pt = 0;
+      user_config->stages[i].id = -1;
       user_config->stages[i].t_op = 0;
       user_config->stages[i].t_stage = 0;
       user_config->stages[i].t_capped = 0;
@@ -115,25 +119,13 @@ void malloc_config_stages(configuration *user_config) {
  * Libera toda la memoria de una estructura de configuracion
  */
 void free_config(configuration *user_config) {
-    size_t i;
+    size_t i, found_ids;
+    int *freed_ids;
+    found_ids = 0;
     if(user_config != NULL) {
+      freed_ids = (int *) malloc(user_config->n_stages * sizeof(int));
       for(i=0; i < user_config->n_stages; i++) {
-	
-        if(user_config->stages[i].array != NULL) {
-          free(user_config->stages[i].array);
-          user_config->stages[i].array = NULL;
-	}
-        if(user_config->stages[i].full_array != NULL) {
-          free(user_config->stages[i].full_array);
-          user_config->stages[i].full_array = NULL;
-	}
-        if(user_config->stages[i].double_array != NULL) {
-          free(user_config->stages[i].double_array);
-          user_config->stages[i].double_array = NULL;
-	}
-        if(user_config->stages[i].counts.counts != NULL) {
-	  freeCounts(&(user_config->stages[i].counts));
-	}
+        free_config_stage(&(user_config->stages[i]), freed_ids, &found_ids);
       }
       //Liberar tipos derivados
       MPI_Type_free(&(user_config->config_type));
@@ -148,7 +140,57 @@ void free_config(configuration *user_config) {
       free(user_config->groups);
       free(user_config->stages);
       free(user_config);
+      free(freed_ids);
     }
+}
+
+
+/*
+ * Libera toda la memoria de una estructura de configuracion
+ */
+void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids) {
+  size_t i;
+  int free_reqs;
+
+  free_reqs = 1;
+  if(stage->id > -1) {
+    for(i=0; i<*found_ids; i++) {
+      if(stage->id == freed_ids[i]) {
+  	free_reqs = 0;
+        break;
+      }
+    }
+    if(free_reqs) {
+      freed_ids[*found_ids] = stage->id;
+      *found_ids=*found_ids + 1;
+    }
+  }
+	
+  if(stage->array != NULL) {
+    free(stage->array);
+    stage->array = NULL;
+  }
+  if(stage->full_array != NULL) {
+    free(stage->full_array);
+    stage->full_array = NULL;
+  }
+  if(stage->double_array != NULL) {
+    free(stage->double_array);
+    stage->double_array = NULL;
+  }
+  if(stage->reqs != NULL && free_reqs) {
+    for(i=0; i<stage->req_count; i++) {
+      if(stage->reqs[i] != MPI_REQUEST_NULL) {
+        MPI_Request_free(&(stage->reqs[i]));
+	stage->reqs[i] = MPI_REQUEST_NULL;
+      }
+    }
+    free(stage->reqs);
+    stage->reqs = NULL;
+  }
+  if(stage->counts.counts != NULL) {
+    freeCounts(&(stage->counts));
+  }
 }
 
 
@@ -257,18 +299,18 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
 
 
 /*
- * Tipo derivado para enviar 6 elementos especificos
+ * Tipo derivado para enviar 7 elementos especificos
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file) {
-  int i, counts = 6;
-  int blocklengths[6] = {1, 1, 1, 1, 1, 1};
+  int i, counts = 7;
+  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = MPI_UNSIGNED_LONG;
-  types[4] = types[5] = MPI_INT;
+  types[4] = types[5] = types[6] = MPI_INT;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -279,6 +321,7 @@ void def_struct_config_file(configuration *config_file) {
   MPI_Get_address(&(config_file->adr), &displs[3]);
   MPI_Get_address(&(config_file->granularity), &displs[4]);
   MPI_Get_address(&(config_file->rigid_times), &displs[5]);
+  MPI_Get_address(&(config_file->capture_method), &displs[6]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -333,24 +376,25 @@ void def_struct_groups(configuration *config_file) {
  * de la estructuras de fases de iteracion en una sola comunicacion.
  */
 void def_struct_iter_stage(configuration *config_file) {
-  int i, counts = 5;
-  int blocklengths[5] = {1, 1, 1, 1, 1};
+  int i, counts = 6;
+  int blocklengths[6] = {1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype aux, types[counts];
   iter_stage_t *stages = config_file->stages;
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = MPI_INT;
-  types[3] = types[4] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = MPI_INT;
+  types[4] = types[5] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(stages, &dir);
 
   MPI_Get_address(&(stages->pt), &displs[0]);
-  MPI_Get_address(&(stages->bytes), &displs[1]);
-  MPI_Get_address(&(stages->t_capped), &displs[2]);
-  MPI_Get_address(&(stages->t_stage), &displs[3]);
-  MPI_Get_address(&(stages->t_op), &displs[4]);
+  MPI_Get_address(&(stages->id), &displs[1]);
+  MPI_Get_address(&(stages->bytes), &displs[2]);
+  MPI_Get_address(&(stages->t_capped), &displs[3]);
+  MPI_Get_address(&(stages->t_stage), &displs[4]);
+  MPI_Get_address(&(stages->t_op), &displs[5]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 

@@ -7,6 +7,7 @@
 
 #define RESULTS_INIT_DATA_QTY 100
 
+enum capture_methods{RESULTS_MAX, RESULTS_MEAN, RESULTS_MEDIAN};
 typedef struct {
   // Iters data
   double *iters_time, **stage_times;
@@ -26,8 +27,7 @@ void comm_results(results_data *results, int root, size_t resizes, MPI_Comm inte
 void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr);
 void reset_results_index(results_data *results);
 
-void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm);
-void compute_results_stages(results_data *results, int myId, int numP, int root, int n_stages, MPI_Comm comm);
+void compute_results_iter(results_data *results, int myId, int numP, int root, size_t n_stages, int capture_method, MPI_Comm comm);
 
 void print_iter_results(results_data results);
 void print_stage_results(results_data results, size_t n_stages);
