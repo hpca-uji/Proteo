@@ -1,6 +1,5 @@
 #!/bin/bash
 
-dir="/home/martini/tmp/malleability_benchmark/"
 partition="P1"
 
 # Checks if all the runs in the current working directory performed under a 
@@ -18,6 +17,8 @@ partition="P1"
 #               Must be a positive integer.
 #====== Do not modify the following values =======
 
+scriptDir="$(dirname "$0")"
+source $scriptDir/../Codes/build/config.txt
 codeDir="Codes/"
 execDir="Exec/"
 ResultsDir="Results/"

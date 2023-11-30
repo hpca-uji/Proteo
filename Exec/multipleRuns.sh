@@ -1,13 +1,13 @@
 #!/bin/bash
 
-dir="/home/martini/tmp/malleability_benchmark/"
-
 # Creates a directory with all possible and valid combinations of configuration files
 #   that can be created from a given complex configuration file.
 # Parameter 1: Complex configuration file name.
 # Parameter 2: Common output name of the output configuration files. It will be appended an index to each of them.
 #====== Do not modify these values =======
 
+scriptDir="$(dirname "$0")"
+source $scriptDir/../Codes/build/config.txt
 codeDir="Codes/"
 execDir="Exec/"
 ResultsDir="Results/"

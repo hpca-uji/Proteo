@@ -1,6 +1,5 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark"
 cores=20
 
 # Executes a given configuration file. This script can be called with Slurm commands to 
@@ -12,6 +11,8 @@ cores=20
 # Parameter 5(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
+scriptDir="$(dirname "$0")"
+source $scriptDir/../Codes/build/config.txt
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"

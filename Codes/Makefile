@@ -30,6 +30,9 @@ $(BIN) : $(BUILD_DIR)/$(BIN)
 # Actual target of the binary - depends on all .o files.
 $(BUILD_DIR)/$(BIN) : $(OBJ)
 	$(MCC) $(C_FLAGS) $^ -o $@ $(LD_FLAGS)
+	@ echo -n "dir=\"" > $(BUILD_DIR)/config.txt
+	@ realpath -z $$(echo "$$(pwd)/..") >> $(BUILD_DIR)/config.txt
+	@ echo "\"" >> $(BUILD_DIR)/config.txt
 
 # Include all .d files
 # .d files are used for knowing the dependencies of each source file
@@ -45,7 +48,7 @@ $(BUILD_DIR)/%.o : %.c
 	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
 
 clean:
-	-rm $(BUILD_DIR)/$(BIN) $(OBJ) $(DEP)
+	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/config.txt $(OBJ) $(DEP)
 clear:
 	-rm -rf $(BUILDDIR)
 
