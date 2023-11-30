@@ -45,6 +45,7 @@ int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child) {
   // WORK
   int spawn_err = MPI_Comm_spawn(spawn_data.cmd, MPI_ARGV_NULL, spawn_data.spawn_qty, spawn_data.mapping, spawn_data.root, comm, child, MPI_ERRCODES_IGNORE); 
   MPI_Comm_set_name(*child, "MPI_COMM_MALL_RESIZE");
+
   // END WORK
 
   if(spawn_err != MPI_SUCCESS) {

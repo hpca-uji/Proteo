@@ -5,7 +5,7 @@
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);
 
 void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
@@ -75,8 +75,14 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts);
 
+        if(is_intercomm) {
+          MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
+	  aux_comm_used = 1;
+	} else {
+	  aux_comm = comm;
+	}
     /* PERFORM COMMUNICATION */
     switch(red_method) {
 
@@ -95,11 +101,11 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 	break;
 
       case MALL_RED_POINT:
-        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, comm);
+        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, aux_comm);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
+        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm);
 	break;
     }
 
@@ -292,8 +298,15 @@ int async_communication(char *send, char **recv, int qty, int myId, int numP, in
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts);
     check_requests(s_counts, r_counts, requests, request_qty);
+
+        if(is_intercomm) {
+          MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
+	  aux_comm_used = 1;
+	} else {
+	  aux_comm = comm;
+	}
 
     /* PERFORM COMMUNICATION */
     switch(red_method) {
@@ -302,11 +315,11 @@ int async_communication(char *send, char **recv, int qty, int myId, int numP, in
       case MALL_RED_RMA_LOCK:
 	return MALL_DENIED; //TODO Realizar versiones asíncronas
       case MALL_RED_POINT:
-        async_point2point(send, *recv, s_counts, r_counts, comm, *requests);
+        async_point2point(send, *recv, s_counts, r_counts, aux_comm, *requests);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm, &((*requests)[0]));
+        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm, &((*requests)[0]));
 	break;
     }
 
@@ -324,7 +337,7 @@ int async_communication(char *send, char **recv, int qty, int myId, int numP, in
 
     if(aux_comm_used) {
       MPI_Comm_free(&aux_comm);
-    } 
+    }
     freeCounts(&s_counts);
     freeCounts(&r_counts);
     return 0; //FIXME In this case is always false...
@@ -385,13 +398,13 @@ void async_point2point(char *send, char *recv, struct Counts s_counts, struct Co
  * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
  *
  */
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
   int array_size = numO;
   int offset_ids = 0;
   struct Dist_data dist_data;
 
   if(is_intercomm) {
-    //offset_ids = numP; //FIXME Modify only if active?
+    offset_ids = is_sync ? numP : 0; //FIXME Modify only if active?
   } else {
     array_size = numP > numO ? numP : numO;
   }
