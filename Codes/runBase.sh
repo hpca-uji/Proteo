@@ -4,7 +4,7 @@
 #SBATCH -N 1
 #SBATCH --exclude=c01,c00,c02
 
-dir="/home/martini/malleability_benchmark"
+dir="/home/martini/tmp/malleability_benchmark"
 partition='P1'
 
 codeDir="/Codes"

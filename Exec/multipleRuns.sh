@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark/"
+dir="/home/martini/tmp/malleability_benchmark/"
 
 # Creates a directory with all possible and valid combinations of configuration files
 #   that can be created from a given complex configuration file.

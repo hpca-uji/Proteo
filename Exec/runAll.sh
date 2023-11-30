@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark"
+dir="/home/martini/tmp/malleability_benchmark"
 partition="P1"
 exclude="c00,c01,c02"
 

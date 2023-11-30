@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark/"
+dir="/home/martini/tmp/malleability_benchmark/"
 partition="P1"
 
 # Checks if all the runs in the current working directory performed under a 
@@ -68,7 +68,7 @@ fi
 # then the scripts exits.
 #The user must figure out what to do with those runs.
 qtyG=$(ls R*_Global.out | wc -l)
-qtyG=$(($qtyG * 2))
+qtyG=$(($qtyG * $total_groups))
 qtyL=$(ls R*_G*N*.out | wc -l)
 if [ "$qtyG" == "$qtyL" ]
 then

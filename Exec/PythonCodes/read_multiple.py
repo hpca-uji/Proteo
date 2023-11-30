@@ -175,6 +175,7 @@ def check_sections_assumptions(datasets):
         if i>0:
             if datasets[total_stages+1+i][Config_section.P_RESIZE_PROCS.value] == datasets[total_stages+i][Config_section.P_RESIZE_PROCS.value]:
                 return False
+
     return True
 
 def correct_adr(sdr, adr_percentage, w_general_dataset):
