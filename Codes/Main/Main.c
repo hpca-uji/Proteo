@@ -12,7 +12,8 @@
 #include "../malleability/malleabilityManager.h"
 #include "../malleability/malleabilityStates.h"
 
-#define DR_MAX_SIZE 1000000000
+//#define DR_MAX_SIZE 1000000000
+#define DR_MAX_SIZE 600000000
 
 int work();
 double iterate(int async_comm);

@@ -36,7 +36,7 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
  */
 double init_stage(configuration *config_file, int stage_i, group_data group, MPI_Comm comm, int compute) {
   double result = 0;
-  int qty = 20000;
+  int qty = 1000;
 
   iter_stage_t *stage = &(config_file->stages[stage_i]);
   stage->operations = qty;
@@ -182,6 +182,7 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
   result = 0;
   t_stage = stage->t_stage * config_file->groups[group.grp].factor;
   initMatrix(&(stage->double_array), config_file->granularity);
+
 
   if(compute) {
     if(group.myId == ROOT) {
