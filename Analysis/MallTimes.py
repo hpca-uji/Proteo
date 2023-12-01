@@ -274,9 +274,8 @@ dataG = []
 
 for elem in lista:
   f = open(elem, "r")
-  id_run = elem.split("_Global.out")[0].split(common_name)[1] 
-  path_to_run = elem.split(common_name)[0]
-  lista_local = glob.glob(path_to_run + common_name + id_run + "_G*NP*.out")
+  id_run = elem.split("_Global.out")[0].split(common_name)[-1] 
+  lista_local = glob.glob(BaseDir + common_name + id_run + "_G*NP*.out")
 
   it,runs_in_file = read_global_file(f, dataG, it)
   f.close()

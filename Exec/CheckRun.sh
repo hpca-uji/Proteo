@@ -19,9 +19,9 @@ partition="P1"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="Codes/"
-execDir="Exec/"
-ResultsDir="Results/"
+codeDir="/Codes/"
+execDir="/Exec/"
+ResultsDir="/Results/"
 cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
 
 if [ "$#" -lt "6" ]
