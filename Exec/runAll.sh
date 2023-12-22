@@ -1,6 +1,5 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark"
 partition="P1"
 exclude="c00,c01,c02"
 
@@ -9,6 +8,8 @@ exclude="c00,c01,c02"
 # Parameter 2(Optional) - Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
 #====== Do not modify these values =======
 
+scriptDir="$(dirname "$0")"
+source $scriptDir/../Codes/build/config.txt
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"

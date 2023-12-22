@@ -1,7 +1,5 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark" #FIXME Obtain from another way
-
 # Runs in a given current directory all .ini files
 # Parameter 1(Optional) - Amount of executions per file. Must be a positive number
 #====== Do not modify these values =======

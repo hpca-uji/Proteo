@@ -4,7 +4,8 @@
 #SBATCH -N 1
 #SBATCH --exclude=c01,c00,c02
 
-dir="/home/martini/malleability_benchmark"
+scriptDir="$(dirname "$0")"
+source $scriptDir/build/config.txt
 codeDir="/Codes"
 execDir="/Exec"
 

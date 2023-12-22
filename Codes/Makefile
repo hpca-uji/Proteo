@@ -10,6 +10,7 @@ DEF =
 
 # Final binary
 BIN = a.out
+CONFIG = config.txt
 # Put all auto generated stuff to this build dir.
 BUILD_DIR = ./build
 
@@ -26,6 +27,14 @@ DEP = $(OBJ:%.o=%.d)
 
 # Default target named after the binary.
 $(BIN) : $(BUILD_DIR)/$(BIN)
+
+# Default configuration file
+$(CONFIG) : $(BUILD_DIR)/$(CONFIG)
+$(BUILD_DIR)/$(CONFIG) :
+	mkdir -p $(@D)
+	@ echo -n "dir=\"" > $(BUILD_DIR)/$(CONFIG)
+	@ realpath -z $$(echo "$$(pwd)/..") >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "\"" >> $(BUILD_DIR)/$(CONFIG)
 
 # Actual target of the binary - depends on all .o files.
 $(BUILD_DIR)/$(BIN) : $(OBJ)
@@ -45,12 +54,12 @@ $(BUILD_DIR)/%.o : %.c
 	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
 
 clean:
-	-rm $(BUILD_DIR)/$(BIN) $(OBJ) $(DEP)
+	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
 clear:
 	-rm -rf $(BUILDDIR)
 
 
-install: $(BIN)
+install: $(BIN) $(CONFIG)
 	echo "Done"
 
 # Builds target with slurm
