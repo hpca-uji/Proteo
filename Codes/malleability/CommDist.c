@@ -5,7 +5,8 @@
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
 
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
+//void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
 void check_requests(struct Counts s_counts, struct Counts r_counts, int red_strategies, MPI_Request **requests, size_t *request_qty);
 
 void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
@@ -78,7 +79,18 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+//    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+// TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); //FIXME MAGICAL VALUE
+
+    if(is_intercomm) {
+      MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
+      aux_comm_used = 1;
+    } else {
+      aux_comm = comm;
+    }
+// FIXME END REFACTOR
+
 
     /* PERFORM COMMUNICATION */
     switch(red_method) {
@@ -90,19 +102,15 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        if(is_intercomm) {
-          MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
-	  aux_comm_used = 1;
-	} else { aux_comm = comm; }
         sync_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, red_method);
 	break;
 
       case MALL_RED_POINT:
-        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, comm);
+        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, aux_comm);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm);
+        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm);
 	break;
     }
 
@@ -283,7 +291,16 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+// TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
+    //prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); // TODO MAGICAL VALUE
+    if(is_intercomm) {
+      MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
+      aux_comm_used = 1;
+    } else {
+      aux_comm = comm;
+    }
+// FIXME END REFACTOR
     check_requests(s_counts, r_counts, red_strategies, requests, request_qty);
 
     /* PERFORM COMMUNICATION */
@@ -296,18 +313,14 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        if(is_intercomm) {
-          MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
-	  aux_comm_used = 1;
-	} else { aux_comm = comm; }
         async_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, red_method, *requests, win);
 	break;
       case MALL_RED_POINT:
-        async_point2point(send, *recv, s_counts, r_counts, comm, *requests);
+        async_point2point(send, *recv, s_counts, r_counts, aux_comm, *requests);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, comm, &((*requests)[0]));
+        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm, &((*requests)[0]));
 	break;
     }
 
@@ -545,13 +558,14 @@ void async_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win, MPI_Requ
  * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
  *
  */
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
+//FIXME Ensure name for is_sync variable
+void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
   int array_size = numO;
   int offset_ids = 0;
   struct Dist_data dist_data;
 
   if(is_intercomm) {
-    //offset_ids = !is_children_group ? numP : 0; //FIXME Modify only if active?
+    offset_ids = is_sync ? numP : 0; //FIXME Modify only if active?
   } else {
     array_size = numP > numO ? numP : numO;
   }
