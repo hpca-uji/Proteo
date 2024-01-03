@@ -9,7 +9,7 @@
 #include <mpi.h>
 #include <signal.h>
 
-void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void, int n_stages);
+void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root, void *results_void, size_t n_stages, int capture_method);
 void zombies_service_init();
 void zombies_service_free();
 void zombies_awake();

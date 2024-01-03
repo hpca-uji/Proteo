@@ -318,9 +318,9 @@ double iterate_rigid(double *time, double *times_stages) {
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
-    MPI_Barrier(comm);
     start_time_stage = MPI_Wtime();
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
+    MPI_Barrier(comm);
     times_stages[i] = MPI_Wtime() - start_time_stage;
   }
 
@@ -359,8 +359,7 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
-  compute_results_iter(results, group->myId, group->numP, ROOT, comm);
-  compute_results_stages(results, group->myId, group->numP, config_file->n_stages, ROOT, comm);
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 

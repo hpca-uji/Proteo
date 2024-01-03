@@ -47,6 +47,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->adr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
+    } else if (MATCH("general", "Capture_Method")) {
+        pconfig->capture_method = atoi(value);
 
     // Iter stage
     } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
@@ -55,6 +57,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
     } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
         pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
+        pconfig->stages[pconfig->actual_stage].id = atoi(value);
     } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
         pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
         pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
@@ -107,6 +111,8 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
+    config->capture_method = 0;
+    config->rigid_times = 0;
     config->n_resizes = 0;
     config->n_groups = 1;
     config->n_stages = 1;

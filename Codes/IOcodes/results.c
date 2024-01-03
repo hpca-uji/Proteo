@@ -7,6 +7,11 @@
 
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type);
 
+void compute_max(results_data *results, double *computed_array, int myId, int root, MPI_Comm comm);
+void compute_mean(results_data *results, double *computed_array, int myId, int numP, int root, MPI_Comm comm);
+void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm);
+void match_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm);
+
 //======================================================||
 //======================================================||
 //================MPI RESULTS FUNCTIONS=================||
@@ -105,13 +110,6 @@ void reset_results_index(results_data *results) {
   results->iters_async = 0;
 }
 
-//=============================================================== FIXME BORRAR?
-int compare(const void *_a, const void *_b) { 
-        double *a, *b;
-        a = (double *) _a;
-        b = (double *) _b;
-        return (*a - *b);
-}
 /*
  * Obtiene para cada iteracion, el tiempo maximo entre todos los procesos
  * que han participado.
@@ -119,64 +117,116 @@ int compare(const void *_a, const void *_b) {
  * Es necesario obtener el maximo, pues es el que representa el tiempo real
  * que se ha utilizado.
  */
-void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
-  if(myId == root) {
-    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
-    /*
-    for(size_t i=0; i<results->iter_index; i++) {
-      results->iters_time[i] = results->iters_time[i] / numP;
-    }*/
-  } else {
-    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+void compute_results_iter(results_data *results, int myId, int numP, int root, size_t stages, int capture_method, MPI_Comm comm) {
+  size_t i, *used_ids;
+  switch(capture_method) {
+    case RESULTS_MAX:
+      compute_max(results, results->iters_time, myId, root, comm);
+      for(i=0; i<stages; i++) {
+        compute_max(results, results->stage_times[i], myId, root, comm);
+      }
+      break;
+    case RESULTS_MEAN:
+      compute_mean(results, results->iters_time, myId, numP, root, comm);
+      for(i=0; i<stages; i++) {
+        compute_mean(results, results->stage_times[i], myId, numP, root, comm);
+      }
+      break;
+    case RESULTS_MEDIAN:
+      used_ids = malloc(results->iter_index * sizeof(size_t));
+      compute_median(results, results->iters_time, used_ids, myId, numP, root, comm);
+      for(i=0; i<stages; i++) {
+        //compute_median(results, results->stage_times[i], myId, numP, root, comm);
+        match_median(results, results->stage_times[i], used_ids, myId, numP, root, comm);
+      }
+      free(used_ids);
+      break;
   }
-  /*
-  double *aux_all_iters, *aux_id_iters, median;
+}
+
+void compute_max(results_data *results, double *computed_array, int myId, int root, MPI_Comm comm) {
+  if(myId == root) {
+    MPI_Reduce(MPI_IN_PLACE, computed_array, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  } else {
+    MPI_Reduce(computed_array, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  }
+}
+
+void compute_mean(results_data *results, double *computed_array, int myId, int numP, int root, MPI_Comm comm) {
+  if(myId == root) {
+    MPI_Reduce(MPI_IN_PLACE, computed_array, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    for(size_t i=0; i<results->iter_index; i++) {
+      computed_array[i] = results->iters_time[i] / numP;
+    }
+  } else {
+    MPI_Reduce(computed_array, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+  }
+}
+
+
+
+struct TimeWithIndex {
+    double time;
+    size_t index;
+};
+
+int compare(const void *a, const void *b) {
+  return ((struct TimeWithIndex *)a)->time - ((struct TimeWithIndex *)b)->time;
+}
+
+/*
+ * Calcula la mediana de un vector de tiempos replicado entre "numP" procesos.
+ * Se calcula la mediana para cada elemento del vector final y se devuelve este.
+ *
+ * Además se devuelve en el vector "used_ids" de que proceso se ha obtenido la mediana de cada elemento.
+ */
+void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
+  double *aux_all_iters, median;
+  struct TimeWithIndex *aux_id_iters;
   if(myId == root) {
     aux_all_iters = malloc(numP *results->iter_index * sizeof(double));
+    aux_id_iters = malloc(numP * sizeof(struct TimeWithIndex));
   }
-  MPI_Gather(results->iters_time, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
+  MPI_Gather(computed_array, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
   if(myId == root) {
-    aux_id_iters = malloc(numP * sizeof(double));
     for(size_t i=0; i<results->iter_index; i++) {
       for(int j=0; j<numP; j++) {
-        aux_id_iters[j] = aux_all_iters[i+(results->iter_index*j)];
+        aux_id_iters[j].time = aux_all_iters[i+(results->iter_index*j)];
+        aux_id_iters[j].index = (size_t) j;
       }
       // Get Median
-      qsort(aux_id_iters, numP, sizeof(double), &compare);
-      median = aux_id_iters[numP/2];
-      if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1] + aux_id_iters[numP/2]) / 2;
-      results->iters_time[i] = median;
+      qsort(aux_id_iters, numP, sizeof(struct TimeWithIndex), &compare);
+      median = aux_id_iters[numP/2].time;
+      if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1].time + aux_id_iters[numP/2].time) / 2;
+      computed_array[i] = median;
+      used_ids[i] = aux_id_iters[numP/2].index; //FIXME What should be the index when numP is even?
     }
     free(aux_all_iters);
     free(aux_id_iters);
   }
-  */
 }
 
-
 /*
- * Obtiene para cada stage de cada iteracion, el tiempo maximo entre todos los procesos
- * que han participado.
+ * Obtiene las medianas de un vector de tiempos replicado entre "numP" procesos.
+ * La mediana de cada elemento se obtiene consultando el vector "used_ids", que contiene
+ * que proceso tiene la mediana.
  *
- * Es necesario obtener el maximo, pues es el que representa el tiempo real
- * que se ha utilizado.
+ * Como resultado devuelve un vector con la mediana calculada.
  */
-void compute_results_stages(results_data *results, int myId, int numP, int root, int stages, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
-  int i;
+void match_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
+  double *aux_all_iters;
+  size_t matched_id;
   if(myId == root) {
-    for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
-     /* for(size_t j=0; j<results->iter_index; j++) {
-        results->stage_times[i][j] = results->stage_times[i][j] / numP;
-      }*/
-    }
+    aux_all_iters = malloc(numP * results->iter_index * sizeof(double));
   }
-  else {
-    for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  MPI_Gather(computed_array, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
+  if(myId == root) {
+    for(size_t i=0; i<results->iter_index; i++) {
+      matched_id = used_ids[i];
+      computed_array[i] = aux_all_iters[i+(results->iter_index*matched_id)];
     }
+    free(aux_all_iters);
   }
-  //MPI_Barrier(comm); //FIXME Esto debería de borrarse
 }
 
 //======================================================||
