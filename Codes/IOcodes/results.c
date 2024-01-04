@@ -5,8 +5,6 @@
 
 #define RESULTS_EXTRA_SIZE 100
 
-void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type);
-
 void compute_max(results_data *results, double *computed_array, int myId, int root, MPI_Comm comm);
 void compute_mean(results_data *results, double *computed_array, int myId, int numP, int root, MPI_Comm comm);
 void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm);
@@ -14,87 +12,9 @@ void match_median(results_data *results, double *computed_array, size_t *used_id
 
 //======================================================||
 //======================================================||
-//================MPI RESULTS FUNCTIONS=================||
-//======================================================||
-//======================================================||
-
-/*
- * Comunica una estructura de resultados a todos los procesos del comunicador
- * a traves de un tipo derivado.
- *
- * Si se llama con un intercommunicador, el grupo de procesos que envia los datos
- * tiene que indicar en el proceso raiz el valor "MPI_ROOT" para "root" y el resto
- * de ese grupo el valor "MPI_PROC_NULL". Los procesos del otro grupo tienen que
- * indicar el Id del proceso raiz que ha puesto "MPI_ROOT".
- */
-void comm_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
-  MPI_Datatype results_type;
-
-  // Obtener un tipo derivado para enviar todos los
-  // datos escalares con una sola comunicacion
-  def_results_type(results, resizes, &results_type);
-  MPI_Bcast(results, 1, results_type, root, intercomm);
-
-  //Liberar tipos derivados
-  MPI_Type_free(&results_type);
-}
-
-/*
- * Define un tipo derivado de MPI para mandar los tiempos
- * con una sola comunicacion.
- *
- * En concreto son tres escalares y dos vectores de tamaño "resizes"
- */
-void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
-  int i, counts = 7;
-  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1};
-  MPI_Aint displs[counts], dir;
-  MPI_Datatype types[counts];
-
-  // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_DOUBLE;
-  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = blocklengths[6] = resizes;
-
-  // Rellenar vector displs
-  MPI_Get_address(results, &dir);
-
-  MPI_Get_address(&(results->exec_start), &displs[0]);
-  MPI_Get_address(&(results->wasted_time), &displs[1]);
-  MPI_Get_address(results->sync_time, &displs[2]);
-  MPI_Get_address(results->async_time, &displs[3]);
-  MPI_Get_address(results->spawn_real_time, &displs[4]);
-  MPI_Get_address(results->spawn_time, &displs[5]);
-  MPI_Get_address(results->malleability_time, &displs[6]);
-
-  for(i=0;i<counts;i++) displs[i] -= dir;
-
-  MPI_Type_create_struct(counts, blocklengths, displs, types, results_type);
-  MPI_Type_commit(results_type);
-}
-//======================================================||
-//======================================================||
 //================SET RESULTS FUNCTIONS=================||
 //======================================================||
 //======================================================||
-
-/*
- * Guarda los resultados respecto a la redistribución de datos
- * tras una reconfiguración. A llamar por los hijos tras
- * terminar la redistribución y obtener la configuración.
- */
-void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr) {
-  if(sdr) { // Si no hay datos sincronos, el tiempo es 0
-    results->sync_time[grp-1]  = results->sync_end - results->sync_time[grp-1];
-  } else {
-    results->sync_time[grp-1]  = 0;
-  }
-  if(adr) { // Si no hay datos asincronos, el tiempo es 0
-    results->async_time[grp-1]  = results->async_end - results->async_time[grp-1];
-  } else {
-    results->async_time[grp-1]  = 0;
-  }
-  results->malleability_time[grp-1]  = results->malleability_end - results->malleability_time[grp-1];
-}
 
 /*
  * Pone el indice del siguiente elemento a escribir a 0 para los vectores

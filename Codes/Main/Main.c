@@ -69,7 +69,6 @@ int main(int argc, char *argv[]) {
 
       set_benchmark_grp(group->grp);
       set_benchmark_configuration(config_file);
-      set_benchmark_results(results);
 
       if(config_file->n_groups > 1) {
         set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
@@ -79,6 +78,7 @@ int main(int argc, char *argv[]) {
         malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
         malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
         malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
+        //malleability_add_data(&(results->exec_start), 1, MAL_DOUBLE, 1, 1);
 
         if(config_file->sdr) {
 	  for(i=0; i<group->sync_data_groups; i++) {
@@ -98,7 +98,6 @@ int main(int argc, char *argv[]) {
 
       get_malleability_user_comm(&comm);
       get_benchmark_configuration(&config_file);
-      get_benchmark_results(&results);
 
       // TODO Refactor - Que sea una unica funcion
       // Obtiene las variables que van a utilizar los hijos
@@ -112,6 +111,9 @@ int main(int argc, char *argv[]) {
       
       malleability_get_data(&value, 2, 1, 1);
       group->iter_start = *((int *)value);
+
+      //malleability_get_data(&value, 3, 1, 1);
+      //results->exec_start = *((double *)value);
 
       if(config_file->sdr) {
         malleability_get_entries(&entries, 0, 1);
@@ -131,7 +133,8 @@ int main(int argc, char *argv[]) {
       }
 
       group->grp = group->grp + 1;
-      realloc_results_iters(results, config_file->n_stages, config_file->groups[group->grp].iters);
+      results = malloc(sizeof(results_data));
+      init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
     }
 
     //
@@ -148,7 +151,7 @@ int main(int argc, char *argv[]) {
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
-        set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
+        malleability_retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
@@ -158,6 +161,7 @@ int main(int argc, char *argv[]) {
 
         if(group->grp != 0) {
           malleability_modify_data(&(group->grp), 0, 1, MAL_INT, 1, 1);
+          malleability_modify_data(&(group->iter_start), 2, 1, MAL_INT, 1, 1);
         }
       }
 

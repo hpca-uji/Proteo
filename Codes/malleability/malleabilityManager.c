@@ -5,6 +5,7 @@
 #include "malleabilityDataStructures.h"
 #include "malleabilityTypes.h"
 #include "malleabilityZombies.h"
+#include "malleabilityTimes.h"
 #include "spawn_methods/GenericSpawn.h"
 #include "CommDist.h"
 
@@ -32,34 +33,7 @@ void* thread_async_work();
 void print_comms_state();
 void malleability_comms_update(MPI_Comm comm);
 
-typedef struct {
-  int spawn_method;
-  int spawn_dist;
-  int spawn_strategies;
-  int red_method;
-  int red_strategies;
-
-  int grp;
-  configuration *config_file;
-  results_data *results;
-} malleability_config_t;
-
-typedef struct { //FIXME numC_spawned no se esta usando
-  int myId, numP, numC, numC_spawned, root, root_parents;
-  pthread_t async_thread;
-  MPI_Comm comm, thread_comm;
-  MPI_Comm intercomm;
-  MPI_Comm user_comm;
-  int dup_user_comm;
-  
-  char *name_exec, *nodelist;
-  int num_cpus, num_nodes, nodelist_len;
-} malleability_t;
-
 int state = MALL_UNRESERVED; //FIXME Mover a otro lado
-
-malleability_config_t *mall_conf;
-malleability_t *mall;
 
 malleability_data_t *rep_s_data;
 malleability_data_t *dist_s_data;
@@ -81,6 +55,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
   mall = (malleability_t *) malloc(sizeof(malleability_t));
+
   rep_s_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
   dist_s_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
   rep_a_data = (malleability_data_t *) malloc(sizeof(malleability_data_t));
@@ -112,6 +87,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   state = MALL_NOT_STARTED;
 
   zombies_service_init();
+  init_malleability_times();
 
   // Si son el primer grupo de procesos, obtienen los datos de los padres
   MPI_Comm_get_parent(&(mall->intercomm));
@@ -147,6 +123,7 @@ void free_malleability() {
   free(dist_s_data);
   free(dist_a_data);
 
+  free_malleability_times();
   if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
   if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
   free(mall);
@@ -181,9 +158,10 @@ int malleability_checkpoint() {
     case MALL_UNRESERVED:
       break;
     case MALL_NOT_STARTED:
+      reset_malleability_times();
       // Comprobar si se tiene que realizar un redimensionado
       //MPI_Barrier(mall->comm);
-      mall_conf->results->malleability_time[mall_conf->grp] = MPI_Wtime();
+      mall_conf->times->malleability_start = MPI_Wtime();
       //if(CHECK_RMS()) {return MALL_DENIED;}
 
       state = spawn_step();
@@ -198,8 +176,7 @@ int malleability_checkpoint() {
       state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
 	//MPI_Barrier(mall->comm);
-        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
-        mall_conf->results->spawn_real_time[mall_conf->grp] = end_real_time - mall_conf->results->spawn_start;
+        mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
 
         malleability_checkpoint();
       }
@@ -224,13 +201,13 @@ int malleability_checkpoint() {
 
     case MALL_SPAWN_ADAPT_PENDING:
       //MPI_Barrier(mall->comm);
-      mall_conf->results->spawn_start = MPI_Wtime();
+      mall_conf->times->spawn_start = MPI_Wtime();
       unset_spawn_postpone_flag(state);
       state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
 
       if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
         //MPI_Barrier(mall->comm);
-        mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+        mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
 	malleability_checkpoint();
       }
       break;
@@ -242,7 +219,7 @@ int malleability_checkpoint() {
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
       //MPI_Barrier(mall->comm);
-      mall_conf->results->malleability_end = MPI_Wtime();
+      mall_conf->times->malleability_end = MPI_Wtime();
       state = MALL_COMPLETED;
       break;
   }
@@ -263,12 +240,8 @@ void get_benchmark_configuration(configuration **config_file) {
   *config_file = mall_conf->config_file;
 }
 
-void set_benchmark_results(results_data *results) {
-  mall_conf->results = results;
-}
-
-void get_benchmark_results(results_data **results) {
-  *results = mall_conf->results;
+void malleability_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
+  malleability_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
 }
 //-------------------------------------------------------------------------------------------------------------
 
@@ -527,9 +500,6 @@ void Children_init() {
   MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, root_parents, mall->intercomm);
   MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, root_parents, mall->intercomm);
 
-  mall_conf->results = (results_data *) malloc(sizeof(results_data));
-  init_results_data(mall_conf->results, mall_conf->config_file->n_resizes, mall_conf->config_file->n_stages, RESULTS_INIT_DATA_QTY);
-
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     //MPI_Barrier(mall->intercomm);
@@ -548,7 +518,7 @@ void Children_init() {
     }
 
     //MPI_Barrier(mall->intercomm);
-    mall_conf->results->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
+    mall_conf->times->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
 
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -568,17 +538,17 @@ void Children_init() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
     } 
     //MPI_Barrier(mall->intercomm);
-    mall_conf->results->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
+    mall_conf->times->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
   }
 
   // Guardar los resultados de esta transmision
-  comm_results(mall_conf->results, mall->root, mall_conf->config_file->n_resizes, mall->intercomm);
+  malleability_times_broadcast(mall->root);
   if(!is_intercomm) {
     malleability_comms_update(mall->intercomm);
   }
 
   //MPI_Barrier(mall->comm);
-  mall_conf->results->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
+  mall_conf->times->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
   MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
 }
 
@@ -594,13 +564,13 @@ void Children_init() {
  */
 int spawn_step(){
   //MPI_Barrier(mall->comm);
-  mall_conf->results->spawn_start = MPI_Wtime();
+  mall_conf->times->spawn_start = MPI_Wtime();
  
   state = init_spawn(mall->name_exec, mall->num_cpus, mall->num_nodes, mall->nodelist, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_method, mall_conf->spawn_strategies, mall->thread_comm, &(mall->intercomm));
 
   if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
       //MPI_Barrier(mall->comm);
-      mall_conf->results->spawn_time[mall_conf->grp] = MPI_Wtime() - mall_conf->results->spawn_start;
+      mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
   }
   return state;
 }
@@ -647,7 +617,7 @@ int start_redistribution() {
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
     //FIXME No se envian los datos replicados (rep_a_data)
     //MPI_Barrier(mall->intercomm);
-    mall_conf->results->async_time[mall_conf->grp] = MPI_Wtime();
+    mall_conf->times->async_start = MPI_Wtime();
     if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       return thread_creation();
     } else {
@@ -699,7 +669,7 @@ int check_redistribution() {
 
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   //MPI_Barrier(mall->intercomm);
-  if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
+  if(!is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
 }
 
@@ -726,7 +696,7 @@ int end_redistribution() {
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     //MPI_Barrier(mall->intercomm);
-    mall_conf->results->sync_time[mall_conf->grp] = MPI_Wtime();
+    mall_conf->times->sync_start = MPI_Wtime();
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc
@@ -741,10 +711,10 @@ int end_redistribution() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
     } 
     //MPI_Barrier(mall->intercomm);
-    if(!is_intercomm) mall_conf->results->sync_end = MPI_Wtime(); // Merge method only
+    if(!is_intercomm) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
   }
 
-  comm_results(mall_conf->results, rootBcast, mall_conf->config_file->n_resizes, mall->intercomm);
+  malleability_times_broadcast(rootBcast);
 
   local_state = MALL_DIST_COMPLETED;
   if(!is_intercomm) { // Merge Spawn
@@ -771,8 +741,9 @@ int shrink_redistribution() {
     //MPI_Barrier(mall->comm);
     double time_extra = MPI_Wtime();
 
-    //TODO Create new state before collecting zombies. Processes can perform tasks before that. Then call again Malleability to commit the change
-    zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, (void *) mall_conf->results, mall_conf->config_file->n_stages, mall_conf->config_file->capture_method);
+    //TODO Create Commit function. Processes can perform tasks before that. Then call again Malleability to commit the change
+    MPI_Abort(MPI_COMM_WORLD, -20); //                                                         (void *) mall_conf->results
+    zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, NULL, mall_conf->config_file->n_stages, mall_conf->config_file->capture_method);
     
     if(mall->myId < mall->numC) {
       if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); //FIXME Modificar a que se pida pro el usuario el cambio y se llama a comms_update
@@ -788,10 +759,7 @@ int shrink_redistribution() {
       MPI_Comm_free(&(mall->intercomm));
 
       //MPI_Barrier(mall->comm);
-      mall_conf->results->spawn_time[mall_conf->grp] += MPI_Wtime() - time_extra;
-      if(malleability_spawn_contains_strat(mall_conf->spawn_strategies,MALL_SPAWN_PTHREAD, NULL)) {
-          mall_conf->results->spawn_real_time[mall_conf->grp] += MPI_Wtime() - time_extra;
-      }
+      mall_conf->times->spawn_time += MPI_Wtime() - time_extra;
       return MALL_DIST_COMPLETED;
     } else {
       return MALL_ZOMBIE;
@@ -885,7 +853,7 @@ int thread_check() {
   } 
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   //MPI_Barrier(mall->intercomm);
-  if(!is_intercomm) mall_conf->results->async_end = MPI_Wtime(); // Merge method only
+  if(!is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
 }
 

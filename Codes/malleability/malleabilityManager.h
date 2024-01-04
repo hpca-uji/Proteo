@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <mpi.h>
-#include "../IOcodes/results.h"
 #include "../Main/configuration.h"
 #include "../Main/Main_datatypes.h"
 #include "malleabilityStates.h"
@@ -29,7 +28,6 @@ void malleability_get_data(void **data, size_t index, int is_replicated, int is_
 
 void set_benchmark_configuration(configuration *config_file);
 void get_benchmark_configuration(configuration **config_file);
-void set_benchmark_results(results_data *results);
-void get_benchmark_results(results_data **results);
+void malleability_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time);
 
 #endif
