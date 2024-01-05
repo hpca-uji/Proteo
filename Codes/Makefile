@@ -3,7 +3,15 @@ MCC = mpicc
 #C_FLAGS_ALL = -Wconversion -Wpedantic
 C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
 LD_FLAGS = -lm -pthread
-DEF =
+
+USE_MAL_SLURM ?= 0
+USE_MAL_BARRIERS ?= 0
+USE_MAL_DEBUG ?= 0
+
+ifeq ($(USE_MAL_SLURM),1)
+    LD_FLAGS += -lslurm
+endif
+DEF = -DUSE_MAL_SLURM=$(USE_MAL_SLURM) -DUSE_MAL_BARRIERS=$(USE_MAL_BARRIERS) -DUSE_MAL_DEBUG=$(USE_MAL_DEBUG)
 
 
 .PHONY : clean clear install install_slurm
@@ -61,8 +69,3 @@ clear:
 
 install: $(BIN) $(CONFIG)
 	echo "Done"
-
-# Builds target with slurm
-install_slurm: LD_FLAGS += -lslurm
-install_slurm: DEF += -DUSE_SLURM
-install_slurm: install

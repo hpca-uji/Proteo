@@ -7,8 +7,6 @@
 #include <mpi.h>
 #include "ProcessDist.h"
 
-//#define USE_SLURM
-
 //--------------PRIVATE DECLARATIONS---------------//
 
 void node_dist( struct physical_dist dist, int **qty, int *used_nodes);
@@ -17,7 +15,7 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs);
 
 void generate_info_string(int target_qty, MPI_Info *info);
 //--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
+#if USE_MAL_SLURM
 #include <slurm/slurm.h>
 void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info);
 void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str);
@@ -77,7 +75,7 @@ int physical_struct_create(int target_qty, int already_created, int num_cpus, in
  *   a usar al crear los procesos.
  */
 void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
-#ifdef USE_SLURM
+#if USE_MAL_SLURM
   int used_nodes=0;
   int *procs_array;
   // GET NEW DISTRIBUTION 
@@ -230,7 +228,7 @@ void generate_info_string(int target_qty, MPI_Info *info){
 }
 
 //--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
+#if USE_MAL_SLURM
 /*
  * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
  * en el que se indica el mappeado a utilizar en los nuevos
@@ -314,7 +312,7 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
 //====================================================
 
 //--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
+#if USE_MAL_SLURM
 /* FIXME Por revisar
  * @deprecated
  * Genera un fichero hostfile y lo anyade a un objeto
