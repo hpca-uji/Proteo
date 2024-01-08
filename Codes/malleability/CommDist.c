@@ -4,6 +4,7 @@
 #include <string.h>
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
+#include "malleabilityDataStructures.h"
 
 //void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
@@ -404,6 +405,9 @@ int async_communication_check(int myId, int is_children_group, int red_strategie
  */
 void async_communication_wait(int red_strategies, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
   MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); 
+  #if USE_MAL_DEBUG >= 3
+    DEBUG_FUNC("Targets Waitall completed", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
   if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { 
     MPI_Ibarrier(comm, &(requests[request_qty-1]) );
     MPI_Wait(&(requests[request_qty-1]), MPI_STATUS_IGNORE); //TODO Is it really needed? It will be ensured later
@@ -573,6 +577,7 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
   mallocCounts(r_counts, array_size+offset_ids);
 
   if(is_children_group) {
+    offset_ids = 0;
     prepare_comm_alltoall(myId, numP, numO, qty, offset_ids, r_counts);
     
     // Obtener distribución para este hijo

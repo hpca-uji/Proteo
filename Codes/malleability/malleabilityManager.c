@@ -53,6 +53,10 @@ malleability_data_t *dist_a_data;
 int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
   MPI_Comm dup_comm, thread_comm;
 
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Initializing MaM", myId, numP); fflush(stdout); MPI_Barrier(comm);
+  #endif
+
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
   mall = (malleability_t *) malloc(sizeof(malleability_t));
 
@@ -108,6 +112,10 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
     MPI_Get_processor_name(mall->nodelist, &mall->nodelist_len);
     //TODO Get name of each process and create real nodelist
   }
+
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("MaM has been initialized correctly as parents", myId, numP); fflush(stdout); MPI_Barrier(comm);
+  #endif
 
   return MALLEABILITY_NOT_CHILDREN;
 }
@@ -505,6 +513,10 @@ void Children_init() {
   int numP_parents, root_parents;
   int is_intercomm;
 
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("MaM will now initialize children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
+
   malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
   MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   if(!is_intercomm) { // For intracommunicators, these processes will be added
@@ -517,8 +529,15 @@ void Children_init() {
   MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, root_parents, mall->intercomm);
   MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, root_parents, mall->intercomm);
 
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Children have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
+
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
+    #if USE_MAL_DEBUG >= 2
+      DEBUG_FUNC("Children start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    #endif
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
@@ -528,9 +547,15 @@ void Children_init() {
     } else {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
 
+      #if USE_MAL_DEBUG >= 2
+        DEBUG_FUNC("Children started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      #endif
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_wait(mall_conf->red_strategies, mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i]);
       }
+      #if USE_MAL_DEBUG >= 2
+        DEBUG_FUNC("Children waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      #endif
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_end(mall_conf->red_method, mall_conf->red_strategies, dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
       }
@@ -541,6 +566,9 @@ void Children_init() {
     #endif
     mall_conf->times->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Children have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
@@ -565,6 +593,9 @@ void Children_init() {
     #endif
     mall_conf->times->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
   }
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Children have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 
   // Guardar los resultados de esta transmision
   malleability_times_broadcast(mall->root);
@@ -577,6 +608,10 @@ void Children_init() {
   #endif
   mall_conf->times->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
   MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
+
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("MaM has been initialized correctly as children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 }
 
 //======================================================||
@@ -682,6 +717,9 @@ int check_redistribution() {
   MPI_Request *req_completed;
   MPI_Win window;
   local_completed = 1;
+  #if USE_MAL_DEBUG >= 2
+    DEBUG_FUNC("Originals are checking for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 
   for(i=0; i<dist_a_data->entries; i++) {
     req_completed = dist_a_data->requests[i];
@@ -689,9 +727,15 @@ int check_redistribution() {
     completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
     local_completed = local_completed && completed;
   }
+  #if USE_MAL_DEBUG >= 2
+    DEBUG_FUNC("Originals will now check a global decision", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 
   MPI_Allreduce(&local_completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
   if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
+  #if USE_MAL_DEBUG >= 2
+    DEBUG_FUNC("Originals sent asyncrhonous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 
   for(i=0; i<dist_a_data->entries; i++) {
     req_completed = dist_a_data->requests[i];
@@ -952,3 +996,4 @@ void malleability_comms_update(MPI_Comm comm) {
   MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
   MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
 }
+

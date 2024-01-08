@@ -3,16 +3,22 @@
 void def_malleability_times(MPI_Datatype *new_type);
 
 void init_malleability_times() {
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Initializing recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
+
+  mall_conf->times = (malleability_times_t *) malloc(sizeof(malleability_times_t));
   if(mall_conf->times == NULL) {
-    mall_conf->times = (malleability_times_t *) malloc(sizeof(malleability_times_t));
-    if(mall_conf->times == NULL) {
-      perror("Error al crear la estructura de tiempos interna para maleabilidad\n");
-      MPI_Abort(MPI_COMM_WORLD, -5);
-    }
+    perror("Error al crear la estructura de tiempos interna para maleabilidad\n");
+    MPI_Abort(MPI_COMM_WORLD, -5);
   }
 
   reset_malleability_times();
   def_malleability_times(&mall_conf->times->times_type);
+
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Initialized recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
 }
 
 
@@ -24,6 +30,9 @@ void reset_malleability_times() {
 }
 
 void free_malleability_times() {
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Freeing recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
   if(mall_conf->times != NULL) {
     if(mall_conf->times->times_type != MPI_DATATYPE_NULL) {
       MPI_Type_free(&mall_conf->times->times_type);
@@ -31,6 +40,9 @@ void free_malleability_times() {
     }
     free(mall_conf->times);
   }
+  #if USE_MAL_DEBUG
+    DEBUG_FUNC("Freed recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
 }
 
 void malleability_times_broadcast(int root) {

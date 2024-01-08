@@ -10,6 +10,9 @@
 #include "../Main/configuration.h"
 #include "../Main/Main_datatypes.h"
 
+
+#define DEBUG_FUNC(debug_string, rank, numP) printf("MaM [P%d/%d]: %s -- %s:%s:%d\n", rank, numP, debug_string, __FILE__, __func__, __LINE__)
+
 /* --- PHYSICAL DIST STRUCTURE --- */
 struct physical_dist {
   int num_cpus, num_nodes;
