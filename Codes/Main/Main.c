@@ -117,24 +117,33 @@ int main(int argc, char *argv[]) {
 
       if(config_file->sdr) {
         malleability_get_entries(&entries, 0, 1);
+        group->sync_qty = (int *) malloc(entries * sizeof(int));
         group->sync_array = (char **) malloc(entries * sizeof(char *));
 	for(i=0; i<entries; i++) {
           malleability_get_data(&value, i, 0, 1);
           group->sync_array[i] = (char *)value;
+          group->sync_qty[i] = DR_MAX_SIZE;
 	}
+        group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
+        group->sync_data_groups = entries;
       }
       if(config_file->adr) {
         malleability_get_entries(&entries, 0, 0);
+        group->async_qty = (int *) malloc(entries * sizeof(int));
         group->async_array = (char **) malloc(entries * sizeof(char *));
 	for(i=0; i<entries; i++) {
           malleability_get_data(&value, i, 0, 0);
           group->async_array[i] = (char *)value;
+          group->async_qty[i] = DR_MAX_SIZE;
 	}
+        group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
+        group->async_data_groups = entries;
       }
 
       group->grp = group->grp + 1;
       results = malloc(sizeof(results_data));
       init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+
     }
 
     //
