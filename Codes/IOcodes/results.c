@@ -199,11 +199,6 @@ void print_global_results(results_data results, size_t resizes) {
     printf("%lf ", results.spawn_time[i]);
   }
 
-  printf("\nT_spawn_real: ");
-  for(i=0; i< resizes; i++) {
-    printf("%lf ", results.spawn_real_time[i]);
-  }
-
   printf("\nT_SR: ");
   for(i=0; i < resizes; i++) {
     printf("%lf ", results.sync_time[i]);
@@ -238,7 +233,6 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
   size_t i;
 
   results->spawn_time = calloc(resizes, sizeof(double));
-  results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
   results->malleability_time = calloc(resizes, sizeof(double));
@@ -289,10 +283,6 @@ void free_results_data(results_data *results, size_t stages) {
     if(results->spawn_time != NULL) {
       free(results->spawn_time);
       results->spawn_time = NULL;
-    }
-    if(results->spawn_real_time != NULL) {
-      free(results->spawn_real_time);
-      results->spawn_real_time = NULL;
     }
     if(results->sync_time != NULL) {
       free(results->sync_time);

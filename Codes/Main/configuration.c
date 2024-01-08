@@ -200,8 +200,8 @@ void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids) {
 void print_config(configuration *user_config) {
   if(user_config != NULL) {
     size_t i;
-    printf("Config loaded: R=%zu, S=%zu, granularity=%d, SDR=%zu, ADR=%zu\n",
-        user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr);
+    printf("Config loaded: R=%zu, S=%zu, granularity=%d, SDR=%zu, ADR=%zu, Rigid=%d, Capture_Method=%d\n",
+        user_config->n_resizes, user_config->n_stages, user_config->granularity, user_config->sdr, user_config->adr, user_config->rigid_times, user_config->capture_method);
     for(i=0; i<user_config->n_stages; i++) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);
@@ -232,8 +232,8 @@ void print_config_group(configuration *user_config, size_t grp) {
       sons = user_config->groups[grp+1].procs;
     }
 
-    printf("Config: granularity=%d, SDR=%zu, ADR=%zu\n",
-        user_config->granularity, user_config->sdr, user_config->adr);
+    printf("Config: granularity=%d, SDR=%zu, ADR=%zu, Rigid=%d, Capture_Method=%d\n",
+        user_config->granularity, user_config->sdr, user_config->adr, user_config->rigid_times, user_config->capture_method);
     for(i=0; i<user_config->n_stages; i++) {
       printf("Stage %zu: PT=%d, T_stage=%lf, bytes=%d, T_capped=%d\n",
         i, user_config->stages[i].pt, user_config->stages[i].t_stage, user_config->stages[i].real_bytes, user_config->stages[i].t_capped);

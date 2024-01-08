@@ -14,7 +14,7 @@ typedef struct {
   size_t iters_async, iter_index, iters_size;
 
   // Spawn, Thread, Sync, Async and Exec time
-  double spawn_start, *spawn_time, *spawn_real_time;
+  double spawn_start, *spawn_time;
   double sync_end,  *sync_time;
   double async_end, *async_time;
   double malleability_end, *malleability_time;
