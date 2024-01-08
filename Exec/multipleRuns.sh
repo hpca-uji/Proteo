@@ -8,9 +8,9 @@
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="Codes/"
-execDir="Exec/"
-ResultsDir="Results/"
+codeDir="/Codes"
+execDir="/Exec"
+ResultsDir="/Results"
 
 complex_file=$1
 output_name=$2

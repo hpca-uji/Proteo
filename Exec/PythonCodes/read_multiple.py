@@ -21,6 +21,7 @@ class Config_section(Enum):
     P_SDR="SDR"
     P_ADR="ADR"
     P_RIGID="Rigid"
+    P_CAPTURE_METHOD="Capture_Method"
 
     P_STAGE_TYPE="Stage_Type"
     P_STAGE_BYTES="Stage_Bytes"
