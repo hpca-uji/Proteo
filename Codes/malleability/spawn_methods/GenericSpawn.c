@@ -6,6 +6,7 @@
 #include <mpi.h>
 #include <string.h>
 #include "../malleabilityStates.h"
+#include "../malleabilityDataStructures.h"
 #include "ProcessDist.h"
 #include "GenericSpawn.h"
 #include "Baseline.h"
@@ -19,8 +20,6 @@ Spawn_data *spawn_data = NULL;
 pthread_t spawn_thread;
 MPI_Comm *returned_comm;
 
-double end_time; //FIXME REFACTOR
-
 //--------------PRIVATE CONFIGURATION DECLARATIONS---------------//
 void set_spawn_configuration(char *cmd, int num_cpus, int num_nodes, char *nodelist, int myId, int root, int initial_qty, int target_qty, int type_dist, int spawn_method, int spawn_strategies, MPI_Comm comm);
 void set_basic_spawn_dtype();
@@ -29,8 +28,8 @@ void deallocate_spawn_data();
 //--------------PRIVATE DECLARATIONS---------------//
 void generic_spawn(MPI_Comm *child, int data_stage);
 
-int check_single_state(MPI_Comm comm, int global_state);
-int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double *real_time);
+int check_single_state(MPI_Comm comm, int global_state, int wait_completed);
+int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, int wait_completed);
 
 //--------------PRIVATE THREADS DECLARATIONS---------------//
 int allocate_thread_spawn();
@@ -83,7 +82,7 @@ int init_spawn(char *argv, int num_cpus, int num_nodes, char *nodelist, int myId
  * Comprueba si una configuracion para crear un nuevo grupo de procesos esta lista,
  * y en caso de que lo este, se devuelve el communicador a estos nuevos procesos.
  */
-int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) { 
+int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int wait_completed) { 
   int local_state;
   int global_state=MALL_NOT_STARTED;
 
@@ -91,10 +90,10 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, double *real_time) {
     local_state = get_spawn_state(spawn_data->spawn_is_async);
 
     if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
-      global_state = check_single_state(comm, local_state);
+      global_state = check_single_state(comm, local_state, wait_completed);
 
-    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_SPAWN_ADAPTED) { // Baseline
-      global_state = check_generic_state(comm, child, local_state, real_time);
+    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_SPAWN_ADAPTED) { // Generic
+      global_state = check_generic_state(comm, child, local_state, wait_completed);
 
     } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
       global_state = local_state;
@@ -127,7 +126,7 @@ void unset_spawn_postpone_flag(int outside_state) {
   int local_state = get_spawn_state(spawn_data->spawn_is_async);
   if(local_state == MALL_SPAWN_ADAPT_POSTPONE && outside_state == MALL_SPAWN_ADAPT_PENDING && spawn_data->spawn_is_async) { 
     set_spawn_state(MALL_SPAWN_PENDING, MALL_SPAWN_PTHREAD);
-    wakeup();
+    wakeup_redistribution();
   }
 }
 
@@ -247,7 +246,7 @@ void set_basic_spawn_dtype() {
   MPI_Get_address(spawn_data, &dir);
 
   MPI_Get_address(&(spawn_data->root_parents), &displs[0]);
-  MPI_Get_address(&(spawn_data->initial_qty), &displs[1]);
+  MPI_Get_address(&(spawn_data->initial_qty), &displs[1]); //FIXME Obtener por la funcion ya existente
   MPI_Get_address(&(spawn_data->spawn_is_single), &displs[2]);
   MPI_Get_address(&(spawn_data->spawn_method), &displs[3]);
 
@@ -305,7 +304,6 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
       break;
   }
   // END WORK
-  end_time = MPI_Wtime();
   aux_state = get_spawn_state(spawn_data->spawn_is_async);
   if(!(aux_state == MALL_SPAWN_PENDING && local_state == MALL_SPAWN_ADAPT_POSTPONE)) {
     set_spawn_state(local_state, spawn_data->spawn_is_async);
@@ -351,9 +349,10 @@ void* thread_work() {
   if(local_state == MALL_SPAWN_ADAPT_POSTPONE || local_state == MALL_SPAWN_PENDING) {
     // El grupo de procesos se terminara de juntar tras la redistribucion de datos
 
-    local_state = wait_wakeup();
+    local_state = wait_redistribution();
     generic_spawn(returned_comm, MALL_DIST_COMPLETED);
   }
+  wakeup_completion();
 
   pthread_exit(NULL);
 }
@@ -368,7 +367,10 @@ void* thread_work() {
  * los procesos no root y se devuelve el estado
  * "MALL_SPAWN_PENDING".
  */
-int check_single_state(MPI_Comm comm, int global_state) {
+int check_single_state(MPI_Comm comm, int global_state, int wait_completed) {
+  while(wait_completed && mall->myId == mall->root && global_state == MALL_SPAWN_SINGLE_PENDING) {
+    global_state = wait_completion();
+  }
   MPI_Bcast(&global_state, 1, MPI_INT, spawn_data->root, comm);
 
   // Non-root processes join root to finalize the spawn
@@ -393,15 +395,16 @@ int check_single_state(MPI_Comm comm, int global_state) {
  * Si ha terminado libera la memoria asociada a spawn_data
  * y devuelve el estado "MALL_SPAWN_COMPLETED".
  */
-int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, double *real_time) {
+int check_generic_state(MPI_Comm comm, MPI_Comm *child, int local_state, int wait_completed) {
   int global_state;
+
+  while(wait_completed && local_state == MALL_SPAWN_PENDING) local_state = wait_completion();
 
   MPI_Allreduce(&local_state, &global_state, 1, MPI_INT, MPI_MIN, comm);
   if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED) {
     set_spawn_state(global_state, MALL_SPAWN_PTHREAD);
     *child = *returned_comm;
-    deallocate_spawn_data(spawn_data);
-    *real_time=end_time;
+    deallocate_spawn_data();
   }
   return global_state;
 }

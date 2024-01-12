@@ -71,7 +71,7 @@ int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
     MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, spawn_data.root, 130, *child, MPI_STATUS_IGNORE);
 
     set_spawn_state(MALL_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
-
+    wakeup_completion();
   } else {
     port_name = malloc(1);
   }

@@ -6,6 +6,7 @@
 #include <mpi.h>
 #include "Main_datatypes.h"
 
+//                   0        1            2           3            4          5           6               7            8
 enum compute_methods{COMP_PI, COMP_MATRIX, COMP_POINT, COMP_IPOINT, COMP_WAIT, COMP_BCAST, COMP_ALLGATHER, COMP_REDUCE, COMP_ALLREDUCE};
 
 double init_stage(configuration *config_file, int stage_i, group_data group, MPI_Comm comm, int compute);

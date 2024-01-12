@@ -193,11 +193,20 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
  * - red_method (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
  *
+ * FIXME: In libfabric one of these macros defines the maximum amount of BYTES that can be communicated in a SINGLE MPI_Get
+ * A window can have more bytes than the amount shown in those macros, therefore, if you want to read more than that amount
+ * you need to perform multiples Gets.
+ * prov/psm3/psm3/psm_config.h:179:#define MQ_SHM_THRESH_RNDV 16000
+ * prov/psm3/psm3/ptl_am/am_config.h:62:#define PSMI_MQ_RV_THRESH_CMA      16000
+ * prov/psm3/psm3/ptl_am/am_config.h:65:#define PSMI_MQ_RV_THRESH_NO_KASSIST 16000
  */
 void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method) {
   MPI_Win win;
-  MPI_Win_create(send, (MPI_Aint)tamBl, sizeof(char), MPI_INFO_NULL, comm, &win);
+  MPI_Win_create(send, (MPI_Aint)tamBl * sizeof(char), sizeof(char), MPI_INFO_NULL, comm, &win);
 
+  #if USE_MAL_DEBUG >= 3
+    DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
+  #endif
   switch(red_method) {
     case MALL_RED_RMA_LOCKALL:
       sync_rma_lockall(recv, r_counts, win);
@@ -206,7 +215,9 @@ void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Com
       sync_rma_lock(recv, r_counts, win);
       break;
   }
-
+  #if USE_MAL_DEBUG >= 3
+    DEBUG_FUNC("Completed synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
+  #endif
   MPI_Win_free(&win);
 }
 
@@ -359,7 +370,7 @@ int async_communication_check(int myId, int is_children_group, int red_strategie
   all_req_null = 1;
   test_err = MPI_SUCCESS;
 
-  if (is_children_group) return 1;
+  if (is_children_group) return 1; //FIXME Deberia devolver un num negativo
 
   if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
 
@@ -398,19 +409,19 @@ int async_communication_check(int myId, int is_children_group, int red_strategie
  * Waits until the completion of a set of requests. If the Ibarrier strategy
  * is being used, the corresponding ibarrier is posted.
  *
- * - red_strategies (IN):
  * - comm (IN): Communicator to use to confirm finalizations of redistribution
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
+ * - post_ibarrier (IN): Whether an Ibarrier should be posted by this process or not.
  */
-void async_communication_wait(int red_strategies, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
+void async_communication_wait(MPI_Comm comm, MPI_Request *requests, size_t request_qty, int post_ibarrier) {
   MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); 
   #if USE_MAL_DEBUG >= 3
-    DEBUG_FUNC("Targets Waitall completed", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Processes Waitall completed", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
-  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { 
+  if(post_ibarrier) {
     MPI_Ibarrier(comm, &(requests[request_qty-1]) );
-    MPI_Wait(&(requests[request_qty-1]), MPI_STATUS_IGNORE); //TODO Is it really needed? It will be ensured later
+    MPI_Wait(&(requests[request_qty-1]), MPI_STATUS_IGNORE);
   }
 }
 
@@ -480,7 +491,7 @@ void async_point2point(char *send, char *recv, struct Counts s_counts, struct Co
  */
 void async_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win) {
 
-  MPI_Win_create(send, (MPI_Aint)tamBl, sizeof(char), MPI_INFO_NULL, comm, win);
+  MPI_Win_create(send, (MPI_Aint)tamBl * sizeof(char), sizeof(char), MPI_INFO_NULL, comm, win);
   switch(red_method) {
     case MALL_RED_RMA_LOCKALL:
       async_rma_lockall(recv, r_counts, *win, requests);

@@ -19,7 +19,7 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 void Children_init();
 int spawn_step();
 int start_redistribution();
-int check_redistribution();
+int check_redistribution(int wait_completed);
 int end_redistribution();
 int shrink_redistribution();
 
@@ -27,7 +27,7 @@ void comm_node_data(int rootBcast, int is_child_group);
 void def_nodeinfo_type(MPI_Datatype *node_type);
 
 int thread_creation();
-int thread_check();
+int thread_check(int wait_completed);
 void* thread_async_work();
 
 void print_comms_state();
@@ -164,13 +164,14 @@ void free_malleability() {
  * Si solo hay datos sincronos se envian tras la creacion de los procesos
  * y finalmente se desconectan los dos grupos de procesos.
  */
-int malleability_checkpoint() {
-  double end_real_time;
+int malleability_checkpoint(int *mam_state, int wait_completed) {
 
   switch(state) {
     case MALL_UNRESERVED:
+      *mam_state = MAM_UNRESERVED;
       break;
     case MALL_NOT_STARTED:
+      *mam_state = MAM_NOT_STARTED;
       reset_malleability_times();
       // Comprobar si se tiene que realizar un redimensionado
       
@@ -183,37 +184,37 @@ int malleability_checkpoint() {
       state = spawn_step();
 
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
-        malleability_checkpoint();
+        malleability_checkpoint(mam_state, wait_completed);
       }
       break;
 
     case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado y comienza la redistribucion
     case MALL_SPAWN_SINGLE_PENDING:
-      state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
+      state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
         #if USE_MAL_BARRIERS
   	  MPI_Barrier(mall->comm);
 	#endif
         mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
 
-        malleability_checkpoint();
+        malleability_checkpoint(mam_state, wait_completed);
       }
       break;
 
     case MALL_SPAWN_ADAPT_POSTPONE:
     case MALL_SPAWN_COMPLETED:
       state = start_redistribution();
-      malleability_checkpoint();
+      malleability_checkpoint(mam_state, wait_completed);
       break;
 
     case MALL_DIST_PENDING:
       if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
-        state = thread_check();
+        state = thread_check(wait_completed);
       } else {
-        state = check_redistribution();
+        state = check_redistribution(wait_completed);
       }
       if(state != MALL_DIST_PENDING) { 
-        malleability_checkpoint();
+        malleability_checkpoint(mam_state, wait_completed);
       }
       break;
 
@@ -224,20 +225,21 @@ int malleability_checkpoint() {
       #endif
       mall_conf->times->spawn_start = MPI_Wtime();
       unset_spawn_postpone_flag(state);
-      state = check_spawn_state(&(mall->intercomm), mall->comm, &end_real_time);
+      state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
 
       if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
         #if USE_MAL_BARRIERS
           MPI_Barrier(mall->comm);
 	#endif
         mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
-	malleability_checkpoint();
+	malleability_checkpoint(mam_state, wait_completed);
       }
       break;
 
     case MALL_SPAWN_ADAPTED:
       state = shrink_redistribution();
-      malleability_checkpoint();
+      if(state == MALL_ZOMBIE) *mam_state = MAM_ZOMBIE;
+      malleability_checkpoint(mam_state, wait_completed);
       break;
 
     case MALL_DIST_COMPLETED: //TODO No es esto muy feo?
@@ -246,9 +248,20 @@ int malleability_checkpoint() {
       #endif
       mall_conf->times->malleability_end = MPI_Wtime();
       state = MALL_COMPLETED;
+      *mam_state = MAM_COMPLETED;
       break;
   }
+
+  if(state > MALL_ZOMBIE && state < MALL_COMPLETED) *mam_state = MAM_PENDING;
   return state;
+}
+
+void MAM_Commit(int *mam_state) {
+  //Hacer borrado de comunicadores no necesarios
+  //Update de comunicadores
+  //Reiniciar algunas estructuras ¿Cuales?
+  //Llamar a funcion de zombies
+  //Devolver el estado de mam
 }
 
 // Funciones solo necesarias por el benchmark
@@ -256,19 +269,18 @@ int malleability_checkpoint() {
 void set_benchmark_grp(int grp) {
   mall_conf->grp = grp;
 }
-
 void set_benchmark_configuration(configuration *config_file) {
   mall_conf->config_file = config_file;
 }
-
 void get_benchmark_configuration(configuration **config_file) {
   *config_file = mall_conf->config_file;
 }
 
+//-------------------------------------------------------------------------------------------------------------
+
 void malleability_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
   malleability_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
 }
-//-------------------------------------------------------------------------------------------------------------
 
 void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
   mall_conf->spawn_method = spawn_method;
@@ -530,7 +542,7 @@ void Children_init() {
   MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, root_parents, mall->intercomm);
 
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Children have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Targets have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -548,13 +560,16 @@ void Children_init() {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
 
       #if USE_MAL_DEBUG >= 2
-        DEBUG_FUNC("Children started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+        DEBUG_FUNC("Targets started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
+
+      int post_ibarrier = 0; 
+      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { post_ibarrier=1; }
       for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_wait(mall_conf->red_strategies, mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i]);
+        async_communication_wait(mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i], post_ibarrier);
       }
       #if USE_MAL_DEBUG >= 2
-        DEBUG_FUNC("Children waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+        DEBUG_FUNC("Targets waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_end(mall_conf->red_method, mall_conf->red_strategies, dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
@@ -567,7 +582,7 @@ void Children_init() {
     mall_conf->times->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Children have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Targets have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
@@ -594,7 +609,7 @@ void Children_init() {
     mall_conf->times->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
   }
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Children have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Targets have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   // Guardar los resultados de esta transmision
@@ -711,30 +726,46 @@ int start_redistribution() {
  * los hijos han terminado de recibir.
  * //FIXME Modificar para que se tenga en cuenta rep_a_data
  */
-int check_redistribution() {
-  int is_intercomm, completed, local_completed, all_completed;
+int check_redistribution(int wait_completed) {
+  int is_intercomm, completed, local_completed, all_completed, post_ibarrier;
   size_t i, req_qty;
   MPI_Request *req_completed;
   MPI_Win window;
+  post_ibarrier = 0;
   local_completed = 1;
   #if USE_MAL_DEBUG >= 2
-    DEBUG_FUNC("Originals are checking for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Sources are testing for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
+  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
 
-  for(i=0; i<dist_a_data->entries; i++) {
-    req_completed = dist_a_data->requests[i];
-    req_qty = dist_a_data->request_qty[i];
-    completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
-    local_completed = local_completed && completed;
+  if(wait_completed) {
+    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
+      if( is_intercomm || mall->myId >= mall->numC) {
+        post_ibarrier=1;
+      }
+    }
+    for(i=0; i<dist_a_data->entries; i++) {
+      req_completed = dist_a_data->requests[i];
+      req_qty = dist_a_data->request_qty[i];
+      async_communication_wait(mall->intercomm, req_completed, req_qty, post_ibarrier);
+    }
+  } else {
+    for(i=0; i<dist_a_data->entries; i++) {
+      req_completed = dist_a_data->requests[i];
+      req_qty = dist_a_data->request_qty[i];
+      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
+      local_completed = local_completed && completed;
+    }
+    #if USE_MAL_DEBUG >= 2
+      DEBUG_FUNC("Sources will now check a global decision", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    #endif
+
+    MPI_Allreduce(&local_completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
+    if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
   }
-  #if USE_MAL_DEBUG >= 2
-    DEBUG_FUNC("Originals will now check a global decision", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  #endif
 
-  MPI_Allreduce(&local_completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
-  if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
   #if USE_MAL_DEBUG >= 2
-    DEBUG_FUNC("Originals sent asyncrhonous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Sources sent asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   for(i=0; i<dist_a_data->entries; i++) {
@@ -744,7 +775,6 @@ int check_redistribution() {
     async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
   }
 
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
@@ -926,8 +956,16 @@ int thread_creation() {
  *
  * El estado de la comunicación es devuelto al finalizar la función. 
  */
-int thread_check() {
+int thread_check(int wait_completed) {
   int all_completed = 0, is_intercomm;
+
+  if(wait_completed && comm_state == MALL_DIST_PENDING) {
+    if(pthread_join(mall->async_thread, NULL)) {
+      printf("Error al esperar al hilo\n");
+      MPI_Abort(MPI_COMM_WORLD, -1);
+      return -2;
+    } 
+  }
 
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
   MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);

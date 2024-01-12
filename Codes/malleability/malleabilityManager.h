@@ -14,7 +14,8 @@
 int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes);
 void free_malleability();
 void indicate_ending_malleability(int new_outside_state);
-int malleability_checkpoint();
+int malleability_checkpoint(int *mam_state, int wait_completed);
+void MAM_Commit(int *mam_state);
 void set_benchmark_grp(int grp);
 
 void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies);

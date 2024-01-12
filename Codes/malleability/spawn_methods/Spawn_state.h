@@ -11,7 +11,10 @@ void free_spawn_state();
 int get_spawn_state(int is_async);
 void set_spawn_state(int value, int is_async);
 
-int wait_wakeup();
-void wakeup();
+int wait_redistribution();
+void wakeup_redistribution();
+
+int wait_completion();
+void wakeup_completion();
 
 #endif

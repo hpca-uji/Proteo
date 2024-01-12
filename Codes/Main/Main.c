@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
       }
 
       res = work();
-      if(res == MALL_ZOMBIE) break;
+      if(res == MAM_ZOMBIE) break;
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
@@ -221,9 +221,10 @@ int main(int argc, char *argv[]) {
  */
 int work() {
   int iter, maxiter, state, res;
+  int wait_completed = MAM_CHECK_COMPLETION;
 
   maxiter = config_file->groups[group->grp].iters;
-  state = MALL_NOT_STARTED;
+  state = MAM_NOT_STARTED;
 
   res = 0;
   for(iter=group->iter_start; iter < maxiter; iter++) {
@@ -231,21 +232,21 @@ int work() {
   }
 
   if(config_file->n_groups != group->grp + 1)
-    state = malleability_checkpoint();
+    malleability_checkpoint(&state, wait_completed);
 
   iter = 0;
-  while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE || state == MALL_SPAWN_ADAPT_PENDING) {
+  while(state == MAM_PENDING) {
     if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;
-    }
-    state = malleability_checkpoint();
+    } else { wait_completed = MAM_WAIT_COMPLETION; }
+    malleability_checkpoint(&state, wait_completed);
   }
 
   
   if(config_file->n_groups == group->grp + 1) res=1;
-  if(state == MALL_ZOMBIE) res=state;
+  if(state == MAM_ZOMBIE) res=state;
   return res;
 }
 
@@ -276,7 +277,7 @@ double iterate(int async_comm) {
   }
 
   // Se esta realizando una redistribucion de datos asincrona
-  if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { 
+  if(async_comm == MAM_PENDING) { 
   // TODO Que diferencie entre ambas en el IO
     results->iters_async += 1;
   }
