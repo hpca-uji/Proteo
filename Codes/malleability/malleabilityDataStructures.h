@@ -4,11 +4,10 @@
 /*
  * Shows available data structures for inner ussage.
  */
+#include <stdlib.h>
+#include <stdio.h>
 #include <mpi.h>
-
-//FIXME Remove both includes
-#include "../Main/configuration.h"
-#include "../Main/Main_datatypes.h"
+#include <pthread.h>
 
 
 #define DEBUG_FUNC(debug_string, rank, numP) printf("MaM [P%d/%d]: %s -- %s:%s:%d\n", rank, numP, debug_string, __FILE__, __func__, __LINE__)
@@ -55,7 +54,6 @@ typedef struct {
   int red_strategies;
 
   malleability_times_t *times;
-  configuration *config_file;
 } malleability_config_t;
 
 typedef struct { //FIXME numC_spawned no se esta usando
@@ -65,7 +63,6 @@ typedef struct { //FIXME numC_spawned no se esta usando
   MPI_Comm intercomm;
   MPI_Comm user_comm;
   MPI_Datatype struct_type;
-  int dup_user_comm; //FIXME Borrar
   
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;
