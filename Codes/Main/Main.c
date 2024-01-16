@@ -32,11 +32,11 @@ int create_out_file(char *nombre, int *ptr, int newstdout);
 configuration *config_file;
 group_data *group;
 results_data *results;
-MPI_Comm comm;
+MPI_Comm comm, new_comm;
 int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
-    int numP, myId, res;
+    int numP, myId, res, commited;
     int req;
     int im_child;
     size_t i;
@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     comm = MPI_COMM_WORLD;
+    new_comm = MPI_COMM_NULL;
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
@@ -67,7 +68,6 @@ int main(int argc, char *argv[]) {
     if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
 
-      set_benchmark_grp(group->grp);
       set_benchmark_configuration(config_file);
 
       if(config_file->n_groups > 1) {
@@ -75,19 +75,19 @@ int main(int argc, char *argv[]) {
   	  config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
         set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
-        malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
-        malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
-        malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
-        //malleability_add_data(&(results->exec_start), 1, MAL_DOUBLE, 1, 1);
+        malleability_add_data(&(group->grp), 1, MPI_INT, 1, 0);
+        malleability_add_data(&run_id, 1, MPI_INT, 1, 0);
+        malleability_add_data(&(group->iter_start), 1, MPI_INT, 1, 0);
+        malleability_add_data(&(results->exec_start), 1, MPI_DOUBLE, 1, 0);
 
         if(config_file->sdr) {
 	  for(i=0; i<group->sync_data_groups; i++) {
-            malleability_add_data(group->sync_array[i], group->sync_qty[i], MAL_CHAR, 0, 1);
+            malleability_add_data(group->sync_array[i], group->sync_qty[i], MPI_CHAR, 0, 0);
 	  }
         }
         if(config_file->adr) {
 	  for(i=0; i<group->async_data_groups; i++) {
-            malleability_add_data(group->async_array[i], group->async_qty[i], MAL_CHAR, 0, 0);
+            malleability_add_data(group->async_array[i], group->async_qty[i], MPI_CHAR, 0, 1);
 	  }
         }
       }
@@ -95,32 +95,28 @@ int main(int argc, char *argv[]) {
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
     } else { //Init hijos
-
-      get_malleability_user_comm(&comm);
+      MAM_Commit(&commited, &comm);
       get_benchmark_configuration(&config_file);
 
       // TODO Refactor - Que sea una unica funcion
       // Obtiene las variables que van a utilizar los hijos
       void *value = NULL;
       size_t entries;
-      malleability_get_data(&value, 0, 1, 1);
+      malleability_get_data(&value, 0, 1, 0);
       group->grp = *((int *)value);
 
-      malleability_get_data(&value, 1, 1, 1);
+      malleability_get_data(&value, 1, 1, 0);
       run_id = *((int *)value);
       
-      malleability_get_data(&value, 2, 1, 1);
+      malleability_get_data(&value, 2, 1, 0);
       group->iter_start = *((int *)value);
 
-      //malleability_get_data(&value, 3, 1, 1);
-      //results->exec_start = *((double *)value);
-
       if(config_file->sdr) {
-        malleability_get_entries(&entries, 0, 1);
+        malleability_get_entries(&entries, 0, 0);
         group->sync_qty = (int *) malloc(entries * sizeof(int));
         group->sync_array = (char **) malloc(entries * sizeof(char *));
 	for(i=0; i<entries; i++) {
-          malleability_get_data(&value, i, 0, 1);
+          malleability_get_data(&value, i, 0, 0);
           group->sync_array[i] = (char *)value;
           group->sync_qty[i] = DR_MAX_SIZE;
 	}
@@ -128,11 +124,11 @@ int main(int argc, char *argv[]) {
         group->sync_data_groups = entries;
       }
       if(config_file->adr) {
-        malleability_get_entries(&entries, 0, 0);
+        malleability_get_entries(&entries, 0, 1);
         group->async_qty = (int *) malloc(entries * sizeof(int));
         group->async_array = (char **) malloc(entries * sizeof(char *));
 	for(i=0; i<entries; i++) {
-          malleability_get_data(&value, i, 0, 0);
+          malleability_get_data(&value, i, 0, 1);
           group->async_array[i] = (char *)value;
           group->async_qty[i] = DR_MAX_SIZE;
 	}
@@ -144,6 +140,8 @@ int main(int argc, char *argv[]) {
       results = malloc(sizeof(results_data));
       init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
 
+      malleability_get_data(&value, 3, 1, 0);
+      results->exec_start = *((double *)value);
     }
 
     //
@@ -151,12 +149,9 @@ int main(int argc, char *argv[]) {
     //
     group->grp = group->grp - 1; // TODO REFACTOR???
     do {
-
-      get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
       group->grp = group->grp + 1;
-      set_benchmark_grp(group->grp);
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
@@ -169,12 +164,13 @@ int main(int argc, char *argv[]) {
         set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
-          malleability_modify_data(&(group->grp), 0, 1, MAL_INT, 1, 1);
-          malleability_modify_data(&(group->iter_start), 2, 1, MAL_INT, 1, 1);
+          malleability_modify_data(&(group->grp), 0, 1, MPI_INT, 1, 0);
+          malleability_modify_data(&(group->iter_start), 2, 1, MPI_INT, 1, 0);
         }
       }
 
       res = work();
+
       if(res == MAM_ZOMBIE) break;
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
@@ -183,6 +179,9 @@ int main(int argc, char *argv[]) {
 
       print_local_results();
       reset_results_index(results);
+
+      if(comm != MPI_COMM_WORLD) MPI_Comm_free(&comm);
+      comm = new_comm;
     } while(config_file->n_groups > group->grp + 1 && config_file->groups[group->grp+1].sm == MALL_SPAWN_MERGE);
 
     //
@@ -220,7 +219,7 @@ int main(int argc, char *argv[]) {
  * de procesos. En caso contrario se devuelve 0.
  */
 int work() {
-  int iter, maxiter, state, res;
+  int iter, maxiter, state, res, commited;
   int wait_completed = MAM_CHECK_COMPLETION;
 
   maxiter = config_file->groups[group->grp].iters;
@@ -246,6 +245,7 @@ int work() {
 
   
   if(config_file->n_groups == group->grp + 1) res=1;
+  else { MAM_Commit(&commited, &new_comm); }
   if(state == MAM_ZOMBIE) res=state;
   return res;
 }

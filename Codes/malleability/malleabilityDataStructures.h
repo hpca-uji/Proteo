@@ -54,7 +54,6 @@ typedef struct {
   int red_method;
   int red_strategies;
 
-  int grp;
   malleability_times_t *times;
   configuration *config_file;
 } malleability_config_t;
@@ -65,7 +64,8 @@ typedef struct { //FIXME numC_spawned no se esta usando
   MPI_Comm comm, thread_comm;
   MPI_Comm intercomm;
   MPI_Comm user_comm;
-  int dup_user_comm;
+  MPI_Datatype struct_type;
+  int dup_user_comm; //FIXME Borrar
   
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;
@@ -74,5 +74,11 @@ typedef struct { //FIXME numC_spawned no se esta usando
 /* --- VARIABLES --- */
 malleability_config_t *mall_conf;
 malleability_t *mall;
+
+/* --- FUNCTIONS --- */
+void MAM_Def_main_datatype();
+void MAM_Free_main_datatype();
+void MAM_Comm_main_structures(int rootBcast);
+
 
 #endif

@@ -7,21 +7,18 @@
 #include "malleabilityDataStructures.h"
 
 //void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
+void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
 void check_requests(struct Counts s_counts, struct Counts r_counts, int red_strategies, MPI_Request **requests, size_t *request_qty);
 
-void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
-void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
-void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win);
-void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win);
+void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
+void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
+void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
 
-
-void async_point2point(char *send, char *recv, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests);
-void async_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win);
-void async_rma_lock(char *recv, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
-void async_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
-
-void perform_manual_communication(char *send, char *recv, int myId, struct Counts s_counts, struct Counts r_counts);
+void async_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests);
+void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win);
+void async_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
+void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
 
 /*
  * Reserva memoria para un vector de hasta "qty" elementos.
@@ -72,7 +69,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int sync_communication(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int red_method, MPI_Comm comm) {
+int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int red_method, MPI_Comm comm) {
     int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
@@ -80,9 +77,9 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
-//    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+//    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts); //FIXME Needs the datatype?
 // TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); //FIXME MAGICAL VALUE
+    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); //FIXME MAGICAL VALUE
 
     if(is_intercomm) {
       MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
@@ -103,15 +100,15 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        sync_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, red_method);
+        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, red_method);
 	break;
 
       case MALL_RED_POINT:
-        sync_point2point(send, *recv, is_intercomm, myId, s_counts, r_counts, aux_comm);
+        sync_point2point(send, *recv, datatype, is_intercomm, myId, s_counts, r_counts, aux_comm);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm);
+        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, aux_comm);
 	break;
     }
 
@@ -140,15 +137,19 @@ int sync_communication(char *send, char **recv, int qty, int myId, int numP, int
  * - comm (IN):  Communicator to use to perform the redistribution.
  *
  */
-void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
-    int i, j, init, end, total_sends;
+void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
+    int i, j, init, end, total_sends, datasize;
+    size_t offset, offset2;
     MPI_Request *sends;
 
+    MPI_Type_size(datatype, &datasize);
     init = s_counts.idI;
     end = s_counts.idE;
     if(!is_intercomm && (s_counts.idI == myId || s_counts.idE == myId + 1)) {
-      perform_manual_communication(send, recv, myId, s_counts, r_counts);
-
+      offset = s_counts.displs[myId] + datasize;
+      offset2 = r_counts.displs[myId] + datasize;
+      memcpy(send+offset, recv+offset2, s_counts.counts[myId]);
+      
       if(s_counts.idI == myId) init = s_counts.idI+1;
       else end = s_counts.idE-1;
     }
@@ -160,7 +161,8 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
     }
     for(i=init; i<end; i++) {
       sends[j] = MPI_REQUEST_NULL;
-      MPI_Isend(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm, &(sends[j]));
+      offset = s_counts.displs[i] * datasize;
+      MPI_Isend(send+offset, s_counts.counts[i], datatype, i, 99, comm, &(sends[j]));
       j++;
     }
 
@@ -172,7 +174,8 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
     }
 
     for(i=init; i<end; i++) {
-      MPI_Recv(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, 99, comm, MPI_STATUS_IGNORE);
+      offset = r_counts.displs[i] * datasize;
+      MPI_Recv(recv+offset, r_counts.counts[i], datatype, i, 99, comm, MPI_STATUS_IGNORE);
     }
 
     if(total_sends > 0) {
@@ -200,19 +203,21 @@ void sync_point2point(char *send, char *recv, int is_intercomm, int myId, struct
  * prov/psm3/psm3/ptl_am/am_config.h:62:#define PSMI_MQ_RV_THRESH_CMA      16000
  * prov/psm3/psm3/ptl_am/am_config.h:65:#define PSMI_MQ_RV_THRESH_NO_KASSIST 16000
  */
-void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method) {
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method) {
+  int datasize;
   MPI_Win win;
-  MPI_Win_create(send, (MPI_Aint)tamBl * sizeof(char), sizeof(char), MPI_INFO_NULL, comm, &win);
+  MPI_Type_size(datatype, &datasize);
+  MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, &win);
 
   #if USE_MAL_DEBUG >= 3
     DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
   switch(red_method) {
     case MALL_RED_RMA_LOCKALL:
-      sync_rma_lockall(recv, r_counts, win);
+      sync_rma_lockall(recv, datatype, r_counts, win);
       break;
     case MALL_RED_RMA_LOCK:
-      sync_rma_lock(recv, r_counts, win);
+      sync_rma_lock(recv, datatype, r_counts, win);
       break;
   }
   #if USE_MAL_DEBUG >= 3
@@ -232,18 +237,21 @@ void sync_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Com
  * - win (IN):   Window to use to perform the redistribution.
  *
  */
-void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win) {
-  int i, target_displs;
+void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win) {
+  int i, target_displs, datasize;
+  size_t offset;
 
-  target_displs = r_counts.first_target_displs;
+  MPI_Type_size(datatype, &datasize);
+  target_displs = r_counts.first_target_displs; //TODO Check that datasize is not needed
+
   for(i=r_counts.idI; i<r_counts.idE; i++) {
+    offset = r_counts.displs[i] * datasize;
     MPI_Win_lock(MPI_LOCK_SHARED, i, MPI_MODE_NOCHECK, win);
-    MPI_Get(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win);
+    MPI_Get(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win);
     MPI_Win_unlock(i, win);
     target_displs=0;
   }
 }
-
 
 /*
  * Performs a passive MPI-RMA data redistribution for a single array using the passive epochs Lockall/Unlockall.
@@ -254,13 +262,17 @@ void sync_rma_lock(char *recv, struct Counts r_counts, MPI_Win win) {
  * - win (IN):   Window to use to perform the redistribution.
  *
  */
-void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win) {
-  int i, target_displs;
+void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win) {
+  int i, target_displs, datasize;
+  size_t offset;
 
-  target_displs = r_counts.first_target_displs;
+  MPI_Type_size(datatype, &datasize);
+  target_displs = r_counts.first_target_displs; //TODO Check that datasize is not needed
+
   MPI_Win_lock_all(MPI_MODE_NOCHECK, win);
   for(i=r_counts.idI; i<r_counts.idE; i++) {
-    MPI_Get(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win);
+    offset = r_counts.displs[i] * datasize;
+    MPI_Get(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win);
     target_displs=0;
   }
   MPI_Win_unlock_all(win);
@@ -295,7 +307,7 @@ void sync_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win) {
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always false...
  */
-int async_communication_start(char *send, char **recv, int qty, int myId, int numP, int numO, int is_children_group, int red_method, int red_strategies, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
+int async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int red_method, int red_strategies, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
     int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
@@ -304,8 +316,8 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
     /* PREPARE COMMUNICATION */
     MPI_Comm_test_inter(comm, &is_intercomm);
 // TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
-    //prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
-    prepare_redistribution(qty, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); // TODO MAGICAL VALUE
+    //prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
+    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); // TODO MAGICAL VALUE
     if(is_intercomm) {
       MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
       aux_comm_used = 1;
@@ -325,14 +337,14 @@ int async_communication_start(char *send, char **recv, int qty, int myId, int nu
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        async_rma(send, *recv, r_counts, dist_data.tamBl, aux_comm, red_method, *requests, win);
+        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, red_method, *requests, win);
 	break;
       case MALL_RED_POINT:
-        async_point2point(send, *recv, s_counts, r_counts, aux_comm, *requests);
+        async_point2point(send, *recv, datatype, s_counts, r_counts, aux_comm, *requests);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, MPI_CHAR, *recv, r_counts.counts, r_counts.displs, MPI_CHAR, aux_comm, &((*requests)[0]));
+        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, aux_comm, &((*requests)[0]));
 	break;
     }
 
@@ -459,16 +471,20 @@ void async_communication_end(int red_method, int red_strategies, MPI_Request *re
  * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
  */
-void async_point2point(char *send, char *recv, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests) {
-    int i, j = 0;
+void async_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests) {
+    int i, j = 0, datasize;
+    size_t offset;
+    MPI_Type_size(datatype, &datasize);
 
     for(i=s_counts.idI; i<s_counts.idE; i++) {
-      MPI_Isend(send+s_counts.displs[i], s_counts.counts[i], MPI_CHAR, i, 99, comm, &(requests[j]));
+      offset = s_counts.displs[i] * datasize;
+      MPI_Isend(send+offset, s_counts.counts[i], datatype, i, 99, comm, &(requests[j]));
       j++;
     }
 
     for(i=r_counts.idI; i<r_counts.idE; i++) {
-      MPI_Irecv(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, 99, comm, &(requests[j]));
+      offset = r_counts.displs[i] * datasize;
+      MPI_Irecv(recv+offset, r_counts.counts[i], datatype, i, 99, comm, &(requests[j]));
       j++;
     }
 }
@@ -489,15 +505,17 @@ void async_point2point(char *send, char *recv, struct Counts s_counts, struct Co
  * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
  */
-void async_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win) {
+void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win) {
+  int datasize;
 
-  MPI_Win_create(send, (MPI_Aint)tamBl * sizeof(char), sizeof(char), MPI_INFO_NULL, comm, win);
+  MPI_Type_size(datatype, &datasize);
+  MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, win);
   switch(red_method) {
     case MALL_RED_RMA_LOCKALL:
-      async_rma_lockall(recv, r_counts, *win, requests);
+      async_rma_lockall(recv, datatype, r_counts, *win, requests);
       break;
     case MALL_RED_RMA_LOCK:
-      async_rma_lock(recv, r_counts, *win, requests);
+      async_rma_lock(recv, datatype, r_counts, *win, requests);
       break;
   }
 }
@@ -512,13 +530,17 @@ void async_rma(char *send, char *recv, struct Counts r_counts, int tamBl, MPI_Co
  * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
  */
-void async_rma_lock(char *recv, struct Counts r_counts, MPI_Win win, MPI_Request *requests) {
-  int i, target_displs, j = 0;
+void async_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests) {
+  int i, target_displs, j = 0, datasize;
+  size_t offset;
 
-  target_displs = r_counts.first_target_displs;
+  MPI_Type_size(datatype, &datasize);
+  target_displs = r_counts.first_target_displs; //TODO Check that datasize is not needed
+
   for(i=r_counts.idI; i<r_counts.idE; i++) {
+    offset = r_counts.displs[i] * datasize;
     MPI_Win_lock(MPI_LOCK_SHARED, i, MPI_MODE_NOCHECK, win);
-    MPI_Rget(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win, &(requests[j]));
+    MPI_Rget(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win, &(requests[j]));
     MPI_Win_unlock(i, win);
     target_displs=0;
     j++;
@@ -534,13 +556,17 @@ void async_rma_lock(char *recv, struct Counts r_counts, MPI_Win win, MPI_Request
  * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
  */
-void async_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win, MPI_Request *requests) {
-  int i, target_displs, j = 0;
+void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests) {
+  int i, target_displs, j = 0, datasize;
+  size_t offset;
 
-  target_displs = r_counts.first_target_displs;
+  MPI_Type_size(datatype, &datasize);
+  target_displs = r_counts.first_target_displs; //TODO Check that datasize is not needed
+
   MPI_Win_lock_all(MPI_MODE_NOCHECK, win);
   for(i=r_counts.idI; i<r_counts.idE; i++) {
-    MPI_Rget(recv+r_counts.displs[i], r_counts.counts[i], MPI_CHAR, i, target_displs, r_counts.counts[i], MPI_CHAR, win, &(requests[j]));
+    offset = r_counts.displs[i] * datasize;
+    MPI_Rget(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win, &(requests[j]));
     target_displs=0;
     j++;
   }
@@ -574,9 +600,10 @@ void async_rma_lockall(char *recv, struct Counts r_counts, MPI_Win win, MPI_Requ
  *
  */
 //FIXME Ensure name for is_sync variable
-void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, char **recv, struct Counts *s_counts, struct Counts *r_counts) {
+void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts) {
   int array_size = numO;
   int offset_ids = 0;
+  int datasize;
   struct Dist_data dist_data;
 
   if(is_intercomm) {
@@ -586,6 +613,7 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
   }
   mallocCounts(s_counts, array_size+offset_ids);
   mallocCounts(r_counts, array_size+offset_ids);
+  MPI_Type_size(datatype, &datasize); //FIXME Right now derived datatypes are not ensured to work
 
   if(is_children_group) {
     offset_ids = 0;
@@ -593,9 +621,9 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
     
     // Obtener distribución para este hijo
     get_block_dist(qty, myId, numP, &dist_data);
-    *recv = malloc(dist_data.tamBl * sizeof(char));
+    *recv = malloc(dist_data.tamBl * datasize);
 //get_block_dist(qty, myId, numP, &dist_data);
-//print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Children C ");
+//print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Targets Recv");
   } else {
 //get_block_dist(qty, myId, numP, &dist_data);
 
@@ -604,10 +632,10 @@ void prepare_redistribution(int qty, int myId, int numP, int numO, int is_childr
         prepare_comm_alltoall(myId, numO, numP, qty, offset_ids, r_counts);
         // Obtener distribución para este hijo y reservar vector de recibo
         get_block_dist(qty, myId, numO, &dist_data);
-        *recv = malloc(dist_data.tamBl * sizeof(char));
-//print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Children P ");
+        *recv = malloc(dist_data.tamBl * datasize);
+//print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
     }
-//print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Parents ");
+//print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Sources Send");
   }
 }
 
@@ -651,24 +679,6 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, int red_stra
     (*requests)[i] = MPI_REQUEST_NULL;
   }
   *request_qty = sum;
-}
-
-
-/*
- * Special case to perform a manual copy of data when a process has to send data to itself. Only used
- * when the MPI communication is not able to hand this situation. An example is when using point to point
- * communications and the process has to perform a Send and Recv to itself
- * - send (IN):  Array with the data to send. This value can not be NULL.
- * - recv (OUT): Array where data will be written. This value can not be NULL.
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
- * - s_counts (IN): Struct where is indicated how many elements sends this process to processes in the new group.
- * - r_counts (IN): Struct where is indicated how many elements receives this process from other processes in the previous group.
- */
-void perform_manual_communication(char *send, char *recv, int myId, struct Counts s_counts, struct Counts r_counts) {
-  int i;
-  for(i=0; i<s_counts.counts[myId];i++) {
-    recv[i+r_counts.displs[myId]] = send[i+s_counts.displs[myId]];
-  }
 }
 
 /*

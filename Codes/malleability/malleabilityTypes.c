@@ -20,7 +20,7 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
  * todos los padres. La nueva serie "data" solo representa los datos
  * que tiene este padre.
  */
-void add_data(void *data, size_t total_qty, int type, size_t request_qty, malleability_data_t *data_struct) {
+void add_data(void *data, size_t total_qty, MPI_Datatype type, size_t request_qty, malleability_data_t *data_struct) {
   size_t i;
   
   if(data_struct->entries == 0) {
@@ -49,7 +49,7 @@ void add_data(void *data, size_t total_qty, int type, size_t request_qty, mallea
  * todos los padres. La nueva serie "data" solo representa los datos
  * que tiene este padre.
  */
-void modify_data(void *data, size_t index, size_t total_qty, int type, size_t request_qty, malleability_data_t *data_struct) {
+void modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, size_t request_qty, malleability_data_t *data_struct) {
   size_t i;
   
   if(data_struct->entries < index) { // Index does not exist
@@ -81,7 +81,7 @@ void modify_data(void *data, size_t index, size_t total_qty, int type, size_t re
  * unicamente.
  */
 void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group, int myId, int root, MPI_Comm intercomm) {
-  int is_intercomm, rootBcast = MPI_PROC_NULL;
+  int is_intercomm, rootBcast = MPI_PROC_NULL, type_size;
   size_t i, j;
   MPI_Datatype entries_type, struct_type;
 
@@ -97,7 +97,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
 
-  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) { //FIXME Que pasa si ambos valores son 0?
+  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) {
     init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
     init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
   }
@@ -107,14 +107,15 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
 
   if(is_children_group) {
     for(i=0; i < data_struct_rep->entries; i++) {
-      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * sizeof(int)); //TODO Tener en cuenta que no siempre es int
+      MPI_Type_size(data_struct_rep->types[i], &type_size);
+      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * type_size);
       data_struct_rep->requests[i] = (MPI_Request *) malloc(data_struct_rep->request_qty[i] * sizeof(MPI_Request));
       for(j=0; j < data_struct_rep->request_qty[i]; j++) {
         data_struct_rep->requests[i][j] = MPI_REQUEST_NULL;
       }
     }
     for(i=0; i < data_struct_dist->entries; i++) {
-      data_struct_dist->arrays[i] = (void *) NULL;
+      data_struct_dist->arrays[i] = (void *) NULL; // TODO Se podria inicializar aqui?
       data_struct_dist->requests[i] = (MPI_Request *) malloc(data_struct_dist->request_qty[i] * sizeof(MPI_Request));
       for(j=0; j < data_struct_dist->request_qty[i]; j++) {
         data_struct_dist->requests[i][j] = MPI_REQUEST_NULL;
@@ -142,7 +143,7 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
 
   data_struct->max_entries = size;
   data_struct->qty = (size_t *) malloc(size * sizeof(size_t));
-  data_struct->types = (int *) malloc(size * sizeof(int));
+  data_struct->types = (MPI_Datatype *) malloc(size * sizeof(MPI_Datatype));
   data_struct->request_qty = (size_t *) malloc(size * sizeof(size_t));
   data_struct->requests = (MPI_Request **) malloc(size * sizeof(MPI_Request *));
   data_struct->windows = (MPI_Win *) malloc(size * sizeof(MPI_Win));
@@ -161,14 +162,14 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
  */
 void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t qty_to_add) {
   size_t i, needed, *qty_aux, *request_qty_aux;
-  int *types_aux;
+  MPI_Datatype *types_aux;
   MPI_Win *windows_aux;
   MPI_Request **requests_aux;
   void **arrays_aux;
 
   needed = data_struct->max_entries + qty_to_add;
   qty_aux = (size_t *) realloc(data_struct->qty, needed * sizeof(int));
-  types_aux = (int *) realloc(data_struct->types, needed * sizeof(int));
+  types_aux = (MPI_Datatype *) realloc(data_struct->types, needed * sizeof(MPI_Datatype));
   request_qty_aux = (size_t *) realloc(data_struct->request_qty, needed * sizeof(int));
   requests_aux = (MPI_Request **) realloc(data_struct->requests, needed * sizeof(MPI_Request *));
   windows_aux = (MPI_Win *) realloc(data_struct->windows, needed * sizeof(MPI_Win));
@@ -184,6 +185,8 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t q
     arrays_aux[i] = NULL;
   }
 
+  //TODO
+  //if(data_struct->qty != qty_aux && data_struct->qty != NULL) free(data_struct->qty);
   data_struct->qty = qty_aux;
   data_struct->types = types_aux;
   data_struct->request_qty = request_qty_aux;
@@ -199,7 +202,7 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
   max = data_struct->entries;
   if(max != 0) {
     for(i=0; i<max; i++) {
-      //free(data_struct->arrays[i]); //FIXME Valores alojados con 1 elemento no se liberan?
+      //free(data_struct->arrays[i]); //FIXME Valores alojados con 1 elemento no se liberan? Usar qty? Comprobar si esta alojado por el usuario?
     }
 
     if(data_struct->qty != NULL) {
@@ -281,11 +284,14 @@ void def_malleability_qty_type(malleability_data_t *data_struct_rep, malleabilit
 
   MPI_Get_address((data_struct_rep->qty), &displs[0]);
   MPI_Get_address((data_struct_rep->request_qty), &displs[1]);
-  MPI_Get_address((data_struct_rep->types), &displs[2]);
+  MPI_Get_address((data_struct_rep->types), &displs[2]); // MPI_Datatype uses typedef int to be declared
   MPI_Get_address((data_struct_dist->qty), &displs[3]);
   MPI_Get_address((data_struct_dist->request_qty), &displs[4]);
-  MPI_Get_address((data_struct_dist->types), &displs[5]);
+  MPI_Get_address((data_struct_dist->types), &displs[5]); // MPI_Datatype uses typedef int to be declared
 
   MPI_Type_create_struct(counts, blocklengths, displs, types, new_type);
   MPI_Type_commit(new_type);
 }
+
+
+

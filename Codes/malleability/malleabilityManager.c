@@ -23,9 +23,6 @@ int check_redistribution(int wait_completed);
 int end_redistribution();
 int shrink_redistribution();
 
-void comm_node_data(int rootBcast, int is_child_group);
-void def_nodeinfo_type(MPI_Datatype *node_type);
-
 int thread_creation();
 int thread_check(int wait_completed);
 void* thread_async_work();
@@ -74,6 +71,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
   mall->myId = myId;
   mall->numP = numP;
   mall->root = root;
+  mall->root_parents = -1;
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm;
   mall->user_comm = comm;
@@ -92,6 +90,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
 
   zombies_service_init();
   init_malleability_times();
+  MAM_Def_main_datatype();
 
   // Si son el primer grupo de procesos, obtienen los datos de los padres
   MPI_Comm_get_parent(&(mall->intercomm));
@@ -136,6 +135,7 @@ void free_malleability() {
   free(dist_s_data);
   free(dist_a_data);
 
+  MAM_Free_main_datatype();
   free_malleability_times();
   if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
   if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
@@ -236,9 +236,9 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
       }
       break;
 
-    case MALL_SPAWN_ADAPTED:
+    case MALL_SPAWN_ADAPTED: //FIXME Borrar?
       state = shrink_redistribution();
-      if(state == MALL_ZOMBIE) *mam_state = MAM_ZOMBIE;
+      if(state == MALL_ZOMBIE) *mam_state = MAM_ZOMBIE; //TODO Esta no hay que borrarla
       malleability_checkpoint(mam_state, wait_completed);
       break;
 
@@ -256,19 +256,42 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
   return state;
 }
 
-void MAM_Commit(int *mam_state) {
-  //Hacer borrado de comunicadores no necesarios
-  //Update de comunicadores
-  //Reiniciar algunas estructuras ¿Cuales?
-  //Llamar a funcion de zombies
-  //Devolver el estado de mam
+/*
+ * TODO
+ */
+void MAM_Commit(int *mam_state, MPI_Comm *new_comm) {
+  if(!(state == MALL_COMPLETED || state == MALL_ZOMBIE)) {
+    *mam_state = MALL_DENIED;
+    return;
+  }
+
+  #if USE_MAL_DEBUG
+    if(mall->myId == mall->root) DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
+  int zombies;
+  MPI_Allreduce(&state, &zombies, 1, MPI_INT, MPI_MIN, mall->intercomm);
+  if(zombies == MALL_ZOMBIE) {
+    zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root, NULL, 0, 0);
+  }
+
+  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
+  if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { 
+    MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
+  }
+
+  mall->root = mall->root_parents == -1 ? mall->root : mall->root_parents;
+  mall->root_parents = -1;
+  state = MALL_NOT_STARTED;
+  *mam_state = MAM_COMMITED;
+  *new_comm = mall->user_comm;
+
+  #if USE_MAL_DEBUG
+    if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+  #endif
 }
 
 // Funciones solo necesarias por el benchmark
 //-------------------------------------------------------------------------------------------------------------
-void set_benchmark_grp(int grp) {
-  mall_conf->grp = grp;
-}
 void set_benchmark_configuration(configuration *config_file) {
   mall_conf->config_file = config_file;
 }
@@ -283,6 +306,8 @@ void malleability_retrieve_times(double *sp_time, double *sy_time, double *asy_t
 }
 
 void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
+  if(state > MALL_NOT_STARTED) return;
+
   mall_conf->spawn_method = spawn_method;
   mall_conf->spawn_strategies = spawn_strategies;
   mall_conf->spawn_dist = spawn_dist;
@@ -300,6 +325,8 @@ void set_malleability_configuration(int spawn_method, int spawn_strategies, int 
  * Tiene que ser llamado despues de setear la config
  */
 void set_children_number(int numC){
+  if(state > MALL_NOT_STARTED) return;
+
   if((mall_conf->spawn_method == MALL_SPAWN_MERGE) && (numC >= mall->numP)) {
     mall->numC = numC;
     mall->numC_spawned = numC - mall->numP;
@@ -335,19 +362,13 @@ void get_malleability_user_comm(MPI_Comm *comm) {
  *
  * Mas informacion en la funcion "add_data".
  *
- * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
-void malleability_add_data(void *data, size_t total_qty, int type, int is_replicated, int is_constant) {
+void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
   size_t total_reqs = 0;
 
   if(is_constant) {
     if(is_replicated) {
-      add_data(data, total_qty, type, total_reqs, rep_s_data);
-    } else {
-      add_data(data, total_qty, type, total_reqs, dist_s_data);
-    }
-  } else {
-    if(is_replicated) {
+      total_reqs = 1;
       add_data(data, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
     } else {
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
@@ -361,6 +382,12 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
     }
+  } else {
+    if(is_replicated) {
+      add_data(data, total_qty, type, total_reqs, rep_s_data);
+    } else {
+      add_data(data, total_qty, type, total_reqs, dist_s_data);
+    }
   }
 }
 
@@ -371,19 +398,13 @@ void malleability_add_data(void *data, size_t total_qty, int type, int is_replic
  * Los datos variables se tienen que modificar cuando quieran ser mandados, no antes
  *
  * Mas informacion en la funcion "modify_data".
- * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
-void malleability_modify_data(void *data, size_t index, size_t total_qty, int type, int is_replicated, int is_constant) {
+void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
   size_t total_reqs = 0;
 
   if(is_constant) {
     if(is_replicated) {
-      modify_data(data, index, total_qty, type, total_reqs, rep_s_data);
-    } else {
-      modify_data(data, index, total_qty, type, total_reqs, dist_s_data);
-    }
-  } else {
-    if(is_replicated) {
+      total_reqs = 1;
       modify_data(data, index, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
     } else {    
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
@@ -397,27 +418,32 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, int ty
       
       modify_data(data, index, total_qty, type, total_reqs, dist_a_data);
     }
+  } else {
+    if(is_replicated) {
+      modify_data(data, index, total_qty, type, total_reqs, rep_s_data);
+    } else {
+      modify_data(data, index, total_qty, type, total_reqs, dist_s_data);
+    }
   }
 }
 
 /*
  * Devuelve el numero de entradas para la estructura de descripcion de 
  * datos elegida.
- * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_get_entries(size_t *entries, int is_replicated, int is_constant){
   
   if(is_constant) {
     if(is_replicated) {
-      *entries = rep_s_data->entries;
-    } else {
-      *entries = dist_s_data->entries;
-    }
-  } else {
-    if(is_replicated) {
       *entries = rep_a_data->entries;
     } else {
       *entries = dist_a_data->entries;
+    }
+  } else {
+    if(is_replicated) {
+      *entries = rep_s_data->entries;
+    } else {
+      *entries = dist_s_data->entries;
     }
   }
 }
@@ -428,22 +454,21 @@ void malleability_get_entries(size_t *entries, int is_replicated, int is_constan
  * con la funcion "malleability_add_data()".
  * Es tarea del usuario saber el tipo de esos datos.
  * TODO Refactor a que sea automatico
- * //FIXME Si es constante se debería ir a asincrono, no sincrono
  */
 void malleability_get_data(void **data, size_t index, int is_replicated, int is_constant) {
   malleability_data_t *data_struct;
 
   if(is_constant) {
     if(is_replicated) {
-      data_struct = rep_s_data;
-    } else {
-      data_struct = dist_s_data;
-    }
-  } else {
-    if(is_replicated) {
       data_struct = rep_a_data;
     } else {
       data_struct = dist_a_data;
+    }
+  } else {
+    if(is_replicated) {
+      data_struct = rep_s_data;
+    } else {
+      data_struct = dist_s_data;
     }
   }
 
@@ -464,22 +489,22 @@ void malleability_get_data(void **data, size_t index, int is_replicated, int is_
  */
 void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
   size_t i;
-  char *aux_send, *aux_recv;
+  void *aux_send, *aux_recv;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
-      aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
+      aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
-		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
+      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, 
+		      mall_conf->red_strategies, mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
+      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
-      aux_send = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
+      aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall->intercomm);
-      if(aux_recv != NULL) data_struct->arrays[i] = (void *) aux_recv;
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall->intercomm);
+      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
   }
 }
@@ -491,20 +516,20 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
  */
 void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
   size_t i;
-  char *aux, aux_s;
+  void *aux, *aux_s = NULL;
 
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
-      aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      async_communication_start(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
+      aux = data_struct->arrays[i];
+      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      data_struct->arrays[i] = (void *) aux;
+      data_struct->arrays[i] = aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
-      aux = (char *) data_struct->arrays[i]; //TODO Comprobar que realmente es un char
-      sync_communication(&aux_s, &aux, data_struct->qty[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall->intercomm);
-      data_struct->arrays[i] = (void *) aux;
+      aux = data_struct->arrays[i];
+      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall->intercomm);
+      data_struct->arrays[i] = aux;
     }
   }
 }
@@ -537,9 +562,7 @@ void Children_init() {
   }
 
   recv_config_file(mall->root, mall->intercomm, &(mall_conf->config_file));
-  comm_node_data(root_parents, MALLEABILITY_CHILDREN);
-  MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, root_parents, mall->intercomm);
-  MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, root_parents, mall->intercomm);
+  MAM_Comm_main_structures(root_parents);
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("Targets have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -593,15 +616,8 @@ void Children_init() {
     recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc
-    // TODO Tener en cuenta el tipo y qty
     for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Datatype datatype;
-      if(rep_s_data->types[i] == MAL_INT) {
-        datatype = MPI_INT;
-      } else {
-        datatype = MPI_CHAR;
-      }
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, root_parents, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], root_parents, mall->intercomm);
     } 
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
@@ -614,15 +630,12 @@ void Children_init() {
 
   // Guardar los resultados de esta transmision
   malleability_times_broadcast(mall->root);
-  if(!is_intercomm) {
-    malleability_comms_update(mall->intercomm);
-  }
 
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
-  MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
+  state = MALL_COMPLETED;
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("MaM has been initialized correctly as children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -690,9 +703,7 @@ int start_redistribution() {
   }
 
   send_config_file(mall_conf->config_file, rootBcast, mall->intercomm);
-  comm_node_data(rootBcast, MALLEABILITY_NOT_CHILDREN);
-  MPI_Bcast(&(mall_conf->red_method), 1, MPI_INT, rootBcast, mall->intercomm);
-  MPI_Bcast(&(mall_conf->red_strategies), 1, MPI_INT, rootBcast, mall->intercomm);
+  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE || mall->numP <= mall->numC) { MAM_Comm_main_structures(rootBcast); }
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
@@ -811,15 +822,8 @@ int end_redistribution() {
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     // TODO Crear funcion especifica y anyadir para Asinc
-    // TODO Tener en cuenta el tipo
     for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Datatype datatype;
-      if(rep_s_data->types[i] == MAL_INT) {
-        datatype = MPI_INT;
-      } else {
-        datatype = MPI_CHAR;
-      }
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], datatype, rootBcast, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], rootBcast, mall->intercomm);
     } 
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
@@ -831,15 +835,9 @@ int end_redistribution() {
 
   local_state = MALL_DIST_COMPLETED;
   if(!is_intercomm) { // Merge Spawn
-    if(mall->numP < mall->numC) { // Expand
-      malleability_comms_update(mall->intercomm);
-    } else { // Shrink || Merge Shrink requiere de mas tareas
+    if(mall->numP > mall->numC) { // Shrink || Merge Shrink requiere de mas tareas
       local_state = MALL_SPAWN_ADAPT_PENDING;
     }
-  }
-
-  if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) {
-    MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
   }
 
   return local_state;
@@ -882,50 +880,6 @@ int shrink_redistribution() {
     } else {
       return MALL_ZOMBIE;
     }
-}
-
-//======================================================||
-//================PRIVATE FUNCTIONS=====================||
-//=================COMM NODE INFO ======================||
-//======================================================||
-//======================================================||
-//TODO Add comment
-void comm_node_data(int rootBcast, int is_child_group) {
-  MPI_Datatype node_type;
-
-  def_nodeinfo_type(&node_type);
-  MPI_Bcast(mall, 1, node_type, rootBcast, mall->intercomm);
-
-  if(is_child_group) {
-    mall->nodelist = malloc((mall->nodelist_len+1) * sizeof(char));
-    mall->nodelist[mall->nodelist_len] = '\0';
-  }
-  MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, mall->intercomm);
-
-  MPI_Type_free(&node_type);
-}
-
-//TODO Add comment
-void def_nodeinfo_type(MPI_Datatype *node_type) {
-  int i, counts = 3;
-  int blocklengths[3] = {1, 1, 1};
-  MPI_Aint displs[counts], dir;
-  MPI_Datatype types[counts];
-
-  // Rellenar vector types
-  types[0] = types[1] = types[2] = MPI_INT;
-
-  // Rellenar vector displs
-  MPI_Get_address(mall, &dir);
-
-  MPI_Get_address(&(mall->num_cpus), &displs[0]);
-  MPI_Get_address(&(mall->num_nodes), &displs[1]);
-  MPI_Get_address(&(mall->nodelist_len), &displs[2]);
-
-  for(i=0;i<counts;i++) displs[i] -= dir;
-
-  MPI_Type_create_struct(counts, blocklengths, displs, types, node_type);
-  MPI_Type_commit(node_type);
 }
 
 // TODO MOVER A OTRO LADO??
@@ -1021,17 +975,20 @@ void print_comms_state() {
   free(test);
 }
 
+/*
+ * Función solo necesaria en Merge
+ */
 void malleability_comms_update(MPI_Comm comm) {
   if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
   if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-  if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso?
+  if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm)); //TODO No es peligroso? Tendria que hacerlo el usuario
 
   MPI_Comm_dup(comm, &(mall->thread_comm));
   MPI_Comm_dup(comm, &(mall->comm));
   MPI_Comm_dup(comm, &(mall->user_comm)); 
 
-  MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
-  MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
-  MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MALL_USER");
+  MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MAM_THREAD");
+  MPI_Comm_set_name(mall->comm, "MPI_COMM_MAM");
+  MPI_Comm_set_name(mall->user_comm, "MPI_COMM_MAM_USER");
 }
 
