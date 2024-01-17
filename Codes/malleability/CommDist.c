@@ -8,7 +8,7 @@
 
 //void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
-void check_requests(struct Counts s_counts, struct Counts r_counts, int red_strategies, MPI_Request **requests, size_t *request_qty);
+void check_requests(struct Counts s_counts, struct Counts r_counts, int red_method, int red_strategies, MPI_Request **requests, size_t *request_qty);
 
 void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
 void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
@@ -325,7 +325,7 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
       aux_comm = comm;
     }
 // FIXME END REFACTOR
-    check_requests(s_counts, r_counts, red_strategies, requests, request_qty);
+    check_requests(s_counts, r_counts, red_method, red_strategies, requests, request_qty);
 
     /* PERFORM COMMUNICATION */
     switch(red_method) {
@@ -651,12 +651,20 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, 
  * - request_qty (IN/OUT): Quantity of requests to be used. If the value is smaller than the amount of communication
  *               functions to perform, it is modified to the minimum value.
  */
-void check_requests(struct Counts s_counts, struct Counts r_counts, int red_strategies, MPI_Request **requests, size_t *request_qty) {
+void check_requests(struct Counts s_counts, struct Counts r_counts, int red_method, int red_strategies, MPI_Request **requests, size_t *request_qty) {
   size_t i, sum;
   MPI_Request *aux;
 
-  sum = (size_t) s_counts.idE - s_counts.idI;
-  sum += (size_t) r_counts.idE - r_counts.idI;
+  switch(red_method) {
+    case MALL_RED_BASELINE:
+      sum = 1;
+      break;
+    case MALL_RED_POINT:
+    default:
+      sum = (size_t) s_counts.idE - s_counts.idI;
+      sum += (size_t) r_counts.idE - r_counts.idI;
+      break;
+  }
   if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
     sum++;
   }

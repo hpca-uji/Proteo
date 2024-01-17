@@ -2,12 +2,11 @@
 
 #SBATCH -p P1
 #SBATCH -N 1
-#SBATCH --exclude=c01,c00,c02
+#SBATCH --exclude=n00
 
 partition='P1'
 
-scriptDir="$(dirname "$0")"
-source $scriptDir/build/config.txt
+source build/config.txt
 codeDir="/Codes"
 execDir="/Exec"
 cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
@@ -24,7 +23,7 @@ fi
 
 echo "MPICH"
 #export HYDRA_DEBUG=1
-
+mpirun --version
 numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
 echo $initial_nodelist

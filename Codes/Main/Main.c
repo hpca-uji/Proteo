@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = init_malleability(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
+    im_child = MAM_Init(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
@@ -87,13 +87,13 @@ int main(int argc, char *argv[]) {
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
-        malleability_retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
+        MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
-        set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
+        MAM_Set_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
 			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-        set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
+        MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
           malleability_modify_data(&(group->grp), 0, 1, MPI_INT, 1, 0);
@@ -166,7 +166,7 @@ int work() {
   }
 
   if(config_file->n_groups != group->grp + 1)
-    malleability_checkpoint(&state, wait_completed);
+    MAM_Checkpoint(&state, wait_completed);
 
   iter = 0;
   while(state == MAM_PENDING) {
@@ -175,7 +175,7 @@ int work() {
       iter++;
       group->iter_start = iter;
     } else { wait_completed = MAM_WAIT_COMPLETION; }
-    malleability_checkpoint(&state, wait_completed);
+    MAM_Checkpoint(&state, wait_completed);
   }
 
   // This function causes an overhead in the recorded time for last group
@@ -184,6 +184,7 @@ int work() {
   else {
     MAM_Get_comm(&new_comm, &targets_qty);
     send_config_file(config_file, ROOT, new_comm);
+    results_comm(results, ROOT, config_file->n_resizes, new_comm);
     MPI_Comm_free(&new_comm);
     MAM_Commit(&commited, &new_comm); 
   }
@@ -481,7 +482,7 @@ void free_application_data() {
     free(group->async_array);
     group->async_array = NULL;
   }
-  free_malleability();
+  MAM_Finalize();
 
   free_results_data(results, config_file->n_stages);
   free(results);
@@ -527,14 +528,13 @@ void init_originals() {
   size_t i;
 
   if(config_file->n_groups > 1) {
-    set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
+    MAM_Set_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
       config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-    set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
+    MAM_Set_target_number(config_file->groups[group->grp+1].procs);
 
     malleability_add_data(&(group->grp), 1, MPI_INT, 1, 0);
     malleability_add_data(&run_id, 1, MPI_INT, 1, 0);
     malleability_add_data(&(group->iter_start), 1, MPI_INT, 1, 0);
-    malleability_add_data(&(results->exec_start), 1, MPI_DOUBLE, 1, 0);
 
     if(config_file->sdr) {
       for(i=0; i<group->sync_data_groups; i++) {
@@ -551,20 +551,25 @@ void init_originals() {
 
 void init_targets() {
   int commited, targets_qty;
-  size_t i;
+  size_t i, entries;
+  void *value = NULL;
 
   MAM_Get_comm(&new_comm, &targets_qty);
+
+  malleability_get_data(&value, 0, 1, 0);
+  group->grp = *((int *)value);
+  group->grp = group->grp + 1;
+
   recv_config_file(ROOT, new_comm, &config_file);
+  results = malloc(sizeof(results_data));
+  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+  results_comm(results, ROOT, config_file->n_resizes, new_comm);
   MPI_Comm_free(&new_comm);
   
   MAM_Commit(&commited, &comm);
 
   // TODO Refactor - Que sea una unica funcion
   // Obtiene las variables que van a utilizar los hijos
-  void *value = NULL;
-  size_t entries;
-  malleability_get_data(&value, 0, 1, 0);
-  group->grp = *((int *)value);
 
   malleability_get_data(&value, 1, 1, 0);
   run_id = *((int *)value);
@@ -595,12 +600,5 @@ void init_targets() {
     }
     group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
     group->async_data_groups = entries;
-    }
-
-    group->grp = group->grp + 1;
-    results = malloc(sizeof(results_data));
-    init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
-
-    malleability_get_data(&value, 3, 1, 0);
-    results->exec_start = *((double *)value);
+  }
 }

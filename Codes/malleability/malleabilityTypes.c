@@ -185,8 +185,14 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t q
     arrays_aux[i] = NULL;
   }
 
-  //TODO
-  //if(data_struct->qty != qty_aux && data_struct->qty != NULL) free(data_struct->qty);
+  // Check if old array can be freed
+  if(data_struct->qty != qty_aux && data_struct->qty != NULL) free(data_struct->qty);
+  if(data_struct->types != types_aux && data_struct->types != NULL) free(data_struct->types);
+  if(data_struct->request_qty != request_qty_aux && data_struct->request_qty != NULL) free(data_struct->request_qty);
+  if(data_struct->requests != requests_aux && data_struct->requests != NULL) free(data_struct->requests);
+  if(data_struct->windows != windows_aux && data_struct->windows != NULL) free(data_struct->windows);
+  if(data_struct->arrays != arrays_aux && data_struct->arrays != NULL) free(data_struct->arrays);
+
   data_struct->qty = qty_aux;
   data_struct->types = types_aux;
   data_struct->request_qty = request_qty_aux;
@@ -201,10 +207,6 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
 
   max = data_struct->entries;
   if(max != 0) {
-    for(i=0; i<max; i++) {
-      //free(data_struct->arrays[i]); //FIXME Valores alojados con 1 elemento no se liberan? Usar qty? Comprobar si esta alojado por el usuario?
-    }
-
     if(data_struct->qty != NULL) {
       free(data_struct->qty);
     }

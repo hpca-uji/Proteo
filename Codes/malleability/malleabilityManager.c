@@ -47,7 +47,7 @@ malleability_data_t *dist_a_data;
  * la comunicacion los procesos hijo estan preparados para ejecutar la
  * aplicacion.
  */
-int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
+int MAM_Init(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
   MPI_Comm dup_comm, thread_comm;
 
   #if USE_MAL_DEBUG
@@ -123,7 +123,7 @@ int init_malleability(int myId, int numP, int root, MPI_Comm comm, char *name_ex
  * de maleabilidad y asegura que los zombies
  * despierten si los hubiese.
  */
-void free_malleability() {	  
+void MAM_Finalize() {	  
   free_malleability_data_struct(rep_s_data);
   free_malleability_data_struct(rep_a_data);
   free_malleability_data_struct(dist_s_data);
@@ -163,7 +163,7 @@ void free_malleability() {
  * Si solo hay datos sincronos se envian tras la creacion de los procesos
  * y finalmente se desconectan los dos grupos de procesos.
  */
-int malleability_checkpoint(int *mam_state, int wait_completed) {
+int MAM_Checkpoint(int *mam_state, int wait_completed) {
   int is_intercomm;
 
   switch(state) {
@@ -184,7 +184,7 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
       state = spawn_step();
 
       if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
-        malleability_checkpoint(mam_state, wait_completed);
+        MAM_Checkpoint(mam_state, wait_completed);
       }
       break;
 
@@ -197,14 +197,14 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
 	#endif
         mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
 
-        malleability_checkpoint(mam_state, wait_completed);
+        MAM_Checkpoint(mam_state, wait_completed);
       }
       break;
 
     case MALL_SPAWN_ADAPT_POSTPONE:
     case MALL_SPAWN_COMPLETED:
       state = start_redistribution();
-      malleability_checkpoint(mam_state, wait_completed);
+      MAM_Checkpoint(mam_state, wait_completed);
       break;
 
     case MALL_DIST_PENDING:
@@ -214,7 +214,7 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
         state = check_redistribution(wait_completed);
       }
       if(state != MALL_DIST_PENDING) { 
-        malleability_checkpoint(mam_state, wait_completed);
+        MAM_Checkpoint(mam_state, wait_completed);
       }
       break;
 
@@ -232,14 +232,14 @@ int malleability_checkpoint(int *mam_state, int wait_completed) {
           MPI_Barrier(mall->comm);
 	#endif
         mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
-	malleability_checkpoint(mam_state, wait_completed);
+	MAM_Checkpoint(mam_state, wait_completed);
       }
       break;
 
     case MALL_SPAWN_ADAPTED: //FIXME Borrar?
       state = shrink_redistribution();
       if(state == MALL_ZOMBIE) *mam_state = MAM_ZOMBIE; //TODO Esta no hay que borrarla
-      malleability_checkpoint(mam_state, wait_completed);
+      MAM_Checkpoint(mam_state, wait_completed);
       break;
 
     case MALL_DIST_COMPLETED:
@@ -329,11 +329,11 @@ void MAM_Commit(int *mam_state, MPI_Comm *new_comm) {
   #endif
 }
 
-void malleability_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
-  malleability_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
+void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
+  MAM_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
 }
 
-void set_malleability_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
+void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
   if(state > MALL_NOT_STARTED) return;
 
   mall_conf->spawn_method = spawn_method;
@@ -349,10 +349,9 @@ void set_malleability_configuration(int spawn_method, int spawn_strategies, int 
 }
 
 /*
- * To be deprecated
  * Tiene que ser llamado despues de setear la config
  */
-void set_children_number(int numC){
+void MAM_Set_target_number(int numC){
   if(state > MALL_NOT_STARTED) return;
 
   if((mall_conf->spawn_method == MALL_SPAWN_MERGE) && (numC >= mall->numP)) {
@@ -874,7 +873,6 @@ int shrink_redistribution() {
     #endif
     double time_extra = MPI_Wtime();
 
-    //TODO Create Commit function. Processes can perform tasks before that. Then call again Malleability to commit the change
     MPI_Abort(MPI_COMM_WORLD, -20); //                                                         
     zombies_collect_suspended(mall->user_comm, mall->myId, mall->numP, mall->numC, mall->root);
     

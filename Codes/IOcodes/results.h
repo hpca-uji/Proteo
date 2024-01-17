@@ -22,6 +22,8 @@ typedef struct {
   double wasted_time; // Time spent recalculating iter stages
 } results_data;
 
+void results_comm(results_data *results, int root, size_t resizes, MPI_Comm intercomm);
+
 void reset_results_index(results_data *results);
 void compute_results_iter(results_data *results, int myId, int numP, int root, size_t n_stages, int capture_method, MPI_Comm comm);
 
