@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = MAM_Init(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
+    im_child = MAM_Init(ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
@@ -82,8 +82,6 @@ int main(int argc, char *argv[]) {
     // EMPIEZA LA EJECUCION-------------------------------
     //
     do {
-      MPI_Comm_size(comm, &(group->numP));
-      MPI_Comm_rank(comm, &(group->myId));
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
@@ -107,15 +105,11 @@ int main(int argc, char *argv[]) {
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
+        print_local_results();
       }
 
-      print_local_results();
       reset_results_index(results);
 
-      if(res!=1) {
-        if(comm != MPI_COMM_WORLD) MPI_Comm_free(&comm);
-        comm = new_comm;
-      }
       group->grp = group->grp + 1;
     } while(config_file->n_groups > group->grp && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE);
 
@@ -154,7 +148,7 @@ int main(int argc, char *argv[]) {
  * de procesos. En caso contrario se devuelve 0.
  */
 int work() {
-  int iter, maxiter, state, res, commited, targets_qty;
+  int iter, maxiter, state, res, commited;
   int wait_completed = MAM_CHECK_COMPLETION;
 
   maxiter = config_file->groups[group->grp].iters;
@@ -182,11 +176,13 @@ int work() {
   compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(config_file->n_groups == group->grp + 1) { res=1; }
   else {
-    MAM_Get_comm(&new_comm, &targets_qty);
+    MAM_Get_comm(&new_comm);
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
-    MPI_Comm_free(&new_comm);
-    MAM_Commit(&commited, &new_comm); 
+    print_local_results();
+    MAM_Commit(&commited, &comm); 
+    MPI_Comm_size(comm, &(group->numP));
+    MPI_Comm_rank(comm, &(group->myId));
   }
   if(state == MAM_ZOMBIE) res=state;
   return res;
@@ -220,7 +216,7 @@ double iterate(int async_comm) {
 
   // Se esta realizando una redistribucion de datos asincrona
   if(async_comm == MAM_PENDING) { 
-  // TODO Que diferencie entre ambas en el IO
+    // TODO Que diferencie entre ambas en el IO
     results->iters_async += 1;
   }
 
@@ -315,7 +311,6 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
-  //compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -550,11 +545,11 @@ void init_originals() {
 }
 
 void init_targets() {
-  int commited, targets_qty;
+  int commited;
   size_t i, entries;
   void *value = NULL;
 
-  MAM_Get_comm(&new_comm, &targets_qty);
+  MAM_Get_comm(&new_comm);
 
   malleability_get_data(&value, 0, 1, 0);
   group->grp = *((int *)value);
@@ -564,9 +559,10 @@ void init_targets() {
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
-  MPI_Comm_free(&new_comm);
-  
   MAM_Commit(&commited, &comm);
+
+  MPI_Comm_size(comm, &(group->numP));
+  MPI_Comm_rank(comm, &(group->myId));
 
   // TODO Refactor - Que sea una unica funcion
   // Obtiene las variables que van a utilizar los hijos

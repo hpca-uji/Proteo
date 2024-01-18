@@ -47,7 +47,7 @@ malleability_data_t *dist_a_data;
  * la comunicacion los procesos hijo estan preparados para ejecutar la
  * aplicacion.
  */
-int MAM_Init(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
+int MAM_Init(int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes) {
   MPI_Comm dup_comm, thread_comm;
 
   #if USE_MAL_DEBUG
@@ -67,8 +67,8 @@ int MAM_Init(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char 
   MPI_Comm_set_name(dup_comm, "MPI_COMM_MAM");
   MPI_Comm_set_name(thread_comm, "MPI_COMM_MAM_THREAD");
 
-  mall->myId = myId;
-  mall->numP = numP;
+  MPI_Comm_rank(comm, &(mall->myId));
+  MPI_Comm_size(comm, &(mall->numP));
   mall->root = root;
   mall->root_parents = -1;
   mall->comm = dup_comm;
@@ -136,8 +136,8 @@ void MAM_Finalize() {
 
   MAM_Free_main_datatype();
   free_malleability_times();
-  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
+  if(mall->comm != MPI_COMM_WORLD && mall->comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->comm));
+  if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->thread_comm));
   free(mall);
   free(mall_conf);
 
@@ -265,31 +265,26 @@ int MAM_Checkpoint(int *mam_state, int wait_completed) {
 
 /*
  * Returns an intracommunicator to allow users to perform their
- * own redistributions. The user must free this communicator
- * when is not longer needed.
+ * own redistributions. The user may free this communicator
+ * when is not longer needed. It will be freed by MaM when
+ * commiting the reconfiguration.
  *
- * This is a blocking function, must be called by all processes involved in the
- * reconfiguration.
- * TODO Hacer en otro sitio la creacion del comunicador y borrar en commit.
  *
  * The communicator is only returned if the state of reconfiguration
  * is completed (MALL_COMPLETED / MAM_COMPLETED). Otherwise MALL_DENIED is obtained.
  */
-int MAM_Get_comm(MPI_Comm *comm, int *targets_qty) {
+int MAM_Get_comm(MPI_Comm *comm) {
   if(!(state == MALL_COMPLETED || state == MALL_ZOMBIE)) {
     return MALL_DENIED;
   }
-
-  MPI_Comm_dup(mall->user_comm, comm);
-  MPI_Comm_set_name(*comm, "MPI_MAM_DUP");
-  *targets_qty = mall->numC;
+  *comm = mall->user_comm;
   return 0;
 }
 
 /*
  * TODO
  */
-void MAM_Commit(int *mam_state, MPI_Comm *new_comm) {
+void MAM_Commit(int *mam_state, MPI_Comm *updated_comm) {
   if(!(state == MALL_COMPLETED || state == MALL_ZOMBIE)) {
     *mam_state = MALL_DENIED;
     return;
@@ -307,11 +302,23 @@ void MAM_Commit(int *mam_state, MPI_Comm *new_comm) {
       zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root);
     }
   }
+
   // Reset/Free unneded communicators
-  if(mall->user_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->user_comm));
+  if(*updated_comm != MPI_COMM_WORLD && *updated_comm != MPI_COMM_NULL) MPI_Comm_free(updated_comm);
+  if(mall->user_comm != MPI_COMM_WORLD && mall->user_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->user_comm));
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { 
     MPI_Comm_disconnect(&(mall->intercomm)); //FIXME Error en OpenMPI + Merge
+  }
+
+  // Zombies KILL
+  if(state == MALL_ZOMBIE) {
+    MAM_Finalize();
+    MPI_Finalize(); 
+    #if USE_MAL_DEBUG
+      DEBUG_FUNC("Is terminating as zombie", mall->myId, mall->numP); fflush(stdout);
+    #endif
+    exit(0);
   }
 
   MPI_Comm_rank(mall->comm, &(mall->myId));
@@ -322,8 +329,8 @@ void MAM_Commit(int *mam_state, MPI_Comm *new_comm) {
   *mam_state = MAM_COMMITED;
 
   // Set new communicator
-  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *new_comm = MPI_COMM_WORLD; }
-  else if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, new_comm); }
+  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *updated_comm = MPI_COMM_WORLD; }
+  else if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, updated_comm); }
   #if USE_MAL_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif

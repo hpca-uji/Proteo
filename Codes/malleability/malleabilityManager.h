@@ -9,11 +9,11 @@
 #include <mpi.h>
 #include "malleabilityStates.h"
 
-int MAM_Init(int myId, int numP, int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes);
+int MAM_Init(int root, MPI_Comm comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes);
 void MAM_Finalize();
 int MAM_Checkpoint(int *mam_state, int wait_completed);
-int MAM_Get_comm(MPI_Comm *comm, int *targets_qty);
-void MAM_Commit(int *mam_state, MPI_Comm *new_comm);
+int MAM_Get_comm(MPI_Comm *comm);
+void MAM_Commit(int *mam_state, MPI_Comm *updated_comm);
 
 void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies);
 void MAM_Set_target_number(int numC); // TODO TO BE DEPRECATED
