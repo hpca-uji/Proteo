@@ -179,6 +179,12 @@ int malleability_spawn_contains_strat(int spawn_strategies, int strategy, int *r
   return value;
 }
 
+int malleability_spawn_add_strat(int *spawn_strategies, int strategy) {
+  if(malleability_spawn_contains_strat(*spawn_strategies, strategy, NULL)) return 1;
+  *spawn_strategies = *spawn_strategies * strategy;
+  return 1;
+}
+
 //--------------PRIVATE CONFIGURATION FUNCTIONS---------------//
 /*
  * Agrupa en una sola estructura todos los datos de configuración necesarios

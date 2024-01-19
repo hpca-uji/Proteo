@@ -32,6 +32,7 @@ int create_out_file(char *nombre, int *ptr, int newstdout);
 
 void init_originals();
 void init_targets();
+void user_redistribution(void *args);
 
 configuration *config_file;
 group_data *group;
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = MAM_Init(ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
+    im_child = MAM_Init(ROOT, &comm, argv[0], nodelist, num_cpus, num_nodes, user_redistribution, NULL);
 
     if(!im_child) { //TODO REFACTOR Simplificar inicio
       init_application();
@@ -74,14 +75,14 @@ int main(int argc, char *argv[]) {
 
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
-    } else { //Init targets
-      init_targets();
     }
 
     //
     // EMPIEZA LA EJECUCION-------------------------------
     //
     do {
+      MPI_Comm_size(comm, &(group->numP));
+      MPI_Comm_rank(comm, &(group->myId));
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
@@ -101,21 +102,21 @@ int main(int argc, char *argv[]) {
 
       res = work();
 
-      if(res == MAM_ZOMBIE) break;
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
         print_local_results();
       }
+      
 
       reset_results_index(results);
 
       group->grp = group->grp + 1;
-    } while(config_file->n_groups > group->grp && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE);
+    } while(config_file->n_groups > group->grp);
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
-    //
+    // 
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
     MPI_Barrier(comm);
@@ -148,7 +149,7 @@ int main(int argc, char *argv[]) {
  * de procesos. En caso contrario se devuelve 0.
  */
 int work() {
-  int iter, maxiter, state, res, commited;
+  int iter, maxiter, state, res;
   int wait_completed = MAM_CHECK_COMPLETION;
 
   maxiter = config_file->groups[group->grp].iters;
@@ -160,30 +161,19 @@ int work() {
   }
 
   if(config_file->n_groups != group->grp + 1)
-    MAM_Checkpoint(&state, wait_completed);
+    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
 
   iter = 0;
-  while(state == MAM_PENDING) {
+  while(state == MAM_PENDING || state == MAM_USER_PENDING) {
     if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;
     } else { wait_completed = MAM_WAIT_COMPLETION; }
-    MAM_Checkpoint(&state, wait_completed);
+    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
   }
 
-  // This function causes an overhead in the recorded time for last group
-  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(config_file->n_groups == group->grp + 1) { res=1; }
-  else {
-    MAM_Get_comm(&new_comm);
-    send_config_file(config_file, ROOT, new_comm);
-    results_comm(results, ROOT, config_file->n_resizes, new_comm);
-    print_local_results();
-    MAM_Commit(&commited, &comm); 
-    MPI_Comm_size(comm, &(group->numP));
-    MPI_Comm_rank(comm, &(group->myId));
-  }
   if(state == MAM_ZOMBIE) res=state;
   return res;
 }
@@ -311,6 +301,8 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
+  // This function causes an overhead in the recorded time for last group
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -545,11 +537,8 @@ void init_originals() {
 }
 
 void init_targets() {
-  int commited;
   size_t i, entries;
   void *value = NULL;
-
-  MAM_Get_comm(&new_comm);
 
   malleability_get_data(&value, 0, 1, 0);
   group->grp = *((int *)value);
@@ -559,10 +548,6 @@ void init_targets() {
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
-  MAM_Commit(&commited, &comm);
-
-  MPI_Comm_size(comm, &(group->numP));
-  MPI_Comm_rank(comm, &(group->myId));
 
   // TODO Refactor - Que sea una unica funcion
   // Obtiene las variables que van a utilizar los hijos
@@ -597,4 +582,23 @@ void init_targets() {
     group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
     group->async_data_groups = entries;
   }
+}
+
+void user_redistribution(void *args) {
+  int commited;
+  mam_user_reconf_t user_reconf;
+
+
+  MAM_Get_Reconf_Info(&user_reconf);
+  new_comm = user_reconf.comm;
+  if(user_reconf.rank_state == 1) { //FIXME Crear MAM_NEW_RANK?
+    init_targets();
+  } else {
+    send_config_file(config_file, ROOT, new_comm);
+    results_comm(results, ROOT, config_file->n_resizes, new_comm);
+
+    print_local_results();
+  }
+
+  MAM_Commit(&commited); 
 }
