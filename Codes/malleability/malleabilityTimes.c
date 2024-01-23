@@ -31,7 +31,7 @@ void reset_malleability_times() {
 
 void free_malleability_times() {
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Freeing recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+    DEBUG_FUNC("Freeing recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
   if(mall_conf->times != NULL) {
     if(mall_conf->times->times_type != MPI_DATATYPE_NULL) {
@@ -41,7 +41,7 @@ void free_malleability_times() {
     free(mall_conf->times);
   }
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Freed recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+    DEBUG_FUNC("Freed recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
 }
 

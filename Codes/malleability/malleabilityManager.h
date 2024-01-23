@@ -18,7 +18,8 @@ typedef struct {
 int MAM_Init(int root, MPI_Comm *comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes, void (*user_function)(void *), void *user_args);
 void MAM_Finalize();
 int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args);
-void MAM_Commit(int *mam_state);
+void MAM_Resume_redistribution(int *mam_state);
+
 
 int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info);
 void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies);

@@ -8,8 +8,9 @@
 #include <unistd.h>
 #include <mpi.h>
 #include <signal.h>
+#include "malleabilityDataStructures.h"
 
-void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root);
+void zombies_collect_suspended(MPI_Comm comm);
 void zombies_service_init();
 void zombies_service_free();
 void zombies_awake();

@@ -23,6 +23,7 @@ void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
 void obtain_op_times();
 void free_application_data();
+void free_zombie_process();
 
 void print_general_info(int myId, int grp, int numP);
 int print_local_results();
@@ -32,6 +33,7 @@ int create_out_file(char *nombre, int *ptr, int newstdout);
 
 void init_originals();
 void init_targets();
+void update_targets();
 void user_redistribution(void *args);
 
 configuration *config_file;
@@ -44,6 +46,7 @@ int main(int argc, char *argv[]) {
     int numP, myId, res;
     int req;
     int im_child;
+    int abort_needed = 0;
 
     int num_cpus, num_nodes;
     char *nodelist = NULL;
@@ -69,7 +72,9 @@ int main(int argc, char *argv[]) {
     init_group_struct(argv, argc, myId, numP);
     im_child = MAM_Init(ROOT, &comm, argv[0], nodelist, num_cpus, num_nodes, user_redistribution, NULL);
 
-    if(!im_child) { //TODO REFACTOR Simplificar inicio
+    if(im_child) {
+      update_targets();
+    } else {
       init_application();
       init_originals();
 
@@ -95,8 +100,8 @@ int main(int argc, char *argv[]) {
         MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
-          malleability_modify_data(&(group->grp), 0, 1, MPI_INT, 1, 0);
-          malleability_modify_data(&(group->iter_start), 2, 1, MPI_INT, 1, 0);
+          malleability_modify_data(&(group->grp), 0, 1, MPI_INT, 1, 1);
+          malleability_modify_data(&(group->iter_start), 0, 1, MPI_INT, 1, 0);
         }
       }
 
@@ -124,11 +129,12 @@ int main(int argc, char *argv[]) {
       MPI_Comm_free(&comm);
     }
 
-    if(group->myId == ROOT && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE) {
-      MPI_Abort(MPI_COMM_WORLD, -100);
+    if(group->myId == ROOT && config_file->groups[group->grp-1].sm == MALL_SPAWN_MERGE) {
+      abort_needed = 1;
     }
     free_application_data();
 
+    if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
     MPI_Finalize();
     return 0;
 }
@@ -154,8 +160,8 @@ int work() {
 
   maxiter = config_file->groups[group->grp].iters;
   state = MAM_NOT_STARTED;
-
   res = 0;
+
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(state);
   }
@@ -174,7 +180,6 @@ int work() {
   }
 
   if(config_file->n_groups == group->grp + 1) { res=1; }
-  if(state == MAM_ZOMBIE) res=state;
   return res;
 }
 
@@ -206,7 +211,7 @@ double iterate(int async_comm) {
 
   // Se esta realizando una redistribucion de datos asincrona
   if(async_comm == MAM_PENDING) { 
-    // TODO Que diferencie entre ambas en el IO
+    // TODO Que diferencie entre tipo de partes asincronas?
     results->iters_async += 1;
   }
 
@@ -470,7 +475,14 @@ void free_application_data() {
     group->async_array = NULL;
   }
   MAM_Finalize();
+  free_zombie_process();
+}
 
+
+/*
+ * Libera la memoria asociada a un proceso Zombie
+ */
+void free_zombie_process() {
   free_results_data(results, config_file->n_stages);
   free(results);
 
@@ -519,8 +531,8 @@ void init_originals() {
       config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
     MAM_Set_target_number(config_file->groups[group->grp+1].procs);
 
-    malleability_add_data(&(group->grp), 1, MPI_INT, 1, 0);
-    malleability_add_data(&run_id, 1, MPI_INT, 1, 0);
+    malleability_add_data(&(group->grp), 1, MPI_INT, 1, 1);
+    malleability_add_data(&run_id, 1, MPI_INT, 1, 1);
     malleability_add_data(&(group->iter_start), 1, MPI_INT, 1, 0);
 
     if(config_file->sdr) {
@@ -540,7 +552,7 @@ void init_targets() {
   size_t i, entries;
   void *value = NULL;
 
-  malleability_get_data(&value, 0, 1, 0);
+  malleability_get_data(&value, 0, 1, 1);
   group->grp = *((int *)value);
   group->grp = group->grp + 1;
 
@@ -549,27 +561,9 @@ void init_targets() {
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
-  // TODO Refactor - Que sea una unica funcion
-  // Obtiene las variables que van a utilizar los hijos
-
-  malleability_get_data(&value, 1, 1, 0);
+  malleability_get_data(&value, 1, 1, 1);
   run_id = *((int *)value);
       
-  malleability_get_data(&value, 2, 1, 0);
-  group->iter_start = *((int *)value);
-
-  if(config_file->sdr) {
-    malleability_get_entries(&entries, 0, 0);
-    group->sync_qty = (int *) malloc(entries * sizeof(int));
-    group->sync_array = (char **) malloc(entries * sizeof(char *));
-    for(i=0; i<entries; i++) {
-      malleability_get_data(&value, i, 0, 0);
-      group->sync_array[i] = (char *)value;
-      group->sync_qty[i] = DR_MAX_SIZE;
-    }
-    group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
-    group->sync_data_groups = entries;
-  }
   if(config_file->adr) {
     malleability_get_entries(&entries, 0, 1);
     group->async_qty = (int *) malloc(entries * sizeof(int));
@@ -584,21 +578,44 @@ void init_targets() {
   }
 }
 
+void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
+  size_t i, entries;
+  void *value = NULL;
+
+  malleability_get_data(&value, 0, 1, 0);
+  group->iter_start = *((int *)value);
+
+  if(config_file->sdr) {
+    malleability_get_entries(&entries, 0, 0);
+    group->sync_qty = (int *) malloc(entries * sizeof(int));
+    group->sync_array = (char **) malloc(entries * sizeof(char *));
+    for(i=0; i<entries; i++) {
+      malleability_get_data(&value, i, 0, 0);
+      group->sync_array[i] = (char *)value;
+      group->sync_qty[i] = DR_MAX_SIZE;
+    }
+    group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->sync_data_groups = entries;
+  }
+}
+
 void user_redistribution(void *args) {
   int commited;
   mam_user_reconf_t user_reconf;
 
-
   MAM_Get_Reconf_Info(&user_reconf);
   new_comm = user_reconf.comm;
-  if(user_reconf.rank_state == 1) { //FIXME Crear MAM_NEW_RANK?
+  if(user_reconf.rank_state == MAM_PROC_NEW_RANK) {
     init_targets();
   } else {
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
     print_local_results();
+    if(user_reconf.rank_state == MAM_PROC_ZOMBIE) {
+      free_zombie_process();
+    }
   }
 
-  MAM_Commit(&commited); 
+  MAM_Resume_redistribution(&commited);
 }

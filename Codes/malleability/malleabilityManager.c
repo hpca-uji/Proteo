@@ -12,9 +12,23 @@
 #define MALLEABILITY_USE_SYNCHRONOUS 0
 #define MALLEABILITY_USE_ASYNCHRONOUS 1
 
+void MAM_Commit(int *mam_state, int is_children_group);
 
 void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous);
 void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous);
+
+
+int MAM_St_not_started(int *mam_state);
+int MAM_St_spawn_pending(int wait_completed);
+int MAM_St_red_start();
+int MAM_St_red_pending(int *mam_state, int wait_completed);
+int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args);
+int MAM_St_user_completed();
+int MAM_St_spawn_adapt_pending(int wait_completed);
+int MAM_St_spawn_adapted(int *mam_state);
+int MAM_St_red_completed(int *mam_state);
+int MAM_St_completed(int *mam_state);
+
 
 void Children_init(void (*user_function)(void *), void *user_args);
 int spawn_step();
@@ -31,7 +45,7 @@ void print_comms_state();
 void malleability_comms_update(MPI_Comm comm);
 
 int MAM_I_convert_key(char *key);
-void MAM_I_create_user_struct(int mam_state, int is_children_group);
+void MAM_I_create_user_struct(int is_children_group);
 
 int state = MALL_UNRESERVED; //FIXME Mover a otro lado
 
@@ -147,6 +161,7 @@ void MAM_Finalize() {
   free_malleability_times();
   if(mall->comm != MPI_COMM_WORLD && mall->comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->comm));
   if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->thread_comm));
+  if(mall->intercomm != MPI_COMM_WORLD && mall->intercomm != MPI_COMM_NULL) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
   free(mall);
   free(mall_conf);
   free(user_reconf);
@@ -169,173 +184,108 @@ void MAM_Finalize() {
  *
  */
 int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
-  int is_intercomm;
+  int call_checkpoint = 0;
 
   switch(state) {
     case MALL_UNRESERVED:
       *mam_state = MAM_UNRESERVED;
       break;
     case MALL_NOT_STARTED:
-      *mam_state = MAM_NOT_STARTED;
-      reset_malleability_times();
-      // Comprobar si se tiene que realizar un redimensionado
-      
-      #if USE_MAL_BARRIERS
-        MPI_Barrier(mall->comm);
-      #endif
-      mall_conf->times->malleability_start = MPI_Wtime();
-      //if(CHECK_RMS()) {return MALL_DENIED;}
-
-      state = spawn_step();
-
-      if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
-        MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      }
+      call_checkpoint = MAM_St_not_started(mam_state);
       break;
 
-    case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado y comienza la redistribucion
+    case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado
     case MALL_SPAWN_SINGLE_PENDING:
-      state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
-      if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
-        #if USE_MAL_BARRIERS
-  	  MPI_Barrier(mall->comm);
-	#endif
-        mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
-
-        MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      }
+      call_checkpoint = MAM_St_spawn_pending(wait_completed);
       break;
 
     case MALL_SPAWN_ADAPT_POSTPONE:
     case MALL_SPAWN_COMPLETED:
-      state = start_redistribution();
-      MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
+      call_checkpoint = MAM_St_red_start();
       break;
 
     case MALL_DIST_PENDING:
-      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
-        state = thread_check(wait_completed);
-      } else {
-        state = check_redistribution(wait_completed);
-      }
-      if(state != MALL_DIST_PENDING) { 
-        MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      }
-      break;
-
-    case MALL_SPAWN_ADAPT_PENDING:
-
-      #if USE_MAL_BARRIERS
-        MPI_Barrier(mall->comm);
-      #endif
-      mall_conf->times->spawn_start = MPI_Wtime();
-      unset_spawn_postpone_flag(state);
-      state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
-
-      if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
-        #if USE_MAL_BARRIERS
-          MPI_Barrier(mall->comm);
-	#endif
-        mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
-        MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      }
-      break;
-
-    case MALL_SPAWN_ADAPTED: //FIXME Borrar?
-      state = shrink_redistribution();
-      if(state == MALL_ZOMBIE) *mam_state = MAM_ZOMBIE; //TODO Esta no hay que borrarla
-      MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      break;
-
-    case MALL_DIST_COMPLETED:
-      MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
-      if(is_intercomm) {
-        MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
-      } else {
-        MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
-      }
-      MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-      state = MALL_USER_PENDING;
-      *mam_state = MAM_USER_PENDING;
-      if(mall_conf->spawn_method == MALL_SPAWN_BASELINE){ mall->zombie = 1; }
-      #if USE_MAL_BARRIERS
-        MPI_Barrier(mall->comm);
-      #endif
-      mall_conf->times->malleability_end = MPI_Wtime();
-      MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
+      call_checkpoint = MAM_St_red_pending(mam_state, wait_completed);
       break;
 
     case MALL_USER_PENDING:
-      #if USE_MAL_DEBUG
-        if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
-      #endif
-      if(user_function != NULL) {
-        MAM_I_create_user_struct(*mam_state, MALLEABILITY_NOT_CHILDREN);
-        user_function(user_args);
-      } else {
-        state = MALL_COMPLETED; //FIXME Deberia ser hacer sync redist
-        *mam_state = MAM_COMPLETED; //FIXME Deberia ser hacer sync redist
-      }
-      if(state != MALL_USER_PENDING && state != MALL_NOT_STARTED) { // TODO Quitar la segunda parte cuando USER este antes de redist sinc
-        MAM_Checkpoint(mam_state, wait_completed, user_function, user_args);
-      }
-      if(state == MALL_NOT_STARTED) { //FIXME Muy feo, borrar
-        *mam_state = MAM_COMMITED;
-      }
+      call_checkpoint = MAM_St_user_pending(mam_state, wait_completed, user_function, user_args);
       break;
 
-    case MALL_COMPLETED:
-      MAM_Commit(mam_state);
+    case MALL_USER_COMPLETED:
+      call_checkpoint = MAM_St_user_completed();
+      break;
+
+    case MALL_SPAWN_ADAPT_PENDING:
+      call_checkpoint = MAM_St_spawn_adapt_pending(wait_completed);
+      break;
+
+    case MALL_SPAWN_ADAPTED:
+    case MALL_DIST_COMPLETED:
+      call_checkpoint = MAM_St_completed(mam_state);
       break;
   }
 
-  if(state > MALL_ZOMBIE && state < MALL_COMPLETED) *mam_state = MAM_PENDING;
+  if(call_checkpoint) { MAM_Checkpoint(mam_state, wait_completed, user_function, user_args); }
+  if(state > MALL_NOT_STARTED && state < MALL_COMPLETED) *mam_state = MAM_PENDING;
   return state;
 }
 
 /*
  * TODO
  */
-void MAM_Commit(int *mam_state) {
-  if(!(state == MALL_COMPLETED || state == MALL_ZOMBIE || state == MALL_USER_PENDING)) { //FIXME El ultimo habria que borrarlo
-    *mam_state = MALL_DENIED;
-    return;
-  }
+void MAM_Resume_redistribution(int *mam_state) {
+  state = MALL_USER_COMPLETED;
+  *mam_state = MAM_PENDING;
+}
+
+/*
+ * TODO
+ */
+void MAM_Commit(int *mam_state, int rootBcast) {
+  int zombies = 0;
   #if USE_MAL_DEBUG
-    if(mall->myId == mall->root){ DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); } fflush(stdout); MPI_Barrier(mall->intercomm);
+    if(mall->myId == mall->root){ DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); } fflush(stdout);
   #endif
+
+  // Get times before commiting
+  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) {
+    // This communication is only needed when a root process will become a zombie
+    malleability_times_broadcast(rootBcast);
+  }
+
+  // Free unneded communicators
+  if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->tmp_comm));
+  if(*(mall->user_comm) != MPI_COMM_WORLD && *(mall->user_comm) != MPI_COMM_NULL) MPI_Comm_free(mall->user_comm);
 
   // Zombies treatment
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
-    int zombies;
-    MPI_Allreduce(&state, &zombies, 1, MPI_INT, MPI_MIN, mall->intercomm);
-    if(zombies == MALL_ZOMBIE) {
-      zombies_collect_suspended(mall->comm, mall->myId, mall->numP, mall->numC, mall->root);
+    MPI_Allreduce(&mall->zombie, &zombies, 1, MPI_INT, MPI_MAX, mall->comm);
+    if(zombies) {
+      zombies_collect_suspended(mall->comm);
     }
   }
 
-  // Reset/Free unneded communicators
-  if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->tmp_comm));
-  if(*(mall->user_comm) != MPI_COMM_WORLD && *(mall->user_comm) != MPI_COMM_NULL) MPI_Comm_free(mall->user_comm);
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
-  if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
-
   // Zombies KILL
-  if(state == MALL_ZOMBIE || mall->zombie) {
+  if(mall->zombie) {
     #if USE_MAL_DEBUG >= 2
       DEBUG_FUNC("Is terminating as zombie", mall->myId, mall->numP); fflush(stdout);
     #endif
     MAM_Finalize();
-    MPI_Finalize(); 
+    MPI_Finalize();
     exit(0);
   }
+
+  // Reset/Free communicators
+  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
+  if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
 
   MPI_Comm_rank(mall->comm, &(mall->myId));
   MPI_Comm_size(mall->comm, &(mall->numP));
   mall->root = mall->root_parents == -1 ? mall->root : mall->root_parents;
   mall->root_parents = -1;
   state = MALL_NOT_STARTED;
-  if(mam_state != NULL) *mam_state = MAM_COMMITED;
+  if(mam_state != NULL) *mam_state = MAM_COMPLETED;
 
   // Set new communicator
   if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
@@ -343,6 +293,11 @@ void MAM_Commit(int *mam_state) {
   #if USE_MAL_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
   #endif
+
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->malleability_end = MPI_Wtime();
 }
 
 int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
@@ -437,10 +392,10 @@ void MAM_Set_target_number(int numC){
 void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
   size_t total_reqs = 0;
 
-  if(is_constant) {
+  if(is_constant) { //Async
     if(is_replicated) {
       total_reqs = 1;
-      add_data(data, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
+      add_data(data, total_qty, type, total_reqs, rep_a_data);
     } else {
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
@@ -453,7 +408,7 @@ void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int 
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
     }
-  } else {
+  } else { //Sync
     if(is_replicated) {
       add_data(data, total_qty, type, total_reqs, rep_s_data);
     } else {
@@ -605,6 +560,131 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   }
 }
 
+
+//======================================================||
+//================PRIVATE FUNCTIONS=====================||
+//====================MAM STAGES========================||
+//======================================================||
+//======================================================||
+
+int MAM_St_not_started(int *mam_state) {
+  *mam_state = MAM_NOT_STARTED;
+  reset_malleability_times();
+  // Comprobar si se tiene que realizar un redimensionado
+      
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->malleability_start = MPI_Wtime();
+  //if(CHECK_RMS()) {return MALL_DENIED;}
+
+  state = spawn_step();
+  //FIXME Esto es necesario pero feo
+  if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId >= mall->numC){ mall->zombie = 1; }
+  else if(mall_conf->spawn_method == MALL_SPAWN_BASELINE){ mall->zombie = 1; }
+
+  if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
+    return 1;
+  }
+  return 0;
+}
+
+int MAM_St_spawn_pending(int wait_completed) {
+  state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
+  if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
+    #if USE_MAL_BARRIERS
+      MPI_Barrier(mall->comm);
+    #endif
+    mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
+    return 1;
+  }
+  return 0;
+}
+
+int MAM_St_red_start() {
+  state = start_redistribution();
+  return 1;
+}
+
+int MAM_St_red_pending(int *mam_state, int wait_completed) {
+  if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
+    state = thread_check(wait_completed);
+  } else {
+    state = check_redistribution(wait_completed);
+  }
+
+  if(state != MALL_DIST_PENDING) { 
+    if(mall->is_intercomm) {
+      MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
+    } else {
+      MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
+    }
+    MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
+    state = MALL_USER_PENDING;
+    *mam_state = MAM_USER_PENDING;
+    return 1;
+  }
+  return 0;
+}
+
+int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
+  #if USE_MAL_DEBUG
+    if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
+  #endif
+  if(user_function != NULL) {
+    MAM_I_create_user_struct(MALLEABILITY_NOT_CHILDREN);
+    do {
+      user_function(user_args);
+    } while(wait_completed && state == MALL_USER_PENDING);
+  } else {
+    MAM_Resume_redistribution(mam_state);
+  }
+
+  if(state != MALL_USER_PENDING) {
+    #if USE_MAL_DEBUG
+      if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
+    #endif
+    return 1;
+  }
+  return 0;
+}
+
+int MAM_St_user_completed() {
+  state = end_redistribution();
+  return 1;
+}
+
+int MAM_St_spawn_adapt_pending(int wait_completed) {
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->spawn_start = MPI_Wtime();
+  unset_spawn_postpone_flag(state);
+  state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
+
+  if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
+    #if USE_MAL_BARRIERS
+      MPI_Barrier(mall->comm);
+    #endif
+    mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
+    return 1;
+  }
+  return 0;
+}
+
+int MAM_St_completed(int *mam_state) {
+  int rootBcast;
+
+  if(mall->is_intercomm) {
+    rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
+  } else {
+    rootBcast = mall->root;
+  }
+  MAM_Commit(mam_state, rootBcast);
+  return 0;
+}
+
+
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
 //=====================CHILDREN=========================||
@@ -618,27 +698,26 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
  */
 void Children_init(void (*user_function)(void *), void *user_args) {
   size_t i;
-  int numP_parents, root_parents;
-  int is_intercomm;
+  int numP_parents;
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("MaM will now initialize children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &root_parents, &(mall->intercomm));
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
-  if(!is_intercomm) { // For intracommunicators, these processes will be added
+  malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &mall->root_parents, &(mall->intercomm));
+  MPI_Comm_test_inter(mall->intercomm, &mall->is_intercomm);
+  if(!mall->is_intercomm) { // For intracommunicators, these processes will be added
     MPI_Comm_rank(mall->intercomm, &(mall->myId));
     MPI_Comm_size(mall->intercomm, &(mall->numP));
   }
 
-  MAM_Comm_main_structures(root_parents);
+  MAM_Comm_main_structures(mall->root_parents);
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("Targets have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
+  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN, mall->myId, mall->root_parents, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     #if USE_MAL_DEBUG >= 2
       DEBUG_FUNC("Children start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -649,17 +728,24 @@ void Children_init(void (*user_function)(void *), void *user_args) {
 
     if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+      for(i=0; i<rep_a_data->entries; i++) {
+        MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_parents, mall->intercomm);
+      } 
     } else {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
 
-      //for(i=0; i<rep_a_data->entries; i++) {
-      //  MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], root_parents, mall->intercomm, &(rep_a_data));
-      //} 
+      for(i=0; i<rep_a_data->entries; i++) {
+        MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_parents, mall->intercomm, &(rep_a_data->requests[i][0]));
+      } 
       #if USE_MAL_DEBUG >= 2
         DEBUG_FUNC("Targets started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
 
       int post_ibarrier = 0; 
+      // FIXME No permite el uso de ibarrier ahora mismo. Realmente solo hace falta un ibarrier para todos
+      for(i=0; i<rep_a_data->entries; i++) {
+        async_communication_wait(mall->intercomm, rep_a_data->requests[i], rep_a_data->request_qty[i], post_ibarrier);
+      }
       if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { post_ibarrier=1; }
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_wait(mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i], post_ibarrier);
@@ -669,6 +755,9 @@ void Children_init(void (*user_function)(void *), void *user_args) {
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_end(mall_conf->red_method, mall_conf->red_strategies, dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
+      }
+      for(i=0; i<rep_a_data->entries; i++) {
+        async_communication_end(mall_conf->red_method, mall_conf->red_strategies, rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]));
       }
     }
 
@@ -681,16 +770,28 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     DEBUG_FUNC("Targets have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, root_parents, mall->intercomm);
+  if(mall->is_intercomm) {
+    MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
+  } else {
+    MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
+  }
+  MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
+  mall->numC = numP_parents;
+  if(user_function != NULL) {
+    state = MALL_USER_PENDING;
+    MAM_I_create_user_struct(MALLEABILITY_CHILDREN);
+    user_function(user_args);
+  }
+
+  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN, mall->myId, mall->root_parents, mall->intercomm);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
-    // TODO Crear funcion especifica y anyadir para Asinc
     for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], root_parents, mall->intercomm);
+      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_parents, mall->intercomm);
     } 
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
@@ -701,32 +802,10 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     DEBUG_FUNC("Targets have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  // Guardar los resultados de esta transmision
-  malleability_times_broadcast(mall->root);
-
-  #if USE_MAL_BARRIERS
-    MPI_Barrier(mall->comm);
-  #endif
-  mall_conf->times->malleability_end = MPI_Wtime(); // Obtener timestamp de cuando termina maleabilidad
-  state = MALL_COMPLETED;
-
-  if(is_intercomm) {
-    MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
-  } else {
-    MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
-  }
-  MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-  mall->numC = numP_parents;
-  if(user_function != NULL) {
-    state = MALL_USER_PENDING;
-    MAM_I_create_user_struct(MAM_COMPLETED, MALLEABILITY_CHILDREN);
-    user_function(user_args);
-  } else {
-    MAM_Commit(NULL);
-  }
+  MAM_Commit(NULL, mall->root_parents);
 
   #if USE_MAL_DEBUG
-    if(mall->myId == mall->root){ DEBUG_FUNC("MaM has been initialized correctly as children", mall->myId, mall->numP); } fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("MaM has been initialized correctly for new ranks", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 }
 
@@ -773,18 +852,19 @@ int spawn_step(){
  * grupos de procesos.
  */
 int start_redistribution() {
-  int rootBcast, is_intercomm;
+  int rootBcast;
+  size_t i;
 
-  is_intercomm = 0;
+  mall->is_intercomm = 0;
   if(mall->intercomm != MPI_COMM_NULL) {
-    MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
+    MPI_Comm_test_inter(mall->intercomm, &mall->is_intercomm);
   } else { 
     // Si no tiene comunicador creado, se debe a que se ha pospuesto el Spawn
     //   y se trata del spawn Merge Shrink
     MPI_Comm_dup(mall->comm, &(mall->intercomm));
   }
 
-  if(is_intercomm) {
+  if(mall->is_intercomm) {
     rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
   } else {
     rootBcast = mall->root;
@@ -794,7 +874,6 @@ int start_redistribution() {
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
-    //FIXME No se envian los datos replicados (rep_a_data)
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
@@ -803,10 +882,13 @@ int start_redistribution() {
       return thread_creation();
     } else {
       send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
+      for(i=0; i<rep_a_data->entries; i++) { //FIXME Ibarrier does not work with rep_a_data
+        MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], rootBcast, mall->intercomm, &(rep_a_data->requests[i][0]));
+      } 
       return MALL_DIST_PENDING; 
     }
   } 
-  return end_redistribution();
+  return MALL_USER_PENDING;
 }
 
 
@@ -825,7 +907,7 @@ int start_redistribution() {
  * //FIXME Modificar para que se tenga en cuenta rep_a_data
  */
 int check_redistribution(int wait_completed) {
-  int is_intercomm, completed, local_completed, all_completed, post_ibarrier;
+  int completed, local_completed, all_completed, post_ibarrier;
   size_t i, req_qty;
   MPI_Request *req_completed;
   MPI_Win window;
@@ -834,11 +916,10 @@ int check_redistribution(int wait_completed) {
   #if USE_MAL_DEBUG >= 2
     DEBUG_FUNC("Sources are testing for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
 
   if(wait_completed) {
-    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
-      if( is_intercomm || mall->myId >= mall->numC) {
+    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { 
+      if( mall->is_intercomm || mall->myId >= mall->numC) {
         post_ibarrier=1;
       }
     }
@@ -847,10 +928,21 @@ int check_redistribution(int wait_completed) {
       req_qty = dist_a_data->request_qty[i];
       async_communication_wait(mall->intercomm, req_completed, req_qty, post_ibarrier);
     }
+    for(i=0; i<rep_a_data->entries; i++) {
+      req_completed = rep_a_data->requests[i];
+      req_qty = rep_a_data->request_qty[i];
+      async_communication_wait(mall->intercomm, req_completed, req_qty, 0); //FIXME Ibarrier does not work with rep_a_data
+    }
   } else {
     for(i=0; i<dist_a_data->entries; i++) {
       req_completed = dist_a_data->requests[i];
       req_qty = dist_a_data->request_qty[i];
+      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
+      local_completed = local_completed && completed;
+    }
+    for(i=0; i<rep_a_data->entries; i++) { //FIXME Ibarrier does not work with rep_a_data
+      req_completed = rep_a_data->requests[i];
+      req_qty = rep_a_data->request_qty[i];
       completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
       local_completed = local_completed && completed;
     }
@@ -872,12 +964,18 @@ int check_redistribution(int wait_completed) {
     window = dist_a_data->windows[i];
     async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
   }
+  for(i=0; i<rep_a_data->entries; i++) {
+    req_completed = rep_a_data->requests[i];
+    req_qty = rep_a_data->request_qty[i];
+    window = rep_a_data->windows[i];
+    async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
+  }
 
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
-  if(!is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return end_redistribution();
+  if(!mall->is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
+  return MALL_USER_PENDING;
 }
 
 
@@ -891,10 +989,9 @@ int check_redistribution(int wait_completed) {
  */ 
 int end_redistribution() {
   size_t i;
-  int is_intercomm, rootBcast, local_state;
+  int rootBcast, local_state;
 
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
-  if(is_intercomm) {
+  if(mall->is_intercomm) {
     rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
   } else {
     rootBcast = mall->root;
@@ -908,63 +1005,23 @@ int end_redistribution() {
     mall_conf->times->sync_start = MPI_Wtime();
     send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
-    // TODO Crear funcion especifica y anyadir para Asinc
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], rootBcast, mall->intercomm);
     } 
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
-    if(!is_intercomm) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
+    if(!mall->is_intercomm) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
   }
 
-  malleability_times_broadcast(rootBcast);
-
   local_state = MALL_DIST_COMPLETED;
-  if(!is_intercomm) { // Merge Spawn
+  if(!mall->is_intercomm) { // Merge Spawn
     if(mall->numP > mall->numC) { // Shrink || Merge Shrink requiere de mas tareas
       local_state = MALL_SPAWN_ADAPT_PENDING;
     }
   }
 
   return local_state;
-}
-
-
-///=============================================
-///=============================================
-///=============================================
-//TODO DEPRECATED
-int shrink_redistribution() {
-    #if USE_MAL_BARRIERS
-      MPI_Barrier(mall->comm);
-    #endif
-    double time_extra = MPI_Wtime();
-
-    MPI_Abort(MPI_COMM_WORLD, -20); //                                                         
-    zombies_collect_suspended(*(mall->user_comm), mall->myId, mall->numP, mall->numC, mall->root);
-    
-    if(mall->myId < mall->numC) {
-      if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm)); //FIXME Modificar a que se pida pro el usuario el cambio y se llama a comms_update
-      if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-
-      MPI_Comm_dup(mall->intercomm, &(mall->thread_comm));
-      MPI_Comm_dup(mall->intercomm, &(mall->comm));
-
-      MPI_Comm_set_name(mall->thread_comm, "MPI_COMM_MALL_THREAD");
-      MPI_Comm_set_name(mall->comm, "MPI_COMM_MALL");
-
-      MPI_Comm_free(&(mall->intercomm));
-
-
-      #if USE_MAL_BARRIERS
-        MPI_Barrier(mall->comm);
-      #endif
-      mall_conf->times->spawn_time += MPI_Wtime() - time_extra;
-      return MALL_DIST_COMPLETED;
-    } else {
-      return MALL_ZOMBIE;
-    }
 }
 
 // TODO MOVER A OTRO LADO??
@@ -996,7 +1053,7 @@ int thread_creation() {
  * El estado de la comunicación es devuelto al finalizar la función. 
  */
 int thread_check(int wait_completed) {
-  int all_completed = 0, is_intercomm;
+  int all_completed = 0;
 
   if(wait_completed && comm_state == MALL_DIST_PENDING) {
     if(pthread_join(mall->async_thread, NULL)) {
@@ -1016,12 +1073,11 @@ int thread_check(int wait_completed) {
     MPI_Abort(MPI_COMM_WORLD, -1);
     return -2;
   } 
-  MPI_Comm_test_inter(mall->intercomm, &is_intercomm);
 
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
-  if(!is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
+  if(!mall->is_intercomm) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
   return end_redistribution();
 }
 
@@ -1035,7 +1091,19 @@ int thread_check(int wait_completed) {
  * por el valor "commAsync".
  */
 void* thread_async_work() {
+  int rootBcast;
+  size_t i;
+
+  if(mall->is_intercomm) {
+    rootBcast = mall->myId == mall->root ? MPI_ROOT : MPI_PROC_NULL;
+  } else {
+    rootBcast = mall->root;
+  }
+
   send_data(mall->numC, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+  for(i=0; i<rep_a_data->entries; i++) {
+    MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], rootBcast, mall->intercomm);
+  } 
   comm_state = MALL_DIST_COMPLETED;
   pthread_exit(NULL);
 }
@@ -1091,17 +1159,18 @@ int MAM_I_convert_key(char *key) {
 /*
  * TODO Por hacer
  */
-void MAM_I_create_user_struct(int mam_state, int is_children_group) {
+void MAM_I_create_user_struct(int is_children_group) {
   user_reconf->comm = mall->tmp_comm;
-  user_reconf->rank_state = mam_state;
 
   if(is_children_group) {
-    user_reconf->rank_state = is_children_group; //FIXME Elegir nombre adecuado
+    user_reconf->rank_state = MAM_PROC_NEW_RANK;
     user_reconf->numS = mall->numC;
     if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) user_reconf->numT = mall->numC;
     else user_reconf->numT = mall->numC + mall->numP;
   } else {
     user_reconf->numS = mall->numP;
     user_reconf->numT = mall->numC;
+    if(mall->zombie) user_reconf->rank_state = MAM_PROC_ZOMBIE;
+    else user_reconf->rank_state = MAM_PROC_CONTINUE;
   }
 }

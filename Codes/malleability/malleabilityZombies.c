@@ -16,30 +16,34 @@ int offset_pids, *pids = NULL;
 
 void gestor_usr2() {}
 
-void zombies_collect_suspended(MPI_Comm comm, int myId, int numP, int numC, int root) {
+void zombies_collect_suspended(MPI_Comm comm) {
   int pid = getpid();
-  int *pids_counts = malloc(numP * sizeof(int));
-  int *pids_displs = malloc(numP * sizeof(int));
+  int *pids_counts = malloc(mall->numP * sizeof(int));
+  int *pids_displs = malloc(mall->numP * sizeof(int));
   int i, count=1;
 
-  if(myId < numC) {
+  #if USE_MAL_DEBUG > 2
+    if(mall->myId == mall->root){ DEBUG_FUNC("Collecting zombies", mall->myId, mall->numP); } fflush(stdout);
+  #endif
+
+  if(mall->myId < mall->numC) {
     count = 0;
-    if(myId == root) {
-      for(i=0; i < numC; i++) {
+    if(mall->myId == mall->root) {
+      for(i=0; i < mall->numC; i++) {
 	pids_counts[i] = 0;
       }
-      for(i=numC; i<numP; i++) {
+      for(i=mall->numC; i<mall->numP; i++) {
   	pids_counts[i] = 1;
-	pids_displs[i] = (i + offset_pids) - numC;
+	pids_displs[i] = (i - mall->numC) + offset_pids;
       }
-      offset_pids += numP - numC;
+      offset_pids += mall->numP - mall->numC;
       }
   }
-  MPI_Gatherv(&pid, count, MPI_INT, pids, pids_counts, pids_displs, MPI_INT, root, comm);
+  MPI_Gatherv(&pid, count, MPI_INT, pids, pids_counts, pids_displs, MPI_INT, mall->root, comm);
   free(pids_counts);
   free(pids_displs);
 
-  if(myId >= numC) {
+  if(mall->myId >= mall->numC) {
     zombies_suspend();
   }
 }

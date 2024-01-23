@@ -59,6 +59,7 @@ typedef struct {
 
 typedef struct { //FIXME numC_spawned no se esta usando
   int myId, numP, numC, numC_spawned, root, root_parents, zombie;
+  int is_intercomm;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm;
   MPI_Comm intercomm, tmp_comm;
