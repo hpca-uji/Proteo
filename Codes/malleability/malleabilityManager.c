@@ -6,6 +6,7 @@
 #include "malleabilityTypes.h"
 #include "malleabilityZombies.h"
 #include "malleabilityTimes.h"
+#include "malleabilityRMS.h"
 #include "spawn_methods/GenericSpawn.h"
 #include "CommDist.h"
 
@@ -18,7 +19,8 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
 void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous);
 
 
-int MAM_St_not_started(int *mam_state);
+int MAM_St_rms(int *mam_state);
+int MAM_St_spawn_start();
 int MAM_St_spawn_pending(int wait_completed);
 int MAM_St_red_start();
 int MAM_St_red_pending(int *mam_state, int wait_completed);
@@ -66,7 +68,7 @@ mam_user_reconf_t *user_reconf;
  * la comunicacion los procesos hijo estan preparados para ejecutar la
  * aplicacion.
  */
-int MAM_Init(int root, MPI_Comm *comm, char *name_exec, char *nodelist, int num_cpus, int num_nodes, void (*user_function)(void *), void *user_args) {
+int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(void *), void *user_args) {
   MPI_Comm dup_comm, thread_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
@@ -99,9 +101,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, char *nodelist, int num_
   mall->tmp_comm = MPI_COMM_NULL;
 
   mall->name_exec = name_exec;
-  mall->nodelist = nodelist;
-  mall->num_cpus = num_cpus;
-  mall->num_nodes = num_nodes;
+  mall->nodelist = NULL;
 
   rep_s_data->entries = 0;
   rep_a_data->entries = 0;
@@ -116,23 +116,17 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, char *nodelist, int num_
 
   // Si son el primer grupo de procesos, obtienen los datos de los padres
   MPI_Comm_get_parent(&(mall->intercomm));
-  if(mall->intercomm != MPI_COMM_NULL ) { 
+  if(mall->intercomm != MPI_COMM_NULL) { 
     Children_init(user_function, user_args);
     return MALLEABILITY_CHILDREN;
   }
+  MAM_check_hosts();
+
 
   #if USE_MAL_BARRIERS && USE_MAL_DEBUG
     if(mall->myId == mall->root)
       printf("MaM: Using barriers to record times.\n");
   #endif
-
-  if(nodelist != NULL) { //TODO To be deprecated by using Slurm or else statement
-    mall->nodelist_len = strlen(nodelist);
-  } else { // If no nodelist is detected, get it from the actual run
-    mall->nodelist = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
-    MPI_Get_processor_name(mall->nodelist, &mall->nodelist_len);
-    //TODO Get name of each process and create real nodelist
-  }
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("MaM has been initialized correctly as parents", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(*comm);
@@ -191,7 +185,10 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
       *mam_state = MAM_UNRESERVED;
       break;
     case MALL_NOT_STARTED:
-      call_checkpoint = MAM_St_not_started(mam_state);
+      call_checkpoint = MAM_St_rms(mam_state);
+      break;
+    case MALL_RMS_COMPLETED:
+      call_checkpoint = MAM_St_spawn_start();
       break;
 
     case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado
@@ -567,8 +564,9 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 //======================================================||
 //======================================================||
 
-int MAM_St_not_started(int *mam_state) {
+int MAM_St_rms(int *mam_state) {
   *mam_state = MAM_NOT_STARTED;
+  state = MALL_RMS_COMPLETED;
   reset_malleability_times();
   // Comprobar si se tiene que realizar un redimensionado
       
@@ -577,7 +575,10 @@ int MAM_St_not_started(int *mam_state) {
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
   //if(CHECK_RMS()) {return MALL_DENIED;}
+  return 1;
+}
 
+int MAM_St_spawn_start() {
   state = spawn_step();
   //FIXME Esto es necesario pero feo
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId >= mall->numC){ mall->zombie = 1; }

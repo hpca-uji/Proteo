@@ -48,15 +48,6 @@ int main(int argc, char *argv[]) {
     int im_child;
     int abort_needed = 0;
 
-    int num_cpus, num_nodes;
-    char *nodelist = NULL;
-    num_cpus = 20; //FIXME NUMERO MAGICO //TODO Usar openMP para obtener el valor con un pragma
-    if (argc >= 5) {
-      nodelist = argv[3];
-      num_nodes = atoi(argv[4]);
-      num_cpus = num_nodes * num_cpus;
-    }
-
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
@@ -70,7 +61,7 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = MAM_Init(ROOT, &comm, argv[0], nodelist, num_cpus, num_nodes, user_redistribution, NULL);
+    im_child = MAM_Init(ROOT, &comm, argv[0], user_redistribution, NULL);
 
     if(im_child) {
       update_targets();
