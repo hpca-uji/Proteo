@@ -2,8 +2,6 @@
 #define MALLEABILITY_TIMES_H
 
 #include <mpi.h>
-#include "malleabilityDataStructures.h"
-
 
 void init_malleability_times();
 void reset_malleability_times();

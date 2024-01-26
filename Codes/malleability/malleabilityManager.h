@@ -22,9 +22,6 @@ void MAM_Resume_redistribution(int *mam_state);
 
 
 int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info);
-void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies);
-void MAM_Set_key_configuration(char *key, int required, int *provided);
-void MAM_Set_target_number(int numC); // TODO TO BE DEPRECATED
 
 void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant);
 void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant);

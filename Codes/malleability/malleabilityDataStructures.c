@@ -1,13 +1,6 @@
 #include "malleabilityDataStructures.h"
 
-
-const char *mam_key_names[] = {
-    MAM_SPAWN_METHOD,
-    MAM_SPAWN_STRATEGIES,
-    MAM_PHYSICAL_DISTRIBUTION,
-    MAM_RED_METHOD,
-    MAM_RED_STRATEGIES
-};
+int state = MALL_UNRESERVED;
 
 /*
  * Crea un tipo derivado para mandar las dos estructuras principales

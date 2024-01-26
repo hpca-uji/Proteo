@@ -1,12 +1,14 @@
 #include <pthread.h>
 #include <string.h>
-#include "malleabilityManager.h"
+//#include "malleabilityManager.h"
+#include "MAM.h"
 #include "malleabilityStates.h"
 #include "malleabilityDataStructures.h"
 #include "malleabilityTypes.h"
 #include "malleabilityZombies.h"
 #include "malleabilityTimes.h"
 #include "malleabilityRMS.h"
+#include "MAM_Init_Configuration.h"
 #include "spawn_methods/GenericSpawn.h"
 #include "CommDist.h"
 
@@ -48,8 +50,6 @@ void malleability_comms_update(MPI_Comm comm);
 
 int MAM_I_convert_key(char *key);
 void MAM_I_create_user_struct(int is_children_group);
-
-int state = MALL_UNRESERVED; //FIXME Mover a otro lado
 
 malleability_data_t *rep_s_data;
 malleability_data_t *dist_s_data;
@@ -110,6 +110,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
 
   state = MALL_NOT_STARTED;
 
+  MAM_Init_configuration();
   zombies_service_init();
   init_malleability_times();
   MAM_Def_main_datatype();
@@ -120,8 +121,9 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
     Children_init(user_function, user_args);
     return MALLEABILITY_CHILDREN;
   }
-  MAM_check_hosts();
 
+  MAM_check_hosts();
+  MAM_Check_configuration();
 
   #if USE_MAL_BARRIERS && USE_MAL_DEBUG
     if(mall->myId == mall->root)
@@ -308,75 +310,6 @@ void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, doub
   MAM_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
 }
 
-void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
-  if(state > MALL_NOT_STARTED) return;
-
-  mall_conf->spawn_method = spawn_method;
-  mall_conf->spawn_strategies = spawn_strategies;
-  mall_conf->spawn_dist = spawn_dist;
-  mall_conf->red_method = red_method;
-  mall_conf->red_strategies = red_strategies;
-
-  if(!malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL) && 
-	(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL)) {
-    malleability_red_add_strat(&(mall_conf->red_strategies), MALL_RED_IBARRIER);
-  }
-}
-
-void MAM_Set_key_configuration(char *key, int required, int *provided) {
-  int value = MAM_I_convert_key(key);
-  *provided = required;
-  switch(value) { //TODO Comprobar si required existe para key
-    case MAM_SPAWN_METHOD_VALUE:
-      mall_conf->spawn_method = required;
-      break;
-    case MAM_SPAWN_STRATEGIES_VALUE:
-      malleability_spawn_add_strat(&(mall_conf->spawn_strategies), required);
-      *provided = mall_conf->spawn_strategies;
-      break;
-    case MAM_PHYSICAL_DISTRIBUTION_VALUE:
-      mall_conf->spawn_dist = required;
-      break;
-    case MAM_RED_METHOD_VALUE:
-      mall_conf->red_method = required;
-      break;
-    case MAM_RED_STRATEGIES_VALUE:
-      malleability_red_add_strat(&(mall_conf->red_strategies), required);
-      *provided = mall_conf->red_strategies;
-      break;
-    case MALL_DENIED:
-    default:
-      printf("MAM: Key %s does not exist\n", key);
-      *provided = MALL_DENIED;
-      break;
-  }
-
-  if(!malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL) && 
-	(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL)) {
-    malleability_red_add_strat(&(mall_conf->red_strategies), MALL_RED_IBARRIER);
-  }
-}
-
-/*
- * Tiene que ser llamado despues de setear la config
- */
-void MAM_Set_target_number(int numC){
-  if(state > MALL_NOT_STARTED) return;
-
-  if((mall_conf->spawn_method == MALL_SPAWN_MERGE) && (numC >= mall->numP)) {
-    mall->numC = numC;
-    mall->numC_spawned = numC - mall->numP;
-
-    if(numC == mall->numP) { // Migrar
-      mall->numC_spawned = numC;
-      mall_conf->spawn_method = MALL_SPAWN_BASELINE;
-    }
-  } else {
-    mall->numC = numC;
-    mall->numC_spawned = numC;
-  }
-}
-
 /*
  * Anyade a la estructura concreta de datos elegida
  * el nuevo set de datos "data" de un total de "total_qty" elementos.
@@ -398,8 +331,8 @@ void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int 
         total_reqs = 1;
       } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
-      }
-      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
+      } 
+      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
         total_reqs++;
       }
       
@@ -435,7 +368,7 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Da
       } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
       }
-      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) {
+      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
         total_reqs++;
       }
       
@@ -518,15 +451,15 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, 
-		      mall_conf->red_strategies, mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
+      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN,  
+		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall_conf->red_method, mall->intercomm);
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall->intercomm);
       if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
   }
@@ -544,14 +477,14 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = data_struct->arrays[i];
-      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall_conf->red_strategies, 
+      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN,
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       data_struct->arrays[i] = aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = data_struct->arrays[i];
-      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall_conf->red_method, mall->intercomm);
+      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->myId, mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall->intercomm);
       data_struct->arrays[i] = aux;
     }
   }
@@ -608,7 +541,7 @@ int MAM_St_red_start() {
 }
 
 int MAM_St_red_pending(int *mam_state, int wait_completed) {
-  if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
+  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
     state = thread_check(wait_completed);
   } else {
     state = check_redistribution(wait_completed);
@@ -663,7 +596,7 @@ int MAM_St_spawn_adapt_pending(int wait_completed) {
   unset_spawn_postpone_flag(state);
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
 
-  if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
+  if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->comm);
     #endif
@@ -727,7 +660,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
       MPI_Barrier(mall->intercomm);
     #endif
 
-    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
       recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_parents, mall->intercomm);
@@ -747,7 +680,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
       for(i=0; i<rep_a_data->entries; i++) {
         async_communication_wait(mall->intercomm, rep_a_data->requests[i], rep_a_data->request_qty[i], post_ibarrier);
       }
-      if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { post_ibarrier=1; }
+      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { post_ibarrier=1; }
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_wait(mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i], post_ibarrier);
       }
@@ -755,10 +688,10 @@ void Children_init(void (*user_function)(void *), void *user_args) {
         DEBUG_FUNC("Targets waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_end(mall_conf->red_method, mall_conf->red_strategies, dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
+        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
       }
       for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_end(mall_conf->red_method, mall_conf->red_strategies, rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]));
+        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]));
       }
     }
 
@@ -826,9 +759,9 @@ int spawn_step(){
   #endif
   mall_conf->times->spawn_start = MPI_Wtime();
  
-  state = init_spawn(mall->name_exec, mall->num_cpus, mall->num_nodes, mall->nodelist, mall->myId, mall->numP, mall->numC, mall->root, mall_conf->spawn_dist, mall_conf->spawn_method, mall_conf->spawn_strategies, mall->thread_comm, &(mall->intercomm));
+  state = init_spawn(mall->name_exec, mall->myId, mall->numP, mall->numC, mall->root, mall->thread_comm, &(mall->intercomm));
 
-  if(!malleability_spawn_contains_strat(mall_conf->spawn_strategies, MALL_SPAWN_PTHREAD, NULL)) {
+  if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
       #if USE_MAL_BARRIERS
         MPI_Barrier(mall->comm);
       #endif
@@ -879,7 +812,7 @@ int start_redistribution() {
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->async_start = MPI_Wtime();
-    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_THREAD, NULL)) {
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
       return thread_creation();
     } else {
       send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
@@ -919,7 +852,7 @@ int check_redistribution(int wait_completed) {
   #endif
 
   if(wait_completed) {
-    if(malleability_red_contains_strat(mall_conf->red_strategies, MALL_RED_IBARRIER, NULL)) { 
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
       if( mall->is_intercomm || mall->myId >= mall->numC) {
         post_ibarrier=1;
       }
@@ -938,13 +871,13 @@ int check_redistribution(int wait_completed) {
     for(i=0; i<dist_a_data->entries; i++) {
       req_completed = dist_a_data->requests[i];
       req_qty = dist_a_data->request_qty[i];
-      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
+      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall->intercomm, req_completed, req_qty);
       local_completed = local_completed && completed;
     }
     for(i=0; i<rep_a_data->entries; i++) { //FIXME Ibarrier does not work with rep_a_data
       req_completed = rep_a_data->requests[i];
       req_qty = rep_a_data->request_qty[i];
-      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall_conf->red_strategies, mall->intercomm, req_completed, req_qty);
+      completed = async_communication_check(mall->myId, MALLEABILITY_NOT_CHILDREN, mall->intercomm, req_completed, req_qty);
       local_completed = local_completed && completed;
     }
     #if USE_MAL_DEBUG >= 2
@@ -963,13 +896,13 @@ int check_redistribution(int wait_completed) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
     window = dist_a_data->windows[i];
-    async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window);
   }
   for(i=0; i<rep_a_data->entries; i++) {
     req_completed = rep_a_data->requests[i];
     req_qty = rep_a_data->request_qty[i];
     window = rep_a_data->windows[i];
-    async_communication_end(mall_conf->red_method, mall_conf->red_strategies, req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window);
   }
 
   #if USE_MAL_BARRIERS
@@ -1141,20 +1074,6 @@ void malleability_comms_update(MPI_Comm comm) {
 
   MPI_Comm_set_name(mall->thread_comm, "MAM_THREAD");
   MPI_Comm_set_name(mall->comm, "MAM_MAIN");
-}
-
-/*
- * Converts the name of a Key to its value version
- */
-int MAM_I_convert_key(char *key) {
-  size_t i; 
-
-  for(i=0; i<MAM_KEY_COUNT; i++) {
-    if(strcmp(key, mam_key_names[i]) == 0) { // Equal
-      return i;
-    }
-  }
-  return MALL_DENIED;
 }
 
 /*

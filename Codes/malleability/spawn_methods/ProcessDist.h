@@ -8,13 +8,7 @@
 #include "../malleabilityStates.h"
 #include "../malleabilityDataStructures.h"
 
-#define MALL_DIST_SPREAD 1
-#define MALL_DIST_COMPACT 2
-
-#define MALL_DIST_STRING 1
-#define MALL_DIST_HOSTFILE 2
-
-int physical_struct_create(int target_qty, int already_created, int num_cpus, int num_nodes, char *nodelist, int dist_type, int info_type, struct physical_dist *dist);
+int physical_struct_create(int target_qty, int already_created, int info_type, struct physical_dist *dist);
 void processes_dist(struct physical_dist dist, MPI_Info *info_spawn);
 
 #endif

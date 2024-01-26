@@ -9,8 +9,7 @@
 #include "configuration.h"
 #include "../IOcodes/results.h"
 #include "../malleability/CommDist.h"
-#include "../malleability/malleabilityManager.h"
-#include "../malleability/malleabilityStates.h"
+#include "../malleability/MAM.h"
 
 #define DR_MAX_SIZE 1000000000
 

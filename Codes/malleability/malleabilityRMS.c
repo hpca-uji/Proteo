@@ -1,10 +1,12 @@
 #define _GNU_SOURCE
-#include "malleabilityRMS.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <sched.h>
+#include <mpi.h>
+#include "malleabilityRMS.h"
+#include "malleabilityDataStructures.h"
 
 
 #if USE_MAL_SLURM

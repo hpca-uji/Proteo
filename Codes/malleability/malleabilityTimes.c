@@ -1,4 +1,5 @@
 #include "malleabilityTimes.h"
+#include "malleabilityDataStructures.h"
 
 void def_malleability_times(MPI_Datatype *new_type);
 

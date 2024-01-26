@@ -4,19 +4,20 @@
 #include <string.h>
 #include "distribution_methods/block_distribution.h"
 #include "CommDist.h"
+#include "MAM_Configuration.h"
 #include "malleabilityDataStructures.h"
 
 //void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
 void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
-void check_requests(struct Counts s_counts, struct Counts r_counts, int red_method, int red_strategies, MPI_Request **requests, size_t *request_qty);
+void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);
 
 void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
-void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method);
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm);
 void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
 void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
 
 void async_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests);
-void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win);
+void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Request *requests, MPI_Win *win);
 void async_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
 void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win, MPI_Request *requests);
 
@@ -69,7 +70,7 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int red_method, MPI_Comm comm) {
+int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm) {
     int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
@@ -89,9 +90,8 @@ int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, 
     }
 // FIXME END REFACTOR
 
-
     /* PERFORM COMMUNICATION */
-    switch(red_method) {
+    switch(mall_conf->red_method) {
 
       case MALL_RED_RMA_LOCKALL:
       case MALL_RED_RMA_LOCK:
@@ -100,7 +100,7 @@ int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, 
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, red_method);
+        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm);
 	break;
 
       case MALL_RED_POINT:
@@ -194,7 +194,6 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_inte
  *               displacements.
  * - tamBl (IN): How many elements are stored in the parameter "send".
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
- * - red_method (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
  *
  * FIXME: In libfabric one of these macros defines the maximum amount of BYTES that can be communicated in a SINGLE MPI_Get
  * A window can have more bytes than the amount shown in those macros, therefore, if you want to read more than that amount
@@ -203,7 +202,7 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_inte
  * prov/psm3/psm3/ptl_am/am_config.h:62:#define PSMI_MQ_RV_THRESH_CMA      16000
  * prov/psm3/psm3/ptl_am/am_config.h:65:#define PSMI_MQ_RV_THRESH_NO_KASSIST 16000
  */
-void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method) {
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm) {
   int datasize;
   MPI_Win win;
   MPI_Type_size(datatype, &datasize);
@@ -212,7 +211,7 @@ void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_cou
   #if USE_MAL_DEBUG >= 3
     DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
-  switch(red_method) {
+  switch(mall_conf->red_method) {
     case MALL_RED_RMA_LOCKALL:
       sync_rma_lockall(recv, datatype, r_counts, win);
       break;
@@ -307,7 +306,7 @@ void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts,
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always false...
  */
-int async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int red_method, int red_strategies, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
+int async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
     int is_intercomm, aux_comm_used = 0;
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
@@ -325,10 +324,10 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
       aux_comm = comm;
     }
 // FIXME END REFACTOR
-    check_requests(s_counts, r_counts, red_method, red_strategies, requests, request_qty);
+    check_requests(s_counts, r_counts, requests, request_qty);
 
     /* PERFORM COMMUNICATION */
-    switch(red_method) {
+    switch(mall_conf->red_method) {
 
       case MALL_RED_RMA_LOCKALL:
       case MALL_RED_RMA_LOCK:
@@ -337,7 +336,7 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
 	} else {
           get_block_dist(qty, myId, numO, &dist_data);
 	}
-        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, red_method, *requests, win);
+        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, *requests, win);
 	break;
       case MALL_RED_POINT:
         async_point2point(send, *recv, datatype, s_counts, r_counts, aux_comm, *requests);
@@ -349,7 +348,7 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
     }
 
     /* POST REQUESTS CHECKS */
-    if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
       if(!is_children_group && (is_intercomm || myId >= numO)) {
         MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
       }
@@ -369,13 +368,12 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
  *
  * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
- * - red_strategies (IN):
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE).
  */
-int async_communication_check(int myId, int is_children_group, int red_strategies, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
+int async_communication_check(int myId, int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
   int completed, req_completed, all_req_null, test_err, aux_condition;
   size_t i;
   completed = 1;
@@ -384,7 +382,7 @@ int async_communication_check(int myId, int is_children_group, int red_strategie
 
   if (is_children_group) return 1; //FIXME Deberia devolver un num negativo
 
-  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
+  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
 
     // The Ibarrier should only be posted at this point if the process
     // has other requests which has not confirmed as completed yet,
@@ -441,19 +439,17 @@ void async_communication_wait(MPI_Comm comm, MPI_Request *requests, size_t reque
  * Frees Requests/Windows associated to a particular redistribution.
  * Should be called for each output result of calling "async_communication_start".
  *
- * - red_method (IN):
- * - red_strategies (IN):
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
  * - win (IN): Window to free.
  */
-void async_communication_end(int red_method, int red_strategies, MPI_Request *requests, size_t request_qty, MPI_Win *win) {
+void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win) {
 
   //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
   //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
-  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
+  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
 
-  if(red_method == MALL_RED_RMA_LOCKALL || red_method == MALL_RED_RMA_LOCK) { MPI_Win_free(win); }
+  if(mall_conf->red_method == MALL_RED_RMA_LOCKALL || mall_conf->red_method == MALL_RED_RMA_LOCK) { MPI_Win_free(win); }
 }
 
 /*
@@ -500,17 +496,16 @@ void async_point2point(void *send, void *recv, MPI_Datatype datatype, struct Cou
  *               displacements.
  * - tamBl (IN): How many elements are stored in the parameter "send".
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
- * - red_method (IN): Type of data redistribution to use. In this case indicates the RMA operation(Lock or LockAll).
  * - window (OUT): Pointer to a window object used for the RMA operations.
  * - requests (OUT): Pointer to array of requests to be used to determine if the communication has ended.
  *
  */
-void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, int red_method, MPI_Request *requests, MPI_Win *win) {
+void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Request *requests, MPI_Win *win) {
   int datasize;
 
   MPI_Type_size(datatype, &datasize);
   MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, win);
-  switch(red_method) {
+  switch(mall_conf->red_method) {
     case MALL_RED_RMA_LOCKALL:
       async_rma_lockall(recv, datatype, r_counts, *win, requests);
       break;
@@ -651,11 +646,11 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, 
  * - request_qty (IN/OUT): Quantity of requests to be used. If the value is smaller than the amount of communication
  *               functions to perform, it is modified to the minimum value.
  */
-void check_requests(struct Counts s_counts, struct Counts r_counts, int red_method, int red_strategies, MPI_Request **requests, size_t *request_qty) {
+void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty) {
   size_t i, sum;
   MPI_Request *aux;
 
-  switch(red_method) {
+  switch(mall_conf->red_method) {
     case MALL_RED_BASELINE:
       sum = 1;
       break;
@@ -665,7 +660,7 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, int red_meth
       sum += (size_t) r_counts.idE - r_counts.idI;
       break;
   }
-  if(malleability_red_contains_strat(red_strategies, MALL_RED_IBARRIER, NULL)) {
+  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
     sum++;
   }
 
@@ -687,30 +682,4 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, int red_meth
     (*requests)[i] = MPI_REQUEST_NULL;
   }
   *request_qty = sum;
-}
-
-/*
- * Función para obtener si entre las estrategias elegidas, se utiliza
- * la estrategia pasada como segundo argumento.
- *
- * Devuelve en "result" 1(Verdadero) si utiliza la estrategia, 0(Falso) en caso
- * contrario.
- */
-int malleability_red_contains_strat(int comm_strategies, int strategy, int *result) {
-  int value = comm_strategies % strategy ? 0 : 1;
-  if(result != NULL) *result = value;
-  return value;
-}
-
-
-/*
- * Función para anyadir una estrategia a un conjunto.
- *
- * Devuelve en "result" 1(Verdadero) si se ha anyadido, 0(Falso) en caso
- * contrario.
- */
-int malleability_red_add_strat(int *comm_strategies, int strategy) {
-  if(malleability_red_contains_strat(*comm_strategies, strategy, NULL)) return 1;
-  *comm_strategies = *comm_strategies * strategy;
-  return 1;
 }

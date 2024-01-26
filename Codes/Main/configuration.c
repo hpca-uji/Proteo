@@ -4,7 +4,6 @@
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
 #include "configuration.h"
-#include "../malleability/spawn_methods/ProcessDist.h"
 #include "../malleability/distribution_methods/block_distribution.h"
 
 void malloc_config_resizes(configuration *user_config);
@@ -149,7 +148,7 @@ void free_config(configuration *user_config) {
  */
 void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids) {
   size_t i;
-  int free_reqs;
+  int mpi_index, free_reqs;
 
   free_reqs = 1;
   if(stage->id > -1) {
@@ -178,10 +177,10 @@ void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids) {
     stage->double_array = NULL;
   }
   if(stage->reqs != NULL && free_reqs) {
-    for(i=0; i<stage->req_count; i++) {
-      if(stage->reqs[i] != MPI_REQUEST_NULL) {
-        MPI_Request_free(&(stage->reqs[i]));
-	stage->reqs[i] = MPI_REQUEST_NULL;
+    for(mpi_index=0; mpi_index<stage->req_count; mpi_index++) {
+      if(stage->reqs[mpi_index] != MPI_REQUEST_NULL) {
+        MPI_Request_free(&(stage->reqs[mpi_index]));
+	stage->reqs[mpi_index] = MPI_REQUEST_NULL;
       }
     }
     free(stage->reqs);
