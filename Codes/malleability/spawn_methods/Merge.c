@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include "../malleabilityStates.h"
+#include "../malleabilityDataStructures.h"
 #include "Merge.h"
 #include "Baseline.h"
 
@@ -17,7 +18,7 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
 
   if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
     if(data_state == MALL_DIST_COMPLETED) {
-      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, spawn_data.myId);
+      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, mall->myId);
       local_state = MALL_SPAWN_ADAPTED;
     } else {
       local_state = MALL_SPAWN_ADAPT_POSTPONE;
@@ -53,11 +54,6 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 
   MPI_Comm_free(child); //POSIBLE ERROR?
   *child = new_comm;
-
-  //*numP = numC; //TODO REFACTOR Llevar a otra parte -- Hacer solo si MALL_SPAWN_ADAPTED
-  //if(*comm != MPI_COMM_WORLD && *comm != MPI_COMM_NULL) {
-  //  MPI_Comm_free(comm);
-  //}
 }
 
 

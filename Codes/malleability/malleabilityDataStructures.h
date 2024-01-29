@@ -20,11 +20,9 @@ struct physical_dist {
 
 /* --- SPAWN STRUCTURE --- */
 typedef struct {
-  int myId, root, root_parents;
   int spawn_qty, initial_qty, target_qty;
   int already_created;
-  int spawn_method, spawn_is_single, spawn_is_async;
-  char *cmd; //Executable name
+  int spawn_is_single, spawn_is_async;
   MPI_Info mapping;
   MPI_Datatype dtype;
   struct physical_dist dist; // Used to create mapping var
@@ -54,8 +52,9 @@ typedef struct {
   malleability_times_t *times;
 } malleability_config_t;
 
-typedef struct { //FIXME numC_spawned no se esta usando
-  int myId, numP, numC, root, root_parents, zombie;
+typedef struct { 
+  int myId, numP, numC, root, zombie;
+  int num_parents, root_parents;
   int is_intercomm;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm;

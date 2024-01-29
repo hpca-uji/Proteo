@@ -22,8 +22,7 @@ pthread_t spawn_thread;
 MPI_Comm *returned_comm;
 
 //--------------PRIVATE CONFIGURATION DECLARATIONS---------------//
-void set_spawn_configuration(char *cmd, int myId, int root, int initial_qty, int target_qty, MPI_Comm comm);
-void set_basic_spawn_dtype();
+void set_spawn_configuration(MPI_Comm comm);
 void deallocate_spawn_data();
 
 //--------------PRIVATE DECLARATIONS---------------//
@@ -55,9 +54,9 @@ void* thread_work();
  * Devuelve el estado de el procedimiento. Si no devuelve "MALL_SPAWN_COMPLETED", es necesario llamar a
  * "check_spawn_state()".
  */
-int init_spawn(char *argv, int myId, int initial_qty, int target_qty, int root, MPI_Comm comm, MPI_Comm *child) {
+int init_spawn(MPI_Comm comm, MPI_Comm *child) {
   int local_state;
-  set_spawn_configuration(argv, myId, root, initial_qty, target_qty, comm);
+  set_spawn_configuration(comm);
 
   if(!spawn_data->spawn_is_async) {
     generic_spawn(child, MALL_NOT_STARTED);
@@ -71,7 +70,7 @@ int init_spawn(char *argv, int myId, int initial_qty, int target_qty, int root, 
     local_state = mall_conf->spawn_method == MALL_SPAWN_MERGE && spawn_data->initial_qty > spawn_data->target_qty ?
 	    MALL_SPAWN_ADAPT_POSTPONE : local_state;
     set_spawn_state(local_state, 0);
-    if((spawn_data->spawn_is_single && myId == root) || !spawn_data->spawn_is_single) {
+    if((spawn_data->spawn_is_single && mall->myId == mall->root) || !spawn_data->spawn_is_single) {
       allocate_thread_spawn();
     }
   }
@@ -139,18 +138,18 @@ void unset_spawn_postpone_flag(int outside_state) {
  * para el paso de redistribucion de datos (Numeros de procesos y Id del Root).
  *
  */
-void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, int *numP_parents, int *root_parents, MPI_Comm *parents) {
+void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
-  spawn_data->root = root;
-  spawn_data->myId = myId;
-  spawn_data->spawn_qty = numP;
-  spawn_data->target_qty = numP;
+  spawn_data->spawn_qty = mall->numP;
+  spawn_data->target_qty = mall->numP;
   spawn_data->comm = comm;
 
-  set_basic_spawn_dtype();
-  MPI_Bcast(spawn_data, 1, spawn_data->dtype, MALLEABILITY_ROOT, *parents);
+  MAM_Comm_main_structures(MALLEABILITY_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
+  MPI_Comm_remote_size(*parents, &spawn_data->initial_qty);
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
 
-  switch(spawn_data->spawn_method) {
+  switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:
       baseline(*spawn_data, parents);
       break;
@@ -160,10 +159,8 @@ void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, 
       break;
   }
 
-  *root_parents = spawn_data->root_parents;
-  *numP_parents = spawn_data->initial_qty;
+  mall->num_parents = spawn_data->initial_qty;
 
-  MPI_Type_free(&(spawn_data->dtype));
   free(spawn_data);
 }
 
@@ -172,20 +169,15 @@ void malleability_connect_children(int myId, int numP, int root, MPI_Comm comm, 
  * Agrupa en una sola estructura todos los datos de configuración necesarios
  * e inicializa las estructuras necesarias.
  */
-void set_spawn_configuration(char *cmd, int myId, int root, int initial_qty, int target_qty, MPI_Comm comm) {
+void set_spawn_configuration(MPI_Comm comm) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
 
-  spawn_data->myId = myId;
-  spawn_data->root = root;
-  spawn_data->root_parents = root;
-  spawn_data->initial_qty = initial_qty;
-  spawn_data->target_qty = target_qty;
-  spawn_data->spawn_method = mall_conf->spawn_method;
-  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single)); //FIXME Realmente es necesario spawn_is_single? Mejor usar la funcion?
+  spawn_data->initial_qty = mall->numP;
+  spawn_data->target_qty = mall->numC;
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single)); 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   spawn_data->comm = comm;
 
-  set_basic_spawn_dtype();
 
   switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:
@@ -203,45 +195,9 @@ void set_spawn_configuration(char *cmd, int myId, int root, int initial_qty, int
   }
 
   spawn_data->mapping = MPI_INFO_NULL;
-  if(spawn_data->myId == spawn_data->root) {
-    physical_struct_create(target_qty, spawn_data->already_created, MALL_DIST_STRING, &(spawn_data->dist));
-
-    //COPY PROGRAM NAME
-    spawn_data->cmd = malloc((strlen(cmd)+1) * sizeof(char));
-    strcpy(spawn_data->cmd, cmd);
-    spawn_data->cmd[strlen(cmd)]='\0';
-
-  } else {
-    spawn_data->cmd = malloc(1 * sizeof(char));
+  if(mall->myId == mall->root) {
+    physical_struct_create(spawn_data->target_qty, spawn_data->already_created, MALL_DIST_STRING, &(spawn_data->dist));
   }
-}
-
-/*
- * Crea un tipo derivado para mandar 4 enteros con informacion
- * basica a los hijos. Son datos necesarios para que terminen
- * la creacion de procesos.
- */
-void set_basic_spawn_dtype() {
-  int i, counts = 4;
-  int blocklengths[] = {1, 1, 1, 1};
-  MPI_Aint displs[counts], dir;
-  MPI_Datatype types[counts];
-
-  // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = MPI_INT;
-
-  // Rellenar vector displs
-  MPI_Get_address(spawn_data, &dir);
-
-  MPI_Get_address(&(spawn_data->root_parents), &displs[0]);
-  MPI_Get_address(&(spawn_data->initial_qty), &displs[1]); //FIXME Obtener por la funcion ya existente
-  MPI_Get_address(&(spawn_data->spawn_is_single), &displs[2]);
-  MPI_Get_address(&(spawn_data->spawn_method), &displs[3]);
-
-  for(i=0;i<counts;i++) displs[i] -= dir;
-
-  MPI_Type_create_struct(counts, blocklengths, displs, types, &(spawn_data->dtype));
-  MPI_Type_commit(&(spawn_data->dtype));
 }
 
 /*
@@ -251,12 +207,6 @@ void set_basic_spawn_dtype() {
 void deallocate_spawn_data() {
   if(spawn_data == NULL) return;
 
-  if(spawn_data->cmd != NULL) {
-    free(spawn_data->cmd);
-  }
-  if(spawn_data->dtype != MPI_DATATYPE_NULL) {
-    MPI_Type_free(&(spawn_data->dtype));
-  }
   if(spawn_data->mapping != MPI_INFO_NULL) {
     MPI_Info_free(&(spawn_data->mapping));
   }
@@ -280,7 +230,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
   int local_state, aux_state;
 
   // WORK
-  if(spawn_data->myId == spawn_data->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
+  if(mall->myId == mall->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
     processes_dist(spawn_data->dist, &(spawn_data->mapping));
   }
   switch(mall_conf->spawn_method) {
@@ -359,7 +309,7 @@ int check_single_state(MPI_Comm comm, int global_state, int wait_completed) {
   while(wait_completed && mall->myId == mall->root && global_state == MALL_SPAWN_SINGLE_PENDING) {
     global_state = wait_completion();
   }
-  MPI_Bcast(&global_state, 1, MPI_INT, spawn_data->root, comm);
+  MPI_Bcast(&global_state, 1, MPI_INT, mall->root, comm);
 
   // Non-root processes join root to finalize the spawn
   // They also must join if the application has ended its work
@@ -367,7 +317,7 @@ int check_single_state(MPI_Comm comm, int global_state, int wait_completed) {
     global_state = MALL_SPAWN_PENDING;
     set_spawn_state(global_state, spawn_data->spawn_is_async);
 
-    if(spawn_data->myId != spawn_data->root) {
+    if(mall->myId != mall->root) {
       allocate_thread_spawn(spawn_data);
     }
   }

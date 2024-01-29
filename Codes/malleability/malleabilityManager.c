@@ -93,7 +93,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   MPI_Comm_set_name(thread_comm, "MAM_THREAD");
 
   mall->root = root;
-  mall->root_parents = -1;
+  mall->root_parents = root;
   mall->zombie = 0;
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm;
@@ -279,10 +279,9 @@ void MAM_Commit(int *mam_state, int rootBcast) {
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
 
-  MPI_Comm_rank(mall->comm, &(mall->myId));
-  MPI_Comm_size(mall->comm, &(mall->numP));
-  mall->root = mall->root_parents == -1 ? mall->root : mall->root_parents;
-  mall->root_parents = -1;
+  MPI_Comm_rank(mall->comm, &mall->myId);
+  MPI_Comm_size(mall->comm, &mall->numP);
+  mall->root = mall->root_parents;
   state = MALL_NOT_STARTED;
   if(mam_state != NULL) *mam_state = MAM_COMPLETED;
 
@@ -632,20 +631,17 @@ int MAM_St_completed(int *mam_state) {
  */
 void Children_init(void (*user_function)(void *), void *user_args) {
   size_t i;
-  int numP_parents;
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("MaM will now initialize children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  malleability_connect_children(mall->myId, mall->numP, mall->root, mall->comm, &numP_parents, &mall->root_parents, &(mall->intercomm));
+  malleability_connect_children(mall->comm, &(mall->intercomm));
   MPI_Comm_test_inter(mall->intercomm, &mall->is_intercomm);
   if(!mall->is_intercomm) { // For intracommunicators, these processes will be added
-    MPI_Comm_rank(mall->intercomm, &(mall->myId));
-    MPI_Comm_size(mall->intercomm, &(mall->numP));
+    MPI_Comm_rank(mall->intercomm, &mall->myId);
+    MPI_Comm_size(mall->intercomm, &mall->numP);
   }
-
-  MAM_Comm_main_structures(mall->root_parents);
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("Targets have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -661,12 +657,12 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     #endif
 
     if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
-      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+      recv_data(mall->num_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_parents, mall->intercomm);
       } 
     } else {
-      recv_data(numP_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
+      recv_data(mall->num_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
 
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_parents, mall->intercomm, &(rep_a_data->requests[i][0]));
@@ -710,7 +706,6 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
   }
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-  mall->numC = numP_parents;
   if(user_function != NULL) {
     state = MALL_USER_PENDING;
     MAM_I_create_user_struct(MALLEABILITY_CHILDREN);
@@ -722,7 +717,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
-    recv_data(numP_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
+    recv_data(mall->num_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
 
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_parents, mall->intercomm);
@@ -759,7 +754,7 @@ int spawn_step(){
   #endif
   mall_conf->times->spawn_start = MPI_Wtime();
  
-  state = init_spawn(mall->name_exec, mall->myId, mall->numP, mall->numC, mall->root, mall->thread_comm, &(mall->intercomm));
+  state = init_spawn(mall->thread_comm, &(mall->intercomm));
 
   if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
       #if USE_MAL_BARRIERS
@@ -803,8 +798,6 @@ int start_redistribution() {
   } else {
     rootBcast = mall->root;
   }
-
-  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE || mall->numP <= mall->numC) { MAM_Comm_main_structures(rootBcast); }
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN, mall->myId, mall->root, mall->intercomm);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
@@ -1084,9 +1077,9 @@ void MAM_I_create_user_struct(int is_children_group) {
 
   if(is_children_group) {
     user_reconf->rank_state = MAM_PROC_NEW_RANK;
-    user_reconf->numS = mall->numC;
-    if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) user_reconf->numT = mall->numC;
-    else user_reconf->numT = mall->numC + mall->numP;
+    user_reconf->numS = mall->num_parents;
+    if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) user_reconf->numT = mall->numP;
+    else user_reconf->numT = mall->num_parents + mall->numP;
   } else {
     user_reconf->numS = mall->numP;
     user_reconf->numT = mall->numC;

@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include "../malleabilityStates.h"
+#include "../malleabilityDataStructures.h"
 #include "Baseline.h"
 #include "Spawn_state.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
 int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child);
 int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child);
-void single_strat_children(int myId, int root, MPI_Comm *parents);
+void single_strat_children(MPI_Comm *parents);
 
 
 //--------------PUBLIC FUNCTIONS---------------//
@@ -27,7 +28,7 @@ int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de err
       baseline_spawn(spawn_data, spawn_data.comm, child);
     }
   } else if(spawn_data.spawn_is_single) { // Children path
-    single_strat_children(spawn_data.myId, spawn_data.root, child);
+    single_strat_children(child);
   }
   return MALL_SPAWN_COMPLETED;
 }
@@ -38,19 +39,17 @@ int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de err
  * "processes_dist()".
  */
 int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child) {
-
   int rootBcast = MPI_PROC_NULL;
-  if(spawn_data.myId == spawn_data.root) rootBcast = MPI_ROOT;
+  if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
-  // WORK
-  int spawn_err = MPI_Comm_spawn(spawn_data.cmd, MPI_ARGV_NULL, spawn_data.spawn_qty, spawn_data.mapping, spawn_data.root, comm, child, MPI_ERRCODES_IGNORE); 
+  int spawn_err = MPI_Comm_spawn(mall->name_exec, MPI_ARGV_NULL, spawn_data.spawn_qty, spawn_data.mapping, mall->root, comm, child, MPI_ERRCODES_IGNORE); 
   MPI_Comm_set_name(*child, "MPI_COMM_MALL_RESIZE");
-  // END WORK
 
   if(spawn_err != MPI_SUCCESS) {
     printf("Error creating new set of %d procs.\n", spawn_data.spawn_qty);
   }
-  MPI_Bcast(&spawn_data, 1, spawn_data.dtype, rootBcast, *child);
+
+  MAM_Comm_main_structures(rootBcast);
 
   return spawn_err;
 }
@@ -64,11 +63,11 @@ int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
   char *port_name;
   MPI_Comm newintercomm;
 
-  if (spawn_data.myId == spawn_data.root) {
+  if (mall->myId == mall->root) {
     spawn_err = baseline_spawn(spawn_data, MPI_COMM_SELF, child);
 
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
-    MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, spawn_data.root, 130, *child, MPI_STATUS_IGNORE);
+    MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MPI_ANY_SOURCE, 130, *child, MPI_STATUS_IGNORE);
 
     set_spawn_state(MALL_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
     wakeup_completion();
@@ -76,9 +75,9 @@ int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
     port_name = malloc(1);
   }
 
-  MPI_Comm_connect(port_name, MPI_INFO_NULL, spawn_data.root, spawn_data.comm, &newintercomm);
+  MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, spawn_data.comm, &newintercomm);
 
-  if(spawn_data.myId == spawn_data.root)
+  if(mall->myId == mall->root)
     MPI_Comm_free(child);
   free(port_name);
   *child = newintercomm;
@@ -93,21 +92,21 @@ int single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
  * Solo se utiliza cuando la creación de los procesos ha sido
  * realizada por un solo proceso padre
  */
-void single_strat_children(int myId, int root, MPI_Comm *parents) {
+void single_strat_children(MPI_Comm *parents) {
   char *port_name;
   MPI_Comm newintercomm;
 
-  if(myId == root) {
+  if(mall->myId == mall->root) {
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     MPI_Open_port(MPI_INFO_NULL, port_name);
-    MPI_Send(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, root, 130, *parents);
+    MPI_Send(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, mall->root_parents, 130, *parents);
   } else {
     port_name = malloc(1);
   }
 
-  MPI_Comm_accept(port_name, MPI_INFO_NULL, root, MPI_COMM_WORLD, &newintercomm);
+  MPI_Comm_accept(port_name, MPI_INFO_NULL, mall->root, MPI_COMM_WORLD, &newintercomm);
 
-  if(myId == root) {
+  if(mall->myId == mall->root) {
     MPI_Close_port(port_name);
   }
   free(port_name);
