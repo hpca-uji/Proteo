@@ -12,24 +12,6 @@
 
 #define DEBUG_FUNC(debug_string, rank, numP) printf("MaM [P%d/%d]: %s -- %s:%s:%d\n", rank, numP, debug_string, __FILE__, __func__, __LINE__)
 
-/* --- PHYSICAL DIST STRUCTURE --- */
-struct physical_dist {
-  int target_qty, already_created;
-  int info_type;
-};
-
-/* --- SPAWN STRUCTURE --- */
-typedef struct {
-  int spawn_qty, initial_qty, target_qty;
-  int already_created;
-  int spawn_is_single, spawn_is_async;
-  MPI_Info mapping;
-  MPI_Datatype dtype;
-  struct physical_dist dist; // Used to create mapping var
-
-  MPI_Comm comm, returned_comm;
-} Spawn_data;
-
 /* --- TIME CAPTURE STRUCTURE --- */
 typedef struct {
   // Spawn, Sync and Async time

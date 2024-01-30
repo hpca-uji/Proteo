@@ -7,8 +7,8 @@
 #include <string.h>
 #include "../malleabilityStates.h"
 #include "../malleabilityDataStructures.h"
+#include "Spawn_DataStructure.h"
 
-int physical_struct_create(int target_qty, int already_created, int info_type, struct physical_dist *dist);
-void processes_dist(struct physical_dist dist, MPI_Info *info_spawn);
+void processes_dist(Spawn_data spawn_data, MPI_Info *info_spawn);
 
 #endif

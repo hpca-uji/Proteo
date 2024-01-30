@@ -177,6 +177,7 @@ void set_spawn_configuration(MPI_Comm comm) {
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single)); 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   spawn_data->comm = comm;
+  spawn_data->mapping_fill_method = MALL_DIST_STRING;
 
 
   switch(mall_conf->spawn_method) {
@@ -193,11 +194,7 @@ void set_spawn_configuration(MPI_Comm comm) {
   if(spawn_data->spawn_is_async) {
     init_spawn_state();
   }
-
   spawn_data->mapping = MPI_INFO_NULL;
-  if(mall->myId == mall->root) {
-    physical_struct_create(spawn_data->target_qty, spawn_data->already_created, MALL_DIST_STRING, &(spawn_data->dist));
-  }
 }
 
 /*
@@ -231,7 +228,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
 
   // WORK
   if(mall->myId == mall->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
-    processes_dist(spawn_data->dist, &(spawn_data->mapping));
+    processes_dist(*spawn_data, &(spawn_data->mapping));
   }
   switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:

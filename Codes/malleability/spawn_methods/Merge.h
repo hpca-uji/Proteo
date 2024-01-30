@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include "../malleabilityDataStructures.h"
+#include "Spawn_DataStructure.h"
 
 int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state);
 

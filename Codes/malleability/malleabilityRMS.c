@@ -232,3 +232,16 @@ int MAM_I_slurm_getjob_hosts_info() {
   return 0;
 }
 #endif
+
+//TODO REFACTOR PARA CUANDO SE COMUNIQUE CON RMS
+    // Get Slurm job info
+    //int jobId;
+    //char *tmp;
+    //job_info_msg_t *j_info;
+    //slurm_job_info_t last_record;
+    //tmp = getenv("SLURM_JOB_ID");
+    //jobId = atoi(tmp);
+    //slurm_load_job(&j_info, jobId, 1);
+    //last_record = j_info->job_array[j_info->record_count - 1];
+    // Free JOB INFO
+    //slurm_free_job_info_msg(j_info);
