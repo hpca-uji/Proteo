@@ -45,6 +45,7 @@ void MAM_Free_main_datatype() {
 void MAM_Comm_main_structures(int rootBcast) {
 
   MPI_Bcast(MPI_BOTTOM, 1, mall->struct_type, rootBcast, mall->intercomm);
+
   if(mall->nodelist == NULL) {
     mall->nodelist = malloc((mall->nodelist_len+1) * sizeof(char));
     mall->nodelist[mall->nodelist_len] = '\0';

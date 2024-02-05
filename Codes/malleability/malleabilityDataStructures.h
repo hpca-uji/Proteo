@@ -35,9 +35,9 @@ typedef struct {
 } malleability_config_t;
 
 typedef struct { 
-  int myId, numP, numC, root, zombie;
+  int myId, numP, numC, zombie;
+  int root, root_collectives;
   int num_parents, root_parents;
-  int is_intercomm;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm;
   MPI_Comm intercomm, tmp_comm;

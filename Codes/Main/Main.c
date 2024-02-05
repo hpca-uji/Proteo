@@ -517,10 +517,6 @@ void init_originals() {
   size_t i;
 
   if(config_file->n_groups > 1) {
-    MAM_Set_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-      config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-    MAM_Set_target_number(config_file->groups[group->grp+1].procs);
-
     malleability_add_data(&(group->grp), 1, MPI_INT, 1, 1);
     malleability_add_data(&run_id, 1, MPI_INT, 1, 1);
     malleability_add_data(&(group->iter_start), 1, MPI_INT, 1, 0);

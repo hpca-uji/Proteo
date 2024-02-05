@@ -30,6 +30,7 @@ int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de err
   } else if(spawn_data.spawn_is_single) { // Children path
     single_strat_children(child);
   }
+
   return MALL_SPAWN_COMPLETED;
 }
 
@@ -48,7 +49,6 @@ int baseline_spawn(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *child) {
   if(spawn_err != MPI_SUCCESS) {
     printf("Error creating new set of %d procs.\n", spawn_data.spawn_qty);
   }
-
   MAM_Comm_main_structures(rootBcast);
 
   return spawn_err;

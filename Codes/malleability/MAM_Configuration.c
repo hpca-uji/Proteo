@@ -20,7 +20,7 @@ int MAM_I_set_target_number(unsigned int new_numC);
 
 int MAM_I_configuration_get_info();
 
-int MAM_I_contains_strat(unsigned int comm_strategies, unsigned int strategy, int *result);
+int MAM_I_contains_strat(unsigned int comm_strategies, unsigned int strategy);
 int MAM_I_add_strat(unsigned int *comm_strategies, unsigned int strategy);
 int MAM_I_remove_strat(unsigned int *comm_strategies, unsigned int strategy);
 
@@ -34,6 +34,8 @@ mam_config_setting_t configSettings[] = {
     {NULL, 1, INT_MAX, {.set_config_complex = MAM_I_set_target_number }, MAM_NUM_TARGETS_ENV}
 };
 
+unsigned int masks_spawn[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_SPAWN_SINGLE, MAM_MASK_SPAWN_INTERCOMM};
+unsigned int masks_red[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_RED_WAIT_SOURCES, MAM_MASK_RED_WAIT_TARGETS};
 
 /**
  * @brief Set configuration parameters for MAM.
@@ -107,10 +109,14 @@ void MAM_Set_key_configuration(int key, int required, int *provided) {
     } else {*provided = *(config->value); }
   } else { printf("MAM: Key %d does not exist\n", key); }
 
-  //FIXME Si cambia esto no se indica...
-  if(!MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_TARGETS, &aux) && 
-	(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL)) {
-    MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
+  //TODO -- Llevar esto a una funcion de MAM_Config_init para asegurar que es correcto.
+  if(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
+    if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_STRAT_SPAWN_INTERCOMM)) {
+      MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
+    }
+    if(MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_SOURCES)) {
+      MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
+    }
   }
 }
 
@@ -118,26 +124,29 @@ void MAM_Set_key_configuration(int key, int required, int *provided) {
  * Retorna si una estrategia aparece o no
  */
 int MAM_Contains_strat(int key, unsigned int strategy, int *result) {
-  int strategies, aux;
+  int strategies, aux = MAM_OK;
+  unsigned int len = 0, mask;
 
   switch(key) {
     case MAM_SPAWN_STRATEGIES:
-      if(strategy < MAM_STRATS_SPAWN_LEN) {
-	strategies = mall_conf->spawn_strategies;
-      }
+      strategies = mall_conf->spawn_strategies;
+      mask = masks_spawn[strategy];
+      len = MAM_STRATS_SPAWN_LEN;
       break;
     case MAM_RED_STRATEGIES:
-      if(strategy < MAM_STRATS_RED_LEN) {
-	strategies = mall_conf->red_strategies;
-      }
+      strategies = mall_conf->red_strategies;
+      mask = masks_red[strategy];
+      len = MAM_STRATS_RED_LEN;
       break;
     default:
       aux = MALL_DENIED;
       break;
   }
 
-  if(aux != MALL_DENIED) {
-    MAM_I_contains_strat(strategies, strategy, &aux);
+  if(aux == MAM_OK && strategy < len) {
+    aux = MAM_I_contains_strat(strategies, mask);
+  } else {
+    aux = 0;
   }
 
   if(result != NULL) *result = aux;
@@ -197,7 +206,7 @@ void MAM_Check_configuration() {
 //======================================================||
 
 
-int MAM_I_configuration_get_info() {
+int MAM_I_configuration_get_info() { //FIXME Cambiar nombre
   size_t i;
   int set_value;
   char *tmp = NULL;
@@ -246,6 +255,9 @@ int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies) {
     case MAM_STRAT_SPAWN_SINGLE:
       result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_SINGLE);
       break;
+    case MAM_STRAT_SPAWN_INTERCOMM:
+      result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_INTERCOMM);
+      break;
     default:
       //Unkown strategy
       result = MALL_DENIED;
@@ -267,7 +279,7 @@ int MAM_I_set_red_strat(unsigned int strategy, unsigned int *strategies) {
       *strategies = MAM_STRAT_CLEAR_VALUE;
       result = MAM_STRATS_MODIFIED;
       break;
-    case MAM_STRAT_RED_PTHREAD:
+    case MAM_STRAT_RED_PTHREAD: //TODO - IMPROVEMENT - This could be done with a single operation instead of 3.
       result = MAM_I_add_strat(strategies, MAM_MASK_PTHREAD);
       if(result == MAM_STRATS_ADDED) {
         strat_removed += MAM_I_remove_strat(strategies, MAM_MASK_RED_WAIT_SOURCES);
@@ -305,28 +317,28 @@ int MAM_I_set_target_number(unsigned int new_numC) {
   if(state > MALL_NOT_STARTED || new_numC == 0) return MALL_DENIED;
 
   mall->numC = (int) new_numC;
-  if(mall->numC == mall->numP) { // Migrar
+  if(mall->numC == mall->numP) { // Migrar //FIXME Cambiar de sitio
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, &provided);
   }
   return new_numC;
 }
 
+
 /*
  * Returns 1 if strategy is applied, 0 otherwise
  */
-int MAM_I_contains_strat(unsigned int comm_strategies, unsigned int strategy, int *result) {
-  *result = comm_strategies & strategy;
-  return *result;
+int MAM_I_contains_strat(unsigned int comm_strategies, unsigned int strategy) {
+  return comm_strategies & strategy;
 }
 
 int MAM_I_add_strat(unsigned int *comm_strategies, unsigned int strategy) {
-  if(MAM_I_contains_strat(*comm_strategies, strategy, NULL)) return MAM_OK;
+  if(MAM_I_contains_strat(*comm_strategies, strategy)) return MAM_OK;
   *comm_strategies |= strategy;
   return MAM_STRATS_ADDED;
 }
 
 int MAM_I_remove_strat(unsigned int *comm_strategies, unsigned int strategy) {
-  if(!MAM_I_contains_strat(*comm_strategies, strategy, NULL)) return MAM_OK;
+  if(!MAM_I_contains_strat(*comm_strategies, strategy)) return MAM_OK;
   *comm_strategies &= ~strategy;
   return MAM_STRATS_MODIFIED;
 }

@@ -1,4 +1,6 @@
 #include "malleabilityTypes.h"
+#include "malleabilityDataStructures.h"
+#include "MAM_Configuration.h"
 
 
 void init_malleability_data_struct(malleability_data_t *data_struct, size_t size);
@@ -80,22 +82,14 @@ void modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, 
  * En el argumento "root" todos tienen que indicar quien es el proceso raiz de los padres
  * unicamente.
  */
-void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group, int myId, int root, MPI_Comm intercomm) {
-  int is_intercomm, rootBcast = MPI_PROC_NULL, type_size;
+void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *data_struct_dist, int is_children_group) {
+  int type_size;
   size_t i, j;
   MPI_Datatype entries_type, struct_type;
 
-
-  MPI_Comm_test_inter(intercomm, &is_intercomm);
-  if(is_intercomm && !is_children_group) {
-    rootBcast = myId == root ? MPI_ROOT : MPI_PROC_NULL;
-  } else {
-    rootBcast = root;
-  }
-
   // Mandar primero numero de entradas
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
-  MPI_Bcast(MPI_BOTTOM, 1, entries_type, rootBcast, intercomm);
+  MPI_Bcast(MPI_BOTTOM, 1, entries_type, mall->root_collectives, mall->intercomm);
 
   if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) {
     init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
@@ -103,7 +97,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
-  MPI_Bcast(MPI_BOTTOM, 1, struct_type, rootBcast, intercomm);
+  MPI_Bcast(MPI_BOTTOM, 1, struct_type, mall->root_collectives, mall->intercomm);
 
   if(is_children_group) {
     for(i=0; i < data_struct_rep->entries; i++) {

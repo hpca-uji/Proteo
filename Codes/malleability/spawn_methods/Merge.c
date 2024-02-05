@@ -36,6 +36,11 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
   return local_state;
 }
 
+int intracomm_strategy(int is_children_group, MPI_Comm *child) {
+  merge_adapt_expand(child, is_children_group);
+  return MALL_SPAWN_COMPLETED;
+}
+
 //--------------PRIVATE MERGE TYPE FUNCTIONS---------------//
 
 /*
@@ -52,7 +57,7 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 
   MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
 
-  MPI_Comm_free(child); //POSIBLE ERROR?
+  MPI_Comm_free(child);
   *child = new_comm;
 }
 

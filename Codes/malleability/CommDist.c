@@ -7,11 +7,10 @@
 #include "MAM_Configuration.h"
 #include "malleabilityDataStructures.h"
 
-//void prepare_redistribution(int qty, int myId, int numP, int numO, int is_children_group, int is_intercomm, char **recv, struct Counts *s_counts, struct Counts *r_counts);
-void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
+void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts); //FIXME Choose name for is_sync
 void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);
 
-void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
+void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
 void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm);
 void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
 void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
@@ -60,7 +59,6 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
  *               If the process receives data and is NULL, the behaviour is undefined.
  * - qty  (IN):  Sum of elements shared by all processes that will send data.
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
  *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
  * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
@@ -68,56 +66,37 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
  * - comm (IN):  Communicator to use to perform the redistribution.
  *
- * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always true...
  */
-int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm) {
-    int is_intercomm, aux_comm_used = 0;
+void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm) {
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
-    MPI_Comm aux_comm = MPI_COMM_NULL;
 
     /* PREPARE COMMUNICATION */
-    MPI_Comm_test_inter(comm, &is_intercomm);
-//    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts); //FIXME Needs the datatype?
-// TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
-    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); //FIXME MAGICAL VALUE
-
-    if(is_intercomm) {
-      MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
-      aux_comm_used = 1;
-    } else {
-      aux_comm = comm;
-    }
-// FIXME END REFACTOR
+    prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts);
 
     /* PERFORM COMMUNICATION */
     switch(mall_conf->red_method) {
-
       case MALL_RED_RMA_LOCKALL:
       case MALL_RED_RMA_LOCK:
         if(is_children_group) {
 	  dist_data.tamBl = 0;
 	} else {
-          get_block_dist(qty, myId, numO, &dist_data);
+          get_block_dist(qty, mall->myId, numO, &dist_data);
 	}
-        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm);
+        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm);
 	break;
 
       case MALL_RED_POINT:
-        sync_point2point(send, *recv, datatype, is_intercomm, myId, s_counts, r_counts, aux_comm);
+        sync_point2point(send, *recv, datatype, s_counts, r_counts, comm);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, aux_comm);
+        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm);
 	break;
     }
 
-    if(aux_comm_used) {
-      MPI_Comm_free(&aux_comm);
-    } 
     freeCounts(&s_counts);
     freeCounts(&r_counts);
-    return 1; //FIXME In this case is always true...
 }
 
 /*
@@ -127,9 +106,6 @@ int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, 
  * - send (IN):  Array with the data to send. This value can not be NULL for parents.
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to 
  *               receive data. If the process receives data and is NULL, the behaviour is undefined.
- * - is_intercomm (IN): Indicates wether the communicator is an intercommunicator (TRUE) or an
- *               intracommunicator (FALSE).
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - s_counts (IN): Struct which describes how many elements will send this process to each children and 
  *               the displacements.
  * - r_counts (IN): Structure which describes how many elements will receive this process from each parent 
@@ -137,7 +113,7 @@ int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, 
  * - comm (IN):  Communicator to use to perform the redistribution.
  *
  */
-void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_intercomm, int myId, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
+void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
     int i, j, init, end, total_sends, datasize;
     size_t offset, offset2;
     MPI_Request *sends;
@@ -145,12 +121,12 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_inte
     MPI_Type_size(datatype, &datasize);
     init = s_counts.idI;
     end = s_counts.idE;
-    if(!is_intercomm && (s_counts.idI == myId || s_counts.idE == myId + 1)) {
-      offset = s_counts.displs[myId] + datasize;
-      offset2 = r_counts.displs[myId] + datasize;
-      memcpy(send+offset, recv+offset2, s_counts.counts[myId]);
+    if(mall_conf->spawn_method == MALL_SPAWN_MERGE && (s_counts.idI == mall->myId || s_counts.idE == mall->myId + 1)) {
+      offset = s_counts.displs[mall->myId] + datasize;
+      offset2 = r_counts.displs[mall->myId] + datasize;
+      memcpy(send+offset, recv+offset2, s_counts.counts[mall->myId]);
       
-      if(s_counts.idI == myId) init = s_counts.idI+1;
+      if(s_counts.idI == mall->myId) init = s_counts.idI+1;
       else end = s_counts.idE-1;
     }
 
@@ -168,9 +144,9 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, int is_inte
 
     init = r_counts.idI;
     end = r_counts.idE;
-    if(!is_intercomm) {
-      if(r_counts.idI == myId) init = r_counts.idI+1;
-      else if(r_counts.idE == myId + 1) end = r_counts.idE-1;
+    if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
+      if(r_counts.idI == mall->myId) init = r_counts.idI+1;
+      else if(r_counts.idE == mall->myId + 1) end = r_counts.idE-1;
     }
 
     for(i=init; i<end; i++) {
@@ -292,7 +268,6 @@ void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts,
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
  *               If the process receives data and is NULL, the behaviour is undefined.
  * - qty  (IN):  Sum of elements shared by all processes that will send data.
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
  *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
  * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
@@ -304,26 +279,13 @@ void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts,
  * - request_qty (OUT): Quantity of requests to be used. If a process sends and receives data, this value will be 
  *               modified to the expected value.
  *
- * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE). //FIXME In this case is always false...
  */
-int async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
-    int is_intercomm, aux_comm_used = 0;
+void async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
     struct Counts s_counts, r_counts;
     struct Dist_data dist_data;
-    MPI_Comm aux_comm = MPI_COMM_NULL;
 
     /* PREPARE COMMUNICATION */
-    MPI_Comm_test_inter(comm, &is_intercomm);
-// TODO START REFACTOR POR DEFECTO USA SIEMPRE INTRACOMM
-    //prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, recv, &s_counts, &r_counts);
-    prepare_redistribution(qty, datatype, myId, numP, numO, is_children_group, is_intercomm, 1, recv, &s_counts, &r_counts); // TODO MAGICAL VALUE
-    if(is_intercomm) {
-      MPI_Intercomm_merge(comm, is_children_group, &aux_comm);
-      aux_comm_used = 1;
-    } else {
-      aux_comm = comm;
-    }
-// FIXME END REFACTOR
+    prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts); 
     check_requests(s_counts, r_counts, requests, request_qty);
 
     /* PERFORM COMMUNICATION */
@@ -334,46 +296,40 @@ int async_communication_start(void *send, void **recv, int qty, MPI_Datatype dat
         if(is_children_group) {
 	  dist_data.tamBl = 0;
 	} else {
-          get_block_dist(qty, myId, numO, &dist_data);
+          get_block_dist(qty, mall->myId, numO, &dist_data);
 	}
-        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, aux_comm, *requests, win);
+        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm, *requests, win);
 	break;
       case MALL_RED_POINT:
-        async_point2point(send, *recv, datatype, s_counts, r_counts, aux_comm, *requests);
+        async_point2point(send, *recv, datatype, s_counts, r_counts, comm, *requests);
 	break;
       case MALL_RED_BASELINE:
       default:
-        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, aux_comm, &((*requests)[0]));
+        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm, &((*requests)[0]));
 	break;
     }
 
     /* POST REQUESTS CHECKS */
     if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-      if(!is_children_group && (is_intercomm || myId >= numO)) {
+      if(!is_children_group && (mall_conf->spawn_method == MALL_SPAWN_BASELINE || mall->myId >= numO)) { // TODO Simplify to "if rank is source only" or "if rank will be zombie"
         MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
       }
     }
 
-    if(aux_comm_used) {
-      MPI_Comm_free(&aux_comm);
-    } 
-
     freeCounts(&s_counts);
     freeCounts(&r_counts);
-    return 0; //FIXME In this case is always false...
 }
 
 /*
  * Checks if a set of requests have been completed (1) or not (0).
  *
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE).
  */
-int async_communication_check(int myId, int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
+int async_communication_check(int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
   int completed, req_completed, all_req_null, test_err, aux_condition;
   size_t i;
   completed = 1;
@@ -407,7 +363,7 @@ int async_communication_check(int myId, int is_children_group, MPI_Comm comm, MP
   }
 
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
-    printf("P%d aborting -- Test Async\n", myId);
+    printf("P%d aborting -- Test Async\n", mall->myId);
     MPI_Abort(MPI_COMM_WORLD, test_err);
   }
 
@@ -581,56 +537,64 @@ void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts
  * how many elements sends/receives to other processes for the new group.
  *
  * - qty  (IN):  Sum of elements shared by all processes that will send data.
- * - myId (IN):  Rank of the MPI process in the local communicator. For the parents is not the rank obtained from "comm".
  * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
  *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
  * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
  *               resize, while for the children is the amount of parents.
  * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
- * - is_intercomm (IN): Indicates wether the used communicator is a intercomunicator(TRUE) or intracommunicator(FALSE).
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
  *               process receives data and is NULL, the behaviour is undefined.
  * - s_counts (OUT): Struct where is indicated how many elements sends this process to processes in the new group.
  * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
  *
  */
-//FIXME Ensure name for is_sync variable
-void prepare_redistribution(int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, int is_intercomm, int is_sync, void **recv, struct Counts *s_counts, struct Counts *r_counts) {
+void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts) {
   int array_size = numO;
   int offset_ids = 0;
   int datasize;
   struct Dist_data dist_data;
 
-  if(is_intercomm) {
-    offset_ids = is_sync ? numP : 0; //FIXME Modify only if active?
+  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) {
+    offset_ids =  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL) ? 
+	    0 : numP;
   } else {
     array_size = numP > numO ? numP : numO;
   }
+
   mallocCounts(s_counts, array_size+offset_ids);
   mallocCounts(r_counts, array_size+offset_ids);
   MPI_Type_size(datatype, &datasize); //FIXME Right now derived datatypes are not ensured to work
 
   if(is_children_group) {
     offset_ids = 0;
-    prepare_comm_alltoall(myId, numP, numO, qty, offset_ids, r_counts);
+    prepare_comm_alltoall(mall->myId, numP, numO, qty, offset_ids, r_counts);
     
     // Obtener distribución para este hijo
-    get_block_dist(qty, myId, numP, &dist_data);
+    get_block_dist(qty, mall->myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * datasize);
-//get_block_dist(qty, myId, numP, &dist_data);
-//print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Targets Recv");
-  } else {
-//get_block_dist(qty, myId, numP, &dist_data);
 
-    prepare_comm_alltoall(myId, numP, numO, qty, offset_ids, s_counts);
-    if(!is_intercomm && myId < numO) {
-        prepare_comm_alltoall(myId, numO, numP, qty, offset_ids, r_counts);
-        // Obtener distribución para este hijo y reservar vector de recibo
-        get_block_dist(qty, myId, numO, &dist_data);
-        *recv = malloc(dist_data.tamBl * datasize);
-//print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
+    #if USE_MAL_DEBUG >= 4
+      get_block_dist(qty, mall->myId, numP, &dist_data);
+      print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Targets Recv");
+    #endif
+  } else {
+    #if USE_MAL_DEBUG >= 4
+      get_block_dist(qty, mall->myId, numP, &dist_data);
+    #endif
+
+    prepare_comm_alltoall(mall->myId, numP, numO, qty, offset_ids, s_counts);
+    if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId < numO) {
+      prepare_comm_alltoall(mall->myId, numO, numP, qty, offset_ids, r_counts);
+      // Obtener distribución para este hijo y reservar vector de recibo
+      get_block_dist(qty, mall->myId, numO, &dist_data);
+      *recv = malloc(dist_data.tamBl * datasize);
+      #if USE_MAL_DEBUG >= 4
+        print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
+      #endif
     }
-//print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Sources Send");
+    #if USE_MAL_DEBUG >= 4
+      print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Sources Send");
+    #endif
   }
 }
 

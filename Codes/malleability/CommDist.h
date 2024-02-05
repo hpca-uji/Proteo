@@ -7,10 +7,10 @@
 #include <string.h>
 #include "malleabilityStates.h"
 
-int sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm);
+void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm);
 
-int async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int myId, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win);
-int async_communication_check(int myId, int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty);
+void async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win);
+int async_communication_check(int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty);
 void async_communication_wait(MPI_Comm comm, MPI_Request *requests, size_t request_qty, int post_ibarrier);
 void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win);
 
