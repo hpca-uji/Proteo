@@ -7,7 +7,7 @@ int state = MALL_UNRESERVED;
  * de MaM.
  */
 void MAM_Def_main_datatype() {
-  int i, counts = 9;
+  int i, counts = 10;
   int blocklengths[counts];
   MPI_Aint displs[counts];
   MPI_Datatype types[counts];
@@ -24,9 +24,10 @@ void MAM_Def_main_datatype() {
   MPI_Get_address(&(mall_conf->red_method), &displs[3]);
   MPI_Get_address(&(mall_conf->red_strategies), &displs[4]);
   MPI_Get_address(&(mall->root_parents), &displs[5]);
-  MPI_Get_address(&(mall->num_cpus), &displs[6]);
-  MPI_Get_address(&(mall->num_nodes), &displs[7]);
-  MPI_Get_address(&(mall->nodelist_len), &displs[8]);
+  MPI_Get_address(&(mall->num_parents), &displs[6]); //TODO Add only when Intercomm strat active?
+  MPI_Get_address(&(mall->num_cpus), &displs[7]);
+  MPI_Get_address(&(mall->num_nodes), &displs[8]);
+  MPI_Get_address(&(mall->nodelist_len), &displs[9]);
 
   MPI_Type_create_struct(counts, blocklengths, displs, types, &mall->struct_type);
   MPI_Type_commit(&mall->struct_type);

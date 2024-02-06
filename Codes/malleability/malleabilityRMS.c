@@ -152,7 +152,7 @@ int GetCPUCount() {
  * TODO
  */
 int MAM_I_slurm_getenv_hosts_info() {
-  char *tmp = NULL, *token;
+  char *tmp = NULL, *tmp_copy, *token;
   int cpus, count;
   //int i, *cpus_counts, *nodes_counts, *aux;
   
@@ -171,7 +171,10 @@ int MAM_I_slurm_getenv_hosts_info() {
 
   tmp = getenv("SLURM_JOB_CPUS_PER_NODE");
   if(tmp == NULL) return 1;
-  token = strtok(tmp, ",");
+
+  tmp_copy = (char *) malloc((strlen(tmp)+1) * sizeof(char));
+  strcpy(tmp_copy, tmp);
+  token = strtok(tmp_copy, ",");
   //TODO When MaM considers heteregenous allocations, these will be needed instead of num_cpus.
   //cpus_counts = (int *) malloc(mall->num_nodes * sizeof(int));
   //nodes_counts = (int *) malloc(mall->num_nodes * sizeof(int));
@@ -200,6 +203,7 @@ int MAM_I_slurm_getenv_hosts_info() {
   }
   */
 
+  free(tmp_copy);
   return 0;
 }
 

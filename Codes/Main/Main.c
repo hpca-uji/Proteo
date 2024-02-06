@@ -46,6 +46,7 @@ int main(int argc, char *argv[]) {
     int req;
     int im_child;
     int abort_needed = 0;
+    size_t i;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
@@ -85,8 +86,14 @@ int main(int argc, char *argv[]) {
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
-        MAM_Set_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
+        MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
+			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
+	for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
+	  MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
+	}
+	for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
+	  MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
+	}
         MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {

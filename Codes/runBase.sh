@@ -28,7 +28,7 @@ numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
 echo $initial_nodelist
 echo "Test PreRUN $numP $nodelist"
-mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/build/a.out $configFile $outIndex $nodelist $nodes
+mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/build/a.out $configFile $outIndex 
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out

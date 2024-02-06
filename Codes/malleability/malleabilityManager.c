@@ -152,6 +152,7 @@ void MAM_Finalize() {
   free(rep_a_data);
   free(dist_s_data);
   free(dist_a_data);
+  if(mall->nodelist != NULL) free(mall->nodelist);
 
   MAM_Free_main_datatype();
   free_malleability_times();
@@ -517,6 +518,7 @@ int MAM_St_rms(int *mam_state) {
 }
 
 int MAM_St_spawn_start() {
+  mall->num_parents = mall->numP;
   state = spawn_step();
   //FIXME Esto es necesario pero feo
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId >= mall->numC){ mall->zombie = 1; }
@@ -529,9 +531,6 @@ int MAM_St_spawn_start() {
 }
 
 int MAM_St_spawn_pending(int wait_completed) {
-  fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  if(mall->myId == 0)printf("TEST END\n");
-  fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
   if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
     #if USE_MAL_BARRIERS
@@ -908,7 +907,6 @@ int check_redistribution(int wait_completed) {
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
   return MALL_USER_PENDING;
 }
-
 
 /*
  * Termina la redistribución de los datos con los hijos, comprobando

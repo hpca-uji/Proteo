@@ -191,10 +191,12 @@ void generate_info_string(char *nodelist, int *procs_array, size_t nodes, MPI_In
  * al crear procesos e indicar donde tienen que ser creados.
  */
 void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **host_str) {
-  char *host;
+  char *host, *aux, *token;
   size_t i=0,len=0;
-  
-  char *token = strtok(nodelist, ",");
+
+  aux = (char *) malloc((strlen(nodelist)+1) * sizeof(char));
+  strcpy(aux, nodelist);
+  token = strtok(aux, ",");
   while (token != NULL && i < used_nodes) {
     host = strdup(token);
     if (qty[i] != 0) {
@@ -204,6 +206,7 @@ void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **host_str
     free(host);
     token = strtok(NULL, ",");
   }
+  free(aux);
 }
 
 /*

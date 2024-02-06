@@ -53,7 +53,9 @@ typedef struct
 typedef struct
 {
   int iters, procs;
-  int sm, ss, phy_dist, rm, rs;
+  int sm, phy_dist, rm;
+  int *ss, *rs;
+  size_t ss_len, rs_len;
   float factor;
 } group_config_t;
 
@@ -65,7 +67,7 @@ typedef struct
     int granularity;
     size_t sdr, adr;
 
-    MPI_Datatype config_type, group_type, iter_stage_type;
+    MPI_Datatype config_type, group_type, group_strats_type, iter_stage_type;
     iter_stage_t *stages;
     group_config_t *groups;
 } configuration;

@@ -144,7 +144,8 @@ void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents) {
   spawn_data->comm = comm;
 
   MAM_Comm_main_structures(MALLEABILITY_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
-  MPI_Comm_remote_size(*parents, &spawn_data->initial_qty);
+  //MPI_Comm_remote_size(*parents, &spawn_data->initial_qty);
+  spawn_data->initial_qty = mall->num_parents;
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
@@ -161,9 +162,7 @@ void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents) {
       merge(*spawn_data, parents, MALL_NOT_STARTED);
       break;
   }
-
-  mall->num_parents = spawn_data->initial_qty;
-
+  //mall->num_parents = spawn_data->initial_qty;
   free(spawn_data);
 }
 
