@@ -123,7 +123,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   }
 
   MAM_check_hosts();
-  MAM_Check_configuration();
+  MAM_Set_initial_configuration();
 
   #if USE_MAL_BARRIERS && USE_MAL_DEBUG
     if(mall->myId == mall->root)
@@ -334,9 +334,6 @@ void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int 
       } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
       } 
-      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-        total_reqs++;
-      }
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
     }
@@ -369,9 +366,6 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Da
         total_reqs = 1;
       } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
-      }
-      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-        total_reqs++;
       }
       
       modify_data(data, index, total_qty, type, total_reqs, dist_a_data);
@@ -504,16 +498,18 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 //======================================================||
 
 int MAM_St_rms(int *mam_state) {
-  *mam_state = MAM_NOT_STARTED;
-  state = MALL_RMS_COMPLETED;
   reset_malleability_times();
-  // Comprobar si se tiene que realizar un redimensionado
-      
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
-  //if(CHECK_RMS()) {return MALL_DENIED;}
+
+  *mam_state = MAM_NOT_STARTED;
+  state = MALL_RMS_COMPLETED;
+  MAM_Check_configuration();
+  mall->wait_targets_posted = 0;
+
+  //if(CHECK_RMS()) {return MALL_DENIED;}    
   return 1;
 }
 
@@ -644,7 +640,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   size_t i;
 
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("MaM will now initialize children", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("MaM will now initialize spawned processes", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   malleability_connect_children(mall->comm, &(mall->intercomm));
@@ -655,13 +651,13 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   mall->root_collectives = mall->root_parents;
 
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Targets have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Spawned have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     #if USE_MAL_DEBUG >= 2
-      DEBUG_FUNC("Children start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+      DEBUG_FUNC("Spawned start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     #endif
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
@@ -679,20 +675,23 @@ void Children_init(void (*user_function)(void *), void *user_args) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
       } 
       #if USE_MAL_DEBUG >= 2
-        DEBUG_FUNC("Targets started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+        DEBUG_FUNC("Spawned started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
 
-      int post_ibarrier = 0; 
-      // FIXME No permite el uso de ibarrier ahora mismo. Realmente solo hace falta un ibarrier para todos
       for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_wait(mall->intercomm, rep_a_data->requests[i], rep_a_data->request_qty[i], post_ibarrier);
+        async_communication_wait(rep_a_data->requests[i], rep_a_data->request_qty[i]);
       }
-      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { post_ibarrier=1; }
       for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_wait(mall->intercomm, dist_a_data->requests[i], dist_a_data->request_qty[i], post_ibarrier);
+        async_communication_wait(dist_a_data->requests[i], dist_a_data->request_qty[i]);
       }
+      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
+        MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
+        mall->wait_targets_posted = 1;
+        MPI_Wait(&mall->wait_targets, MPI_STATUS_IGNORE);
+      }
+
       #if USE_MAL_DEBUG >= 2
-        DEBUG_FUNC("Targets waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+        DEBUG_FUNC("Spawned waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
         async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
@@ -708,7 +707,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     mall_conf->times->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
   #if USE_MAL_DEBUG
-    DEBUG_FUNC("Targets have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("Spawned have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
@@ -812,9 +811,14 @@ int start_redistribution() {
       return thread_creation();
     } else {
       send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
-      for(i=0; i<rep_a_data->entries; i++) { //FIXME Ibarrier does not work with rep_a_data
+      for(i=0; i<rep_a_data->entries; i++) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
       } 
+
+      if(mall->zombie && MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
+        MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
+        mall->wait_targets_posted = 1;
+      }
       return MALL_DIST_PENDING; 
     }
   } 
@@ -837,44 +841,54 @@ int start_redistribution() {
  * //FIXME Modificar para que se tenga en cuenta rep_a_data
  */
 int check_redistribution(int wait_completed) {
-  int completed, local_completed, all_completed, post_ibarrier;
+  int completed, local_completed, all_completed;
   size_t i, req_qty;
   MPI_Request *req_completed;
   MPI_Win window;
-  post_ibarrier = 0;
   local_completed = 1;
   #if USE_MAL_DEBUG >= 2
     DEBUG_FUNC("Sources are testing for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   if(wait_completed) {
-    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-      if(mall_conf->spawn_method == MALL_SPAWN_BASELINE || mall->myId >= mall->numC) {
-        post_ibarrier=1;
-      }
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL) && !mall->wait_targets_posted) {
+      MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
+      mall->wait_targets_posted = 1;
     }
     for(i=0; i<dist_a_data->entries; i++) {
       req_completed = dist_a_data->requests[i];
       req_qty = dist_a_data->request_qty[i];
-      async_communication_wait(mall->intercomm, req_completed, req_qty, post_ibarrier);
+      async_communication_wait(req_completed, req_qty);
     }
     for(i=0; i<rep_a_data->entries; i++) {
       req_completed = rep_a_data->requests[i];
       req_qty = rep_a_data->request_qty[i];
-      async_communication_wait(mall->intercomm, req_completed, req_qty, 0); //FIXME Ibarrier does not work with rep_a_data
+      async_communication_wait(req_completed, req_qty);
     }
+
+    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { MPI_Wait(&mall->wait_targets, MPI_STATUS_IGNORE); }
   } else {
-    for(i=0; i<dist_a_data->entries; i++) {
-      req_completed = dist_a_data->requests[i];
-      req_qty = dist_a_data->request_qty[i];
-      completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, mall->intercomm, req_completed, req_qty);
-      local_completed = local_completed && completed;
-    }
-    for(i=0; i<rep_a_data->entries; i++) { //FIXME Ibarrier does not work with rep_a_data
-      req_completed = rep_a_data->requests[i];
-      req_qty = rep_a_data->request_qty[i];
-      completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, mall->intercomm, req_completed, req_qty);
-      local_completed = local_completed && completed;
+    if(mall->wait_targets_posted) { 
+      MPI_Test(&mall->wait_targets, &local_completed, MPI_STATUS_IGNORE); 
+    } else {
+      for(i=0; i<dist_a_data->entries; i++) {
+        req_completed = dist_a_data->requests[i];
+        req_qty = dist_a_data->request_qty[i];
+        completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, req_completed, req_qty);
+        local_completed = local_completed && completed;
+      }
+      for(i=0; i<rep_a_data->entries; i++) {
+        req_completed = rep_a_data->requests[i];
+        req_qty = rep_a_data->request_qty[i];
+        completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, req_completed, req_qty);
+        local_completed = local_completed && completed;
+      }
+
+      if(local_completed && MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
+        MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
+        mall->wait_targets_posted = 1;
+        MPI_Test(&mall->wait_targets, &local_completed, MPI_STATUS_IGNORE); //TODO - Figure out if last process takes profit from calling here
+      }
     }
     #if USE_MAL_DEBUG >= 2
       DEBUG_FUNC("Sources will now check a global decision", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);

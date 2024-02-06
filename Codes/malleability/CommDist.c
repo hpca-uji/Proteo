@@ -309,13 +309,6 @@ void async_communication_start(void *send, void **recv, int qty, MPI_Datatype da
 	break;
     }
 
-    /* POST REQUESTS CHECKS */
-    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-      if(!is_children_group && (mall_conf->spawn_method == MALL_SPAWN_BASELINE || mall->myId >= numO)) { // TODO Simplify to "if rank is source only" or "if rank will be zombie"
-        MPI_Ibarrier(comm, &((*requests)[*request_qty-1]) ); //FIXME Not easy to read...
-      }
-    }
-
     freeCounts(&s_counts);
     freeCounts(&r_counts);
 }
@@ -329,38 +322,19 @@ void async_communication_start(void *send, void **recv, int qty, MPI_Datatype da
  *
  * returns: An integer indicating if the operation has been completed(TRUE) or not(FALSE).
  */
-int async_communication_check(int is_children_group, MPI_Comm comm, MPI_Request *requests, size_t request_qty) {
-  int completed, req_completed, all_req_null, test_err, aux_condition;
+int async_communication_check(int is_children_group, MPI_Request *requests, size_t request_qty) {
+  int completed, req_completed, test_err;
   size_t i;
   completed = 1;
-  all_req_null = 1;
   test_err = MPI_SUCCESS;
 
   if (is_children_group) return 1; //FIXME Deberia devolver un num negativo
 
-  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-
-    // The Ibarrier should only be posted at this point if the process
-    // has other requests which has not confirmed as completed yet,
-    // but are confirmed now.
-    if (requests[request_qty-1] == MPI_REQUEST_NULL) {
-      for(i=0; i<request_qty; i++) {
-	aux_condition = requests[i] == MPI_REQUEST_NULL;
-	all_req_null  = all_req_null && aux_condition;
-        test_err = MPI_Test(&(requests[i]), &req_completed, MPI_STATUS_IGNORE);
-        completed = completed && req_completed;
-      }
-      if(completed && !all_req_null) { MPI_Ibarrier(comm, &(requests[request_qty-1])); }
-    }
-    test_err = MPI_Test(&(requests[request_qty-1]), &completed, MPI_STATUS_IGNORE);
-
-  } else {
-    for(i=0; i<request_qty; i++) {
-      test_err = MPI_Test(&(requests[i]), &req_completed, MPI_STATUS_IGNORE);
-      completed = completed && req_completed;
-    }
-//  test_err = MPI_Testall(request_qty, requests, &completed, MPI_STATUSES_IGNORE); //FIXME Some kind of bug with Mpich.
+  for(i=0; i<request_qty; i++) {
+    test_err = MPI_Test(&(requests[i]), &req_completed, MPI_STATUS_IGNORE);
+    completed = completed && req_completed;
   }
+  //test_err = MPI_Testall(request_qty, requests, &completed, MPI_STATUSES_IGNORE); //FIXME Some kind of bug with Mpich.
 
   if (test_err != MPI_SUCCESS && test_err != MPI_ERR_PENDING) {
     printf("P%d aborting -- Test Async\n", mall->myId);
@@ -378,17 +352,12 @@ int async_communication_check(int is_children_group, MPI_Comm comm, MPI_Request 
  * - comm (IN): Communicator to use to confirm finalizations of redistribution
  * - requests (IN): Pointer to array of requests to be used to determine if the communication has ended.
  * - request_qty (IN): Quantity of requests in "requests".
- * - post_ibarrier (IN): Whether an Ibarrier should be posted by this process or not.
  */
-void async_communication_wait(MPI_Comm comm, MPI_Request *requests, size_t request_qty, int post_ibarrier) {
+void async_communication_wait(MPI_Request *requests, size_t request_qty) {
   MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); 
   #if USE_MAL_DEBUG >= 3
     DEBUG_FUNC("Processes Waitall completed", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
-  if(post_ibarrier) {
-    MPI_Ibarrier(comm, &(requests[request_qty-1]) );
-    MPI_Wait(&(requests[request_qty-1]), MPI_STATUS_IGNORE);
-  }
 }
 
 /*
@@ -623,9 +592,6 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request 
       sum = (size_t) s_counts.idE - s_counts.idI;
       sum += (size_t) r_counts.idE - r_counts.idI;
       break;
-  }
-  if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-    sum++;
   }
 
   if (*requests != NULL && sum <= *request_qty) return; // Expected amount of requests

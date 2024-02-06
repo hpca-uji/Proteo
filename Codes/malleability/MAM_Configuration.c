@@ -18,7 +18,7 @@ int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies);
 int MAM_I_set_red_strat(unsigned int strategy, unsigned int *strategies);
 int MAM_I_set_target_number(unsigned int new_numC);
 
-int MAM_I_configuration_get_info();
+int MAM_I_configuration_get_defaults();
 
 int MAM_I_contains_strat(unsigned int comm_strategies, unsigned int strategy);
 int MAM_I_add_strat(unsigned int *comm_strategies, unsigned int strategy);
@@ -108,16 +108,6 @@ void MAM_Set_key_configuration(int key, int required, int *provided) {
       }
     } else {*provided = *(config->value); }
   } else { printf("MAM: Key %d does not exist\n", key); }
-
-  //TODO -- Llevar esto a una funcion de MAM_Config_init para asegurar que es correcto.
-  if(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
-    if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_STRAT_SPAWN_INTERCOMM)) {
-      MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
-    }
-    if(MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_SOURCES)) {
-      MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
-    }
-  }
 }
 
 /*
@@ -180,10 +170,10 @@ void MAM_Init_configuration() {
   configSettings[MAM_RED_STRATEGIES].value = &mall_conf->red_strategies;
 }
 
-void MAM_Check_configuration() {
+void MAM_Set_initial_configuration() {
   int not_filled = 1;
   
-  not_filled = MAM_I_configuration_get_info();
+  not_filled = MAM_I_configuration_get_defaults();
   if(not_filled) {
     if(mall->myId == mall->root) printf("MAM WARNING: Starting configuration not set\n");
     fflush(stdout);
@@ -198,15 +188,28 @@ void MAM_Check_configuration() {
   #endif
 }
 
+void MAM_Check_configuration() {
+  if(mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
+    if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_STRAT_SPAWN_INTERCOMM)) {
+      MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
+    }
+    if(MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_SOURCES)) {
+      MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
+    }
+  }
+
+  if(mall->numC == mall->numP) { // Migrate
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
+  }
+}
 
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
-//================?????????????????=====================||
 //======================================================||
 //======================================================||
 
 
-int MAM_I_configuration_get_info() { //FIXME Cambiar nombre
+int MAM_I_configuration_get_defaults() {
   size_t i;
   int set_value;
   char *tmp = NULL;
@@ -313,13 +316,9 @@ int MAM_I_set_red_strat(unsigned int strategy, unsigned int *strategies) {
 }
 
 int MAM_I_set_target_number(unsigned int new_numC) {
-  int provided;
   if(state > MALL_NOT_STARTED || new_numC == 0) return MALL_DENIED;
 
   mall->numC = (int) new_numC;
-  if(mall->numC == mall->numP) { // Migrar //FIXME Cambiar de sitio
-    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, &provided);
-  }
   return new_numC;
 }
 

@@ -43,6 +43,10 @@ typedef struct {
   MPI_Comm intercomm, tmp_comm;
   MPI_Comm *user_comm;
   MPI_Datatype struct_type;
+
+  // Specific vars for Wait_targets strat
+  int wait_targets_posted;
+  MPI_Request wait_targets;
   
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;

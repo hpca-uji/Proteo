@@ -5,6 +5,7 @@
 #include "malleabilityStates.h"
 
 void MAM_Init_configuration();
+void MAM_Set_initial_configuration();
 void MAM_Check_configuration();
 
 #endif
