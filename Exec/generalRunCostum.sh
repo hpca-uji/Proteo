@@ -55,17 +55,12 @@ fi
 
 numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 nodelist=$SLURM_JOB_NODELIST
-nodes=$SLURM_JOB_NUM_NODES
 if [ -z "$nodelist" ];
 then
   nodelist="localhost"
   initial_nodelist="localhost"
 else
   initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
-fi
-if [ -z "$nodes" ];
-then
-  nodes=1
 fi
 
 #EXECUTE RUN
@@ -74,7 +69,7 @@ if [ $use_extrae -ne 1 ]
 then
   for ((i=0; i<qty; i++))
   do
-    mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
+    mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex
   done
 else
   cp $dir$execDir/Extrae/extrae.xml .
@@ -82,7 +77,7 @@ else
   cp $dir$execDir/Extrae/trace_worker.sh .
   for ((i=0; i<qty; i++))
   do
-    mpirun -hosts $initial_nodelist -np $numP ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
+    mpirun -hosts $initial_nodelist -np $numP ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex 
   done
 fi
 

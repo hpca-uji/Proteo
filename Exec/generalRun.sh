@@ -46,15 +46,10 @@ then
 fi
 
 nodelist=$SLURM_JOB_NODELIST
-nodes=$SLURM_JOB_NUM_NODES
 if [ -z "$nodelist" ];
 then
   echo "Internal ERROR in generalRun.sh - Nodelist not provided"
   exit -1
-fi
-if [ -z "$nodes" ];
-then
-  nodes=1
 fi
 
 numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
@@ -66,7 +61,7 @@ if [ $use_extrae -ne 1 ]
 then
   for ((i=0; i<qty; i++))
   do
-    mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes 
+    mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex
   done
 else
   cp $dir$execDir/Extrae/extrae.xml .
@@ -75,7 +70,7 @@ else
   for ((i=0; i<qty; i++))
   do
     #FIXME Extrae not tested keeping in mind the initial nodelist - Could have some errors
-    srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex $nodelist $nodes
+    srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex
   done
 fi
 
