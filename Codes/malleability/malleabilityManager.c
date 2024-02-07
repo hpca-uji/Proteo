@@ -1001,7 +1001,6 @@ int thread_check(int wait_completed) {
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
   MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
   if(all_completed != MALL_DIST_COMPLETED) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
-  //FIXME No se tiene en cuenta el estado MALL_APP_ENDED
 
   if(pthread_join(mall->async_thread, NULL)) {
     printf("Error al esperar al hilo\n");
@@ -1013,7 +1012,7 @@ int thread_check(int wait_completed) {
     MPI_Barrier(mall->intercomm);
   #endif
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return end_redistribution();
+  return MALL_USER_PENDING;
 }
 
 
