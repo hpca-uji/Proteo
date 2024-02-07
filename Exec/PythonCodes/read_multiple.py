@@ -133,9 +133,9 @@ def key_line_write(f, keys, values):
   for i in range(len(keys)):
     f.write(keys[i] + "=")
     if type(values[i]) == tuple:
-      f.write(str(values[0]))
-      for j in range(len(1, values[i])):
-        f.write("," + str(values[i]) )
+      f.write(str(values[i][0]))
+      for j in range(1,len(values[i])):
+        f.write("," + str(values[i][j]) )
     else:
       f.write(str(values[i]))
     f.write("\n")
