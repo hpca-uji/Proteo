@@ -12,17 +12,22 @@ void MAM_Def_main_datatype() {
   MPI_Aint displs[counts];
   MPI_Datatype types[counts];
 
-  for(i=0; i<counts; i++) {
+  for(i=0; i<5; i++) {
+    blocklengths[i] = 1;
+    types[i] = MPI_UNSIGNED;
+  }
+  for(i=5; i<counts; i++) {
     blocklengths[i] = 1;
     types[i] = MPI_INT;
   }
 
-  // Obtener direccion base
+  // Obtain base direction
   MPI_Get_address(&(mall_conf->spawn_method), &displs[0]);
   MPI_Get_address(&(mall_conf->spawn_strategies), &displs[1]);
   MPI_Get_address(&(mall_conf->spawn_dist), &displs[2]);
   MPI_Get_address(&(mall_conf->red_method), &displs[3]);
   MPI_Get_address(&(mall_conf->red_strategies), &displs[4]);
+
   MPI_Get_address(&(mall->root_parents), &displs[5]);
   MPI_Get_address(&(mall->num_parents), &displs[6]); //TODO Add only when Intercomm strat active?
   MPI_Get_address(&(mall->num_cpus), &displs[7]);
@@ -48,7 +53,7 @@ void MAM_Comm_main_structures(int rootBcast) {
   MPI_Bcast(MPI_BOTTOM, 1, mall->struct_type, rootBcast, mall->intercomm);
 
   if(mall->nodelist == NULL) {
-    mall->nodelist = malloc((mall->nodelist_len+1) * sizeof(char));
+    mall->nodelist = calloc(mall->nodelist_len+1, sizeof(char));
     mall->nodelist[mall->nodelist_len] = '\0';
   }
   MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, mall->intercomm);

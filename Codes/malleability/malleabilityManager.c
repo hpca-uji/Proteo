@@ -102,6 +102,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
 
   mall->name_exec = name_exec;
   mall->nodelist = NULL;
+  mall->nodelist_len = 0;
 
   rep_s_data->entries = 0;
   rep_a_data->entries = 0;

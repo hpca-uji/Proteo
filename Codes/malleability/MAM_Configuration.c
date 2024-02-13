@@ -193,7 +193,8 @@ void MAM_Check_configuration() {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_STRAT_SPAWN_INTERCOMM)) {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
     }
-    if(MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_SOURCES)) {
+    if(!MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_WAIT_TARGETS) &&
+       !MAM_I_contains_strat(mall_conf->red_strategies, MAM_STRAT_RED_PTHREAD)) {
       MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
     }
   }

@@ -122,9 +122,9 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
     init = s_counts.idI;
     end = s_counts.idE;
     if(mall_conf->spawn_method == MALL_SPAWN_MERGE && (s_counts.idI == mall->myId || s_counts.idE == mall->myId + 1)) {
-      offset = s_counts.displs[mall->myId] + datasize;
-      offset2 = r_counts.displs[mall->myId] + datasize;
-      memcpy(send+offset, recv+offset2, s_counts.counts[mall->myId]);
+      offset = s_counts.displs[mall->myId] * datasize;
+      offset2 = r_counts.displs[mall->myId] * datasize;
+      memcpy(recv+offset2, send+offset, s_counts.counts[mall->myId]);
       
       if(s_counts.idI == mall->myId) init = s_counts.idI+1;
       else end = s_counts.idE-1;
@@ -156,6 +156,7 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
 
     if(total_sends > 0) {
       MPI_Waitall(total_sends, sends, MPI_STATUSES_IGNORE);
+      free(sends);
     }
 }
 

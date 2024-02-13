@@ -304,8 +304,8 @@ double init_comm_ptop_pt(group_data group, configuration *config_file, iter_stag
     free(stage->full_array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->real_bytes * sizeof(char));
+  stage->full_array = calloc(stage->real_bytes * sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
@@ -326,8 +326,8 @@ double init_comm_iptop_pt(group_data group, configuration *config_file, iter_sta
     free(stage->reqs);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->real_bytes * sizeof(char));
+  stage->full_array = calloc(stage->real_bytes * sizeof(char));
 
   if(compute && !stage->bytes) { // t_capped is not considered in this case
     stage->req_count = 2 * stage->operations; //FIXME Magical number
@@ -354,7 +354,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
     free(stage->array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char)); //FIXME Valgrind indica unitialised
+  stage->array = calloc(stage->real_bytes * sizeof(char)); //FIXME Valgrind indica unitialised
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
@@ -383,8 +383,8 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
   stage->my_bytes = dist_data.tamBl;
 
-  stage->array = malloc(stage->my_bytes * sizeof(char));
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->my_bytes, sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
@@ -404,9 +404,9 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
     free(stage->full_array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->real_bytes, sizeof(char));
   //Full array para el reduce necesita el mismo tamanyo
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);

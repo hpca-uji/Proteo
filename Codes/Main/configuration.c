@@ -319,6 +319,7 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   config_file->n_resizes = config_file->n_groups-1;
   malloc_config_stages(config_file); // Inicializar a NULL vectores stage
   malloc_config_resizes(config_file); // Inicializar valores de grupos
+
   MPI_Bcast(config_file->stages, config_file->n_stages, config_file->iter_stage_type, root, intercomm);
   MPI_Bcast(config_file->groups, config_file->n_groups, config_file->group_type, root, intercomm);
 
@@ -332,7 +333,6 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
   *config_file_out = config_file;
 }
 
-
 /*
  * Tipo derivado para enviar 7 elementos especificos
  * de la estructura de configuracion con una sola comunicacion.
@@ -341,10 +341,11 @@ void def_struct_config_file(configuration *config_file) {
   int i, counts = 7;
   int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
-  MPI_Datatype types[counts];
+  MPI_Datatype types[counts], type_size_t;
+  MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = MPI_UNSIGNED_LONG;
+  types[0] = types[1] = types[2] = types[3] = type_size_t;
   types[4] = types[5] = types[6] = MPI_INT;
 
   // Rellenar vector displs
@@ -373,12 +374,13 @@ void def_struct_groups(configuration *config_file) {
   int i, counts = 8;
   int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
-  MPI_Datatype aux, types[counts];
+  MPI_Datatype types[counts], type_size_t, aux;
   group_config_t *groups = config_file->groups;
+  MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[4] = types[5] = MPI_INT;
-  types[3] = types[6] = MPI_UNSIGNED_LONG;
+  types[3] = types[6] = type_size_t;
   types[7] = MPI_FLOAT;
 
   // Rellenar vector displs
@@ -424,7 +426,7 @@ void def_struct_groups_strategies(configuration *config_file) {
 
   MPI_Get_address(config_file->groups, &dir);
   for(i = 0; i < counts; i+=2) {
-    group = &config_file->groups[i/2];
+    group = &(config_file->groups[i/2]);
 
     MPI_Get_address(group->ss, &displs[i]);
     MPI_Get_address(group->rs, &displs[i+1]);
