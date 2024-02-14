@@ -642,21 +642,29 @@ int MAM_St_user_completed() {
 }
 
 int MAM_St_spawn_adapt_pending(int wait_completed) {
+  wait_completed = 1;
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->spawn_start = MPI_Wtime();
   unset_spawn_postpone_flag(state);
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
-
+/* TODO Comentar problema, basicamente indicar que no es posible de la forma actual
+ * Ademas es solo para una operación que hemos visto como "extremadamente" rápida
   if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->comm);
     #endif
-    mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
+    mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->spawn_start;
     return 1;
   }
   return 0;
+  */
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->spawn_start;
+  return 1;
 }
 
 int MAM_St_completed(int *mam_state) {
