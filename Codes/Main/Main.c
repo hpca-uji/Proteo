@@ -98,8 +98,8 @@ int main(int argc, char *argv[]) {
         MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
-          malleability_modify_data(&(group->grp), 0, 1, MPI_INT, 1, 1);
-          malleability_modify_data(&(group->iter_start), 0, 1, MPI_INT, 1, 0);
+          MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+          MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
         }
       }
 
@@ -473,11 +473,9 @@ void free_application_data() {
     free(group->async_array);
     group->async_array = NULL;
   }
-/*  MPI_Barrier(MPI_COMM_WORLD); fflush(stdout);
-  printf("TEST %d\n", group->myId);
-  MPI_Barrier(MPI_COMM_WORLD); fflush(stdout);*/
   MAM_Finalize();
   free_zombie_process();
+  free(group);
 }
 
 
@@ -489,8 +487,6 @@ void free_zombie_process() {
   free(results);
 
   free_config(config_file);
-  
-  free(group);
 }
 
 
@@ -529,45 +525,47 @@ void init_originals() {
   size_t i;
 
   if(config_file->n_groups > 1) {
-    malleability_add_data(&(group->grp), 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-    malleability_add_data(&run_id, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-    malleability_add_data(&(group->iter_start), 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+    MAM_Data_add(&(group->grp), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+    MAM_Data_add(&(group->iter_start), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
 
     if(config_file->sdr) {
       for(i=0; i<group->sync_data_groups; i++) {
-        malleability_add_data(group->sync_array[i], group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
       }
     }
     if(config_file->adr) {
       for(i=0; i<group->async_data_groups; i++) {
-        malleability_add_data(group->async_array[i], group->async_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
       }
     }
   }
 }
 
 void init_targets() {
-  size_t i, entries;
+  size_t i, entries, total_qty;
   void *value = NULL;
+  MPI_Datatype type;
 
-  malleability_get_data(&value, 0, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
   group->grp = *((int *)value);
   group->grp = group->grp + 1;
+
 
   recv_config_file(ROOT, new_comm, &config_file);
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
-  malleability_get_data(&value, 1, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
   run_id = *((int *)value);
       
   if(config_file->adr) {
-    malleability_get_entries(&entries, 0, 1);
+    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
     group->async_qty = (int *) malloc(entries * sizeof(int));
     group->async_array = (char **) malloc(entries * sizeof(char *));
     for(i=0; i<entries; i++) {
-      malleability_get_data(&value, i, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
       group->async_array[i] = (char *)value;
       group->async_qty[i] = DR_MAX_SIZE;
     }
@@ -577,18 +575,19 @@ void init_targets() {
 }
 
 void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
-  size_t i, entries;
+  size_t i, entries, total_qty;
   void *value = NULL;
+  MPI_Datatype type;
 
-  malleability_get_data(&value, 0, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
   group->iter_start = *((int *)value);
 
   if(config_file->sdr) {
-    malleability_get_entries(&entries, 0, 0);
+    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
     group->sync_qty = (int *) malloc(entries * sizeof(int));
     group->sync_array = (char **) malloc(entries * sizeof(char *));
     for(i=0; i<entries; i++) {
-      malleability_get_data(&value, i, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
       group->sync_array[i] = (char *)value;
       group->sync_qty[i] = DR_MAX_SIZE;
     }

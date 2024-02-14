@@ -302,33 +302,25 @@ void MAM_Commit(int *mam_state) {
   mall_conf->times->malleability_end = MPI_Wtime();
 }
 
-int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
-  if(state != MALL_USER_PENDING) return MALL_DENIED;
-
-  *reconf_info = *user_reconf;
-  return 0;
-}
-
-void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
-  MAM_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
-}
-
 /*
- * Anyade a la estructura concreta de datos elegida
- * el nuevo set de datos "data" de un total de "total_qty" elementos.
- *
- * Los datos variables se tienen que anyadir cuando quieran ser mandados, no antes
- *
- * Mas informacion en la funcion "add_data".
- *
+ * This function adds data to a data structure based on whether the operation is synchronous or asynchronous,
+ * and whether the data is replicated or distributed. It takes the following parameters:
+ * - data: a pointer to the data to be added
+ * - index: a pointer to a size_t variable where the index of the added data will be stored
+ * - total_qty: the amount of elements in data
+ * - type: the MPI datatype of the data
+ * - is_replicated: a flag indicating whether the data is replicated (MAM_DATA_REPLICATED) or not (MAM_DATA_DISTRIBUTED)
+ * - is_constant: a flag indicating whether the operation is asynchronous (MAM_DATA_CONSTANT) or synchronous (MAM_DATA_VARIABLE)
+ * Finally, it updates the index with the index of the last added data if index is not NULL.
  */
-void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
-  size_t total_reqs = 0;
+void MAM_Data_add(void *data, size_t *index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
+  size_t total_reqs = 0, returned_index;
 
   if(is_constant) { //Async
     if(is_replicated) {
       total_reqs = 1;
       add_data(data, total_qty, type, total_reqs, rep_a_data);
+      returned_index = rep_a_data->entries-1;
     } else {
       if(mall_conf->red_method  == MALL_RED_BASELINE) {
         total_reqs = 1;
@@ -337,25 +329,32 @@ void malleability_add_data(void *data, size_t total_qty, MPI_Datatype type, int 
       } 
       
       add_data(data, total_qty, type, total_reqs, dist_a_data);
+      returned_index = dist_a_data->entries-1;
     }
   } else { //Sync
     if(is_replicated) {
       add_data(data, total_qty, type, total_reqs, rep_s_data);
+      returned_index = rep_s_data->entries-1;
     } else {
       add_data(data, total_qty, type, total_reqs, dist_s_data);
+      returned_index = dist_s_data->entries-1;
     }
   }
+
+  if(index != NULL) *index = returned_index;
 }
 
 /*
- * Modifica en la estructura concreta de datos elegida en el indice "index"
- * con el set de datos "data" de un total de "total_qty" elementos.
- *
- * Los datos variables se tienen que modificar cuando quieran ser mandados, no antes
- *
- * Mas informacion en la funcion "modify_data".
+ * This function modifies a data entry to a data structure based on whether the operation is synchronous or asynchronous,
+ * and whether the data is replicated or distributed. It takes the following parameters:
+ * - data: a pointer to the data to be added
+ * - index: a value indicating which entry will be modified
+ * - total_qty: the amount of elements in data
+ * - type: the MPI datatype of the data
+ * - is_replicated: a flag indicating whether the data is replicated (MAM_DATA_REPLICATED) or not (MAM_DATA_DISTRIBUTED)
+ * - is_constant: a flag indicating whether the operation is asynchronous (MAM_DATA_CONSTANT) or synchronous (MAM_DATA_VARIABLE)
  */
-void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
+void MAM_Data_modify(void *data, size_t index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant) {
   size_t total_reqs = 0;
 
   if(is_constant) {
@@ -381,10 +380,13 @@ void malleability_modify_data(void *data, size_t index, size_t total_qty, MPI_Da
 }
 
 /*
- * Devuelve el numero de entradas para la estructura de descripcion de 
- * datos elegida.
+ * This functions returns how many data entries are available for one of the specific data structures.
+ * It takes the following parameters:
+ * - is_replicated: a flag indicating whether the structure is replicated (MAM_DATA_REPLICATED) or not (MAM_DATA_DISTRIBUTED)
+ * - is_constant: a flag indicating whether the operation is asynchronous (MAM_DATA_CONSTANT) or synchronous (MAM_DATA_VARIABLE)
+ * - entries: a pointer where the amount of entries will be stored
  */
-void malleability_get_entries(size_t *entries, int is_replicated, int is_constant){
+void MAM_Data_get_entries(int is_replicated, int is_constant, size_t *entries){
   
   if(is_constant) {
     if(is_replicated) {
@@ -402,13 +404,16 @@ void malleability_get_entries(size_t *entries, int is_replicated, int is_constan
 }
 
 /*
- * Devuelve el elemento de la lista "index" al usuario.
- * La devolución es en el mismo orden que lo han metido los padres
- * con la funcion "malleability_add_data()".
- * Es tarea del usuario saber el tipo de esos datos.
- * TODO Refactor a que sea automatico
+ * This function returns a data entry to a data structure based on whether the operation is synchronous or asynchronous,
+ * and whether the data is replicated or distributed. It takes the following parameters:
+ * - index: a value indicating which entry will be modified
+ * - is_replicated: a flag indicating whether the data is replicated (MAM_DATA_REPLICATED) or not (MAM_DATA_DISTRIBUTED)
+ * - is_constant: a flag indicating whether the operation is asynchronous (MAM_DATA_CONSTANT) or synchronous (MAM_DATA_VARIABLE)
+ * - data: a pointer where the data will be stored. The user must free it
+ * - total_qty: the amount of elements in data for all ranks
+ * - local_qty: the amount of elements in data for this rank
  */
-void malleability_get_data(void **data, size_t index, int is_replicated, int is_constant) {
+void MAM_Data_get_pointer(void **data, size_t index, size_t *total_qty, MPI_Datatype *type, int is_replicated, int is_constant) {
   malleability_data_t *data_struct;
 
   if(is_constant) {
@@ -426,8 +431,46 @@ void malleability_get_data(void **data, size_t index, int is_replicated, int is_
   }
 
   *data = data_struct->arrays[index];
+  *total_qty = data_struct->qty[index];
+  *type = data_struct->types[index];
+  //get_block_dist(qty, mall->myId, mall->numP, &dist_data); //FIXME Asegurar que numP es correcto
 }
 
+/*
+ * @brief Returns a structure to perform data redistribution during a reconfiguration.
+ *
+ * This function is intended to be called when the state of MaM is MALL_USER_PENDING only. 
+ * It is designed to provide the necessary information for the user to perform data redistribution.
+ *
+ * Parameters:
+ *   - mam_user_reconf_t *reconf_info: A pointer to a mam_user_reconf_t structure where the function will store the required information for data redistribution.
+ *
+ * Return Value:
+ *   - MAM_OK: If the function successfully retrieves the reconfiguration information.
+ *   - MALL_DENIED: If the function is called when the state of the MaM is not MALL_USER_PENDING.
+ */
+int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
+  if(state != MALL_USER_PENDING) return MALL_DENIED;
+
+  *reconf_info = *user_reconf;
+  return MAM_OK;
+}
+
+/*
+ * @brief Returns the times used for the different steps of last reconfiguration.
+ *
+ * This function is intended to be called when a reconfiguration has ended. 
+ * It is designed to provide the necessary information for the user to perform data redistribution.
+ *
+ * Parameters:
+ *  - double *sp_time:   A pointer where the spawn time will be saved.
+ *  - double *sy_time:   A pointer where the sychronous data redistribution time will be saved.
+ *  - double *asy_time:  A pointer where the asychronous data redistribution time will be saved.
+ *  - double *mall_time: A pointer where the malleability time will be saved.
+ */
+void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
+  MAM_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
+}
 
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
@@ -945,7 +988,8 @@ int end_redistribution() {
 
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
-    } 
+    }
+
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
