@@ -189,8 +189,17 @@ void MAM_Set_initial_configuration() {
 }
 
 void MAM_Check_configuration() {
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE && MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
-    MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
+  if(mall->numC == mall->numP) { // Migrate
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
+  }
+
+  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
+    if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
+      MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
+    }
+    if(mall->numP > mall->numC && MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_SINGLE)) {
+      MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_SINGLE);
+    }
   }
   if(mall_conf->red_method == MALL_RED_RMA_LOCK || mall_conf->red_method == MALL_RED_RMA_LOCKALL) {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
@@ -200,10 +209,6 @@ void MAM_Check_configuration() {
        !MAM_I_contains_strat(mall_conf->red_strategies, MAM_MASK_PTHREAD)) {
       MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
     }
-  }
-
-  if(mall->numC == mall->numP) { // Migrate
-    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
   }
 }
 
