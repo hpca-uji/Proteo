@@ -27,7 +27,7 @@ cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
 if [ "$#" -lt "6" ]
 then
   echo "Not enough arguments"
-  echo "Usage -> bash CheckRun Common_Name maxIndex total_repetitions total_groups total_stages max_iteration_time [limit_time]"
+  echo "Usage -> bash CheckRun.sh Common_Name maxIndex total_repetitions total_stages total_groups max_iteration_time [limit_time]"
   exit -1
 fi
 
@@ -44,7 +44,7 @@ then
 fi
 
 limit_time=0
-exec_lines_basic=7
+exec_lines_basic=6
 iter_lines_basic=3
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
 iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
@@ -166,32 +166,39 @@ fi
 #If any run lacks repetitions, the job is automatically launched again
 #If a run has even executed a repetition, is not launched as it could be in the waiting queue
 qty_missing=0
+use_extrae=0
 for ((run=0; run<$maxIndex; run++))
 do
+  diff=0
+
   if [ -f "R${run}_Global.out" ]
   then
     qtyEx=$(grep T_total R"$run"_Global.out | wc -l)
     if [ "$qtyEx" -ne "$totalEjGrupo" ];
     then
-      #1 - Obtain config file name and repetitions to perform
       diff=$(($totalEjGrupo-$qtyEx))
-      qty_missing=$(($qty_missing+$diff))
-      config_file="$common_name$run.ini"
-      if [ $limit_time_exec -ne 0 ] #Max time per execution in seconds
-      then
-        limit_time=$(($limit_time_exec*$diff/60+1))
-      fi
-
-      #2 - Obtain number of nodes needed
-      node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
-
-      #3 - Launch execution
       echo "Run$run lacks $diff repetitions"
-      use_extrae=0
-      sbatch -p $partition -N $node_qty -t $limit_time $dir$execDir./generalRun.sh $dir $cores $config_file $use_extrae $run $diff
     fi
   else
-    echo "File R${run}_Global.out does not exist -- Could it be it must still be executed?"
+    diff=$(($totalEjGrupo))
+    echo "Run$run results not found -- Trying to execute"
+  fi
+
+  if [ $diff -ne 0 ] #Execute if needed
+  then
+    qty_missing=$(($qty_missing+$diff))
+
+    if [ $limit_time_exec -ne 0 ] #Max time per execution in seconds
+    then
+      limit_time=$(($limit_time_exec*$diff/60+1))
+    fi
+
+    #2 - Obtain number of nodes needed
+    config_file="$common_name$run.ini"
+    node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
+
+    #3 - Launch execution
+    sbatch -p $partition -N $node_qty -t $limit_time $dir$execDir./generalRun.sh $dir $cores $config_file $use_extrae $run $diff
   fi
 done
 
