@@ -26,6 +26,7 @@ int MAM_St_spawn_start();
 int MAM_St_spawn_pending(int wait_completed);
 int MAM_St_red_start();
 int MAM_St_red_pending(int *mam_state, int wait_completed);
+int MAM_St_user_start(int *mam_state);
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args);
 int MAM_St_user_completed();
 int MAM_St_spawn_adapt_pending(int wait_completed);
@@ -210,6 +211,10 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
       call_checkpoint = MAM_St_red_pending(mam_state, wait_completed);
       break;
 
+    case MALL_USER_START:
+      call_checkpoint = MAM_St_user_start(mam_state);
+      break;
+
     case MALL_USER_PENDING:
       call_checkpoint = MAM_St_user_pending(mam_state, wait_completed, user_function, user_args);
       break;
@@ -238,7 +243,7 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
  */
 void MAM_Resume_redistribution(int *mam_state) {
   state = MALL_USER_COMPLETED;
-  *mam_state = MAM_PENDING;
+  if(mam_state != NULL) *mam_state = MAM_PENDING;
 }
 
 /*
@@ -601,17 +606,22 @@ int MAM_St_red_pending(int *mam_state, int wait_completed) {
   }
 
   if(state != MALL_DIST_PENDING) { 
-    if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
-      MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
-    } else {
-      MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
-    }
-    MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-    state = MALL_USER_PENDING;
-    *mam_state = MAM_USER_PENDING;
+    state = MALL_USER_START;
     return 1;
   }
   return 0;
+}
+
+int MAM_St_user_start(int *mam_state) {
+  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
+    MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
+  } else {
+    MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
+  }
+  MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
+  state = MALL_USER_PENDING;
+  *mam_state = MAM_USER_PENDING;
+  return 1;
 }
 
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
@@ -874,7 +884,7 @@ int start_redistribution() {
       return MALL_DIST_PENDING; 
     }
   } 
-  return MALL_USER_PENDING;
+  return MALL_USER_START;
 }
 
 
@@ -1131,8 +1141,7 @@ void MAM_I_create_user_struct(int is_children_group) {
   if(is_children_group) {
     user_reconf->rank_state = MAM_PROC_NEW_RANK;
     user_reconf->numS = mall->num_parents;
-    if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) user_reconf->numT = mall->numP;
-    else user_reconf->numT = mall->num_parents + mall->numP;
+    user_reconf->numT = mall->numP;
   } else {
     user_reconf->numS = mall->numP;
     user_reconf->numT = mall->numC;

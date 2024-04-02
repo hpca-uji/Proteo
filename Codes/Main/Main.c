@@ -209,7 +209,7 @@ double iterate(int async_comm) {
   }
 
   // Se esta realizando una redistribucion de datos asincrona
-  if(async_comm == MAM_PENDING) { 
+  if(async_comm == MAM_PENDING || async_comm == MAM_USER_PENDING) { 
     // TODO Que diferencie entre tipo de partes asincronas?
     results->iters_async += 1;
   }
