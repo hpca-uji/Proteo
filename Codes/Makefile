@@ -41,7 +41,7 @@ $(CONFIG) : $(BUILD_DIR)/$(CONFIG)
 $(BUILD_DIR)/$(CONFIG) :
 	mkdir -p $(@D)
 	@ echo -n "dir=\"" > $(BUILD_DIR)/$(CONFIG)
-	@ realpath -z $$(echo "$$(pwd)/..") >> $(BUILD_DIR)/$(CONFIG)
+	@ realpath -z $$(echo "$$(pwd)/..") | tr -d '\0' >> $(BUILD_DIR)/$(CONFIG)
 	@ echo "\"" >> $(BUILD_DIR)/$(CONFIG)
 
 # Actual target of the binary - depends on all .o files.
