@@ -134,7 +134,7 @@ void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
   int i, asigCores;
   int tamBl, remainder;
 
-  tamBl = mall->num_cpus / mall->num_nodes;
+  tamBl = mall->num_cpus;
   asigCores = spawn_data.already_created;
   i = *used_nodes = spawn_data.already_created / tamBl;
   remainder = spawn_data.already_created % tamBl;
