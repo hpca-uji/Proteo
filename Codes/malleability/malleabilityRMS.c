@@ -58,6 +58,55 @@ void MAM_check_hosts() {
 }
 
 /*
+ * @brief Get if a group of processes uses an internode comunicator
+ *
+ * This function checks the physical distribution of all ranks in the
+ * original communicator passed to MaM. If all of them reside in the
+ * same host, false is returned. True is returned otherwise.
+ *
+ * @return Integer indicating if more than one node is used by the
+ * original communicator (>0) or only one (0).
+ */
+int MAM_Is_internode_group() {
+  int i, name_len, max_name_len, unique_count;
+  int myId, numP;
+  char *my_host, *all_hosts, *tested_host;
+
+  MPI_Comm_rank(mall->original_comm, &myId);
+  MPI_Comm_size(mall->original_comm, &numP);
+
+  unique_count = 0; //First node is not counted
+  if(numP == 1) return unique_count;
+
+  all_hosts = NULL;
+  my_host = (char *) malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
+  MPI_Get_processor_name(my_host, &name_len);
+
+  MPI_Allreduce(&name_len, &max_name_len, 1, MPI_INT, MPI_MAX, mall->original_comm);
+  my_host[max_name_len] = '\0';
+  max_name_len++; // Len does not consider terminating character
+  if(myId == MALLEABILITY_ROOT) {
+    all_hosts = (char *) malloc(numP * max_name_len * sizeof(char));
+  }
+  //FIXME Should be a Gatherv as each host could have unitialised chars between name_len and max_name_len
+  MPI_Gather(my_host, max_name_len, MPI_CHAR, all_hosts, max_name_len, MPI_CHAR, MALLEABILITY_ROOT, mall->original_comm);
+
+  if(myId == MALLEABILITY_ROOT) {
+    for (i = 1; i < numP; i++) {
+      tested_host = all_hosts + (i * max_name_len);
+      if (strcmp(my_host, tested_host) != 0) {
+        unique_count++;
+        break;
+      }
+    }
+    free(all_hosts);
+  }
+  MPI_Bcast(&unique_count, 1, MPI_INT, MALLEABILITY_ROOT, mall->original_comm);
+  free(my_host);
+  return unique_count;
+}
+
+/*
  * TODO
  * FIXME Does not consider heterogenous machines for num_cpus
  * FIXME Always returns 0... -- Perform error checking?
@@ -79,7 +128,7 @@ int MAM_I_get_hosts_info() {
     unique_hosts[0] = 0; //First host will always be unique
     unique_count = 1;
   }
-
+  //FIXME Should be a Gatherv as each host could have unitialised chars between name_len and max_name_len
   MPI_Gather(my_host, max_name_len, MPI_CHAR, all_hosts, max_name_len, MPI_CHAR, mall->root, mall->comm);
 
   if(mall->myId == mall->root) {
@@ -169,6 +218,8 @@ int MAM_I_slurm_getenv_hosts_info() {
   tmp = NULL;
 
 
+  //EXAMPLE - SLURM_JOB_CPUS_PER_NODE='72(x2),36'
+  //It indicates two nodes have 72 CPUs each and third has 36 cpus
   tmp = getenv("SLURM_JOB_CPUS_PER_NODE");
   if(tmp == NULL) return 1;
 
@@ -182,7 +233,11 @@ int MAM_I_slurm_getenv_hosts_info() {
   mall->num_cpus = 0;
 
   while (token != NULL) {
-    count = 1; // The count is not present when is 1 node.
+    // If actual token contains only one node, the second portion
+    // does not appear and sscanf does not modify "count"
+    // First portion --> "%d"
+    // Second portion -> "(x%d)"
+    count = 1;
     if (sscanf(token, "%d(x%d)", &cpus, &count) >= 1) {
       mall->num_cpus = cpus; // num_cpus stores the amount of cores per cpu
       //cpus_per_node[i] = cpus;
