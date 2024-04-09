@@ -14,7 +14,7 @@ endif
 DEF = -DUSE_MAL_SLURM=$(USE_MAL_SLURM) -DUSE_MAL_BARRIERS=$(USE_MAL_BARRIERS) -DUSE_MAL_DEBUG=$(USE_MAL_DEBUG)
 
 
-.PHONY : clean clear install install_slurm
+.PHONY : clean clear install
 
 # Final binary
 BIN = a.out
@@ -33,13 +33,13 @@ OBJ = $(C_FILES:%.c=$(BUILD_DIR)/%.o)
 # Gcc will create these .d files containing dependencies.
 DEP = $(OBJ:%.o=%.d)
 
+# Default configuration file
+$(CONFIG) : $(BUILD_DIR)/$(CONFIG)
 # Default target named after the binary.
 $(BIN) : $(BUILD_DIR)/$(BIN)
 
-# Default configuration file
-$(CONFIG) : $(BUILD_DIR)/$(CONFIG)
 $(BUILD_DIR)/$(CONFIG) :
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 	@ echo -n "dir=\"" > $(BUILD_DIR)/$(CONFIG)
 	@ realpath -z $$(echo "$$(pwd)/..") | tr -d '\0' >> $(BUILD_DIR)/$(CONFIG)
 	@ echo "\"" >> $(BUILD_DIR)/$(CONFIG)
@@ -58,14 +58,16 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 # The -MMD flags additionaly creates a .d file with
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
+
 
 clean:
 	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
 clear:
-	-rm -rf $(BUILDDIR)
+	-rm -rf $(BUILD_DIR)
 
+all: install
 
 install: $(BIN) $(CONFIG)
 	echo "Done"
