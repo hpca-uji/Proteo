@@ -25,7 +25,7 @@ int MAM_St_rms(int *mam_state);
 int MAM_St_spawn_start();
 int MAM_St_spawn_pending(int wait_completed);
 int MAM_St_red_start();
-int MAM_St_red_pending(int *mam_state, int wait_completed);
+int MAM_St_red_pending(int wait_completed);
 int MAM_St_user_start(int *mam_state);
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args);
 int MAM_St_user_completed();
@@ -45,9 +45,6 @@ int shrink_redistribution();
 int thread_creation();
 int thread_check(int wait_completed);
 void* thread_async_work();
-
-void print_comms_state();
-void malleability_comms_update(MPI_Comm comm);
 
 int MAM_I_convert_key(char *key);
 void MAM_I_create_user_struct(int is_children_group);
@@ -70,7 +67,7 @@ mam_user_reconf_t *user_reconf;
  * aplicacion.
  */
 int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(void *), void *user_args) {
-  MPI_Comm dup_comm, thread_comm;
+  MPI_Comm dup_comm, thread_comm, original_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
   mall = (malleability_t *) malloc(sizeof(malleability_t));
@@ -90,14 +87,17 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
 
   MPI_Comm_dup(*comm, &dup_comm);
   MPI_Comm_dup(*comm, &thread_comm);
+  MPI_Comm_dup(*comm, &original_comm);
   MPI_Comm_set_name(dup_comm, "MAM_MAIN");
   MPI_Comm_set_name(thread_comm, "MAM_THREAD");
+  MPI_Comm_set_name(original_comm, "MAM_ORIGINAL");
 
   mall->root = root;
   mall->root_parents = root;
   mall->zombie = 0;
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm;
+  mall->original_comm = original_comm;
   mall->user_comm = comm; 
   mall->tmp_comm = MPI_COMM_NULL;
 
@@ -113,7 +113,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   state = MALL_NOT_STARTED;
 
   MAM_Init_configuration();
-  zombies_service_init();
+  MAM_Zombies_service_init();
   init_malleability_times();
   MAM_Def_main_datatype();
 
@@ -124,7 +124,9 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
     return MALLEABILITY_CHILDREN;
   }
 
+  //TODO Check potential improvement - If check_hosts does not use slurm, internode_group could be obtained there
   MAM_check_hosts();
+  mall->internode_group = MAM_Is_internode_group();
   MAM_Set_initial_configuration();
 
   #if USE_MAL_BARRIERS && USE_MAL_DEBUG
@@ -144,7 +146,8 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
  * de maleabilidad y asegura que los zombies
  * despierten si los hubiese.
  */
-void MAM_Finalize() {	  
+int MAM_Finalize() {	  
+  int request_abort;
   free_malleability_data_struct(rep_s_data);
   free_malleability_data_struct(rep_a_data);
   free_malleability_data_struct(dist_s_data);
@@ -157,18 +160,18 @@ void MAM_Finalize() {
   if(mall->nodelist != NULL) free(mall->nodelist);
 
   MAM_Free_main_datatype();
+  request_abort = MAM_Zombies_service_free();
   free_malleability_times();
   if(mall->comm != MPI_COMM_WORLD && mall->comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->comm));
   if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->thread_comm));
   if(mall->intercomm != MPI_COMM_WORLD && mall->intercomm != MPI_COMM_NULL) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
+  if(mall->original_comm != MPI_COMM_WORLD && mall->original_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->original_comm));
   free(mall);
   free(mall_conf);
   free(user_reconf);
 
-  zombies_awake();
-  zombies_service_free();
-
   state = MALL_UNRESERVED;
+  return request_abort;
 }
 
 /* 
@@ -208,7 +211,7 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
       break;
 
     case MALL_DIST_PENDING:
-      call_checkpoint = MAM_St_red_pending(mam_state, wait_completed);
+      call_checkpoint = MAM_St_red_pending(wait_completed);
       break;
 
     case MALL_USER_START:
@@ -250,14 +253,14 @@ void MAM_Resume_redistribution(int *mam_state) {
  * TODO
  */
 void MAM_Commit(int *mam_state) {
-  int zombies = 0;
+  int request_abort;
   #if USE_MAL_DEBUG
     if(mall->myId == mall->root){ DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); } fflush(stdout);
   #endif
 
   // Get times before commiting
   if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) {
-    // This communication is only needed when a root process will become a zombie
+    // This communication is only needed when the root process will become a zombie
     malleability_times_broadcast(mall->root_collectives);
   }
 
@@ -265,26 +268,20 @@ void MAM_Commit(int *mam_state) {
   if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->tmp_comm));
   if(*(mall->user_comm) != MPI_COMM_WORLD && *(mall->user_comm) != MPI_COMM_NULL) MPI_Comm_free(mall->user_comm);
 
-  // Zombies treatment
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
-    MPI_Allreduce(&mall->zombie, &zombies, 1, MPI_INT, MPI_MAX, mall->comm);
-    if(zombies) {
-      zombies_collect_suspended(mall->comm);
-    }
-  }
-
-  // Zombies KILL
+  // Zombies Treatment
+  MAM_Zombies_update();
   if(mall->zombie) {
-    #if USE_MAL_DEBUG >= 2
+    #if USE_MAL_DEBUG >= 1
       DEBUG_FUNC("Is terminating as zombie", mall->myId, mall->numP); fflush(stdout);
     #endif
-    MAM_Finalize();
+    request_abort = MAM_Finalize();
+    if(request_abort) { MPI_Abort(MPI_COMM_WORLD, -101); }
     MPI_Finalize();
     exit(0);
   }
 
   // Reset/Free communicators
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { malleability_comms_update(mall->intercomm); }
+  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MAM_comms_update(mall->intercomm); }
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
 
   MPI_Comm_rank(mall->comm, &mall->myId);
@@ -295,8 +292,9 @@ void MAM_Commit(int *mam_state) {
   if(mam_state != NULL) *mam_state = MAM_COMPLETED;
 
   // Set new communicator
-  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
-  else if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
+  MPI_Comm_dup(mall->comm, mall->user_comm);
+  //if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
+  //else if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
   #if USE_MAL_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
   #endif
@@ -553,9 +551,9 @@ int MAM_St_rms(int *mam_state) {
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
 
+  MAM_Check_configuration();
   *mam_state = MAM_NOT_STARTED;
   state = MALL_RMS_COMPLETED;
-  MAM_Check_configuration();
   mall->wait_targets_posted = 0;
 
   //if(CHECK_RMS()) {return MALL_DENIED;}    
@@ -598,7 +596,7 @@ int MAM_St_red_start() {
   return 1;
 }
 
-int MAM_St_red_pending(int *mam_state, int wait_completed) {
+int MAM_St_red_pending(int wait_completed) {
   if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
     state = thread_check(wait_completed);
   } else {
@@ -652,7 +650,7 @@ int MAM_St_user_completed() {
 }
 
 int MAM_St_spawn_adapt_pending(int wait_completed) {
-  wait_completed = 1;
+  wait_completed = MAM_WAIT_COMPLETION;
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
@@ -661,6 +659,8 @@ int MAM_St_spawn_adapt_pending(int wait_completed) {
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
 /* TODO Comentar problema, basicamente indicar que no es posible de la forma actual
  * Ademas es solo para una operación que hemos visto como "extremadamente" rápida
+ * NO es posible debido a que solo se puede hacer tras enviar los datos variables 
+ * y por tanto pierden validez dichos datos
   if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->comm);
@@ -705,12 +705,18 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     DEBUG_FUNC("MaM will now initialize spawned processes", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  malleability_connect_children(mall->comm, &(mall->intercomm));
+  malleability_connect_children(&(mall->intercomm));
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { // For Merge Method, these processes will be added
     MPI_Comm_rank(mall->intercomm, &mall->myId);
     MPI_Comm_size(mall->intercomm, &mall->numP);
   }
   mall->root_collectives = mall->root_parents;
+
+  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)) {
+    mall->internode_group = 0;
+  } else {
+    mall->internode_group = MAM_Is_internode_group();
+  }
 
   #if USE_MAL_DEBUG
     DEBUG_FUNC("Spawned have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -1100,37 +1106,6 @@ void* thread_async_work() {
 
 
 //==============================================================================
-/*
- * Muestra por pantalla el estado actual de todos los comunicadores
- */
-void print_comms_state() {
-  int tester;
-  char *test = malloc(MPI_MAX_OBJECT_NAME * sizeof(char));
-
-  MPI_Comm_get_name(mall->comm, test, &tester);
-  printf("P%d Comm=%d Name=%s\n", mall->myId, mall->comm, test);
-  MPI_Comm_get_name(*(mall->user_comm), test, &tester);
-  printf("P%d Comm=%d Name=%s\n", mall->myId, *(mall->user_comm), test);
-  if(mall->intercomm != MPI_COMM_NULL) {
-    MPI_Comm_get_name(mall->intercomm, test, &tester);
-    printf("P%d Comm=%d Name=%s\n", mall->myId, mall->intercomm, test);
-  }
-  free(test);
-}
-
-/*
- * Función solo necesaria en Merge
- */
-void malleability_comms_update(MPI_Comm comm) {
-  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
-
-  MPI_Comm_dup(comm, &(mall->thread_comm));
-  MPI_Comm_dup(comm, &(mall->comm));
-
-  MPI_Comm_set_name(mall->thread_comm, "MAM_THREAD");
-  MPI_Comm_set_name(mall->comm, "MAM_MAIN");
-}
 
 /*
  * TODO Por hacer

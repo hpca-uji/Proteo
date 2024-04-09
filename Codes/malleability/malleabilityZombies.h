@@ -10,9 +10,8 @@
 #include <signal.h>
 #include "malleabilityDataStructures.h"
 
-void zombies_collect_suspended(MPI_Comm comm);
-void zombies_service_init();
-void zombies_service_free();
-void zombies_awake();
+void MAM_Zombies_service_init();
+int MAM_Zombies_service_free();
+void MAM_Zombies_update();
 
 #endif

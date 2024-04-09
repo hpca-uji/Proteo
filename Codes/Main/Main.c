@@ -45,7 +45,6 @@ int main(int argc, char *argv[]) {
     int numP, myId, res;
     int req;
     int im_child;
-    int abort_needed = 0;
     size_t i;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
@@ -103,6 +102,10 @@ int main(int argc, char *argv[]) {
         }
       }
 
+    int myId2, numP2;
+    MPI_Comm_size(comm, &numP2);
+    MPI_Comm_rank(comm, &myId2);
+    print_general_info(myId2, group->grp, numP2);
       res = work();
 
       if(res==1) { // Se ha llegado al final de la aplicacion
@@ -126,13 +129,8 @@ int main(int argc, char *argv[]) {
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
     }
-
-    if(group->myId == ROOT && config_file->groups[group->grp-1].sm == MALL_SPAWN_MERGE) {
-      abort_needed = 1;
-    }
     free_application_data();
 
-    if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
     MPI_Finalize();
     return 0;
 }
@@ -291,7 +289,8 @@ void print_general_info(int myId, int grp, int numP) {
   char *version = malloc(MPI_MAX_LIBRARY_VERSION_STRING * sizeof(char));
   MPI_Get_processor_name(name, &len);
   MPI_Get_library_version(version, &len);
-  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
+  //printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
+  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s -- PID=%d\n", myId, grp, numP, name, getpid());
 
   free(name);
   free(version);
@@ -450,6 +449,7 @@ void obtain_op_times(int compute) {
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
+  int abort_needed;
   size_t i;
 
   if(config_file->sdr && group->sync_array != NULL) {
@@ -473,9 +473,10 @@ void free_application_data() {
     free(group->async_array);
     group->async_array = NULL;
   }
-  MAM_Finalize();
+  abort_needed = MAM_Finalize();
   free_zombie_process();
   free(group);
+  if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
 }
 
 
