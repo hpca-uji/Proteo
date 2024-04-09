@@ -9,6 +9,6 @@
 #include "../malleabilityDataStructures.h"
 #include "Spawn_DataStructure.h"
 
-void processes_dist(Spawn_data spawn_data, MPI_Info *info_spawn);
+void processes_dist(Spawn_data *spawn_data);
 
 #endif

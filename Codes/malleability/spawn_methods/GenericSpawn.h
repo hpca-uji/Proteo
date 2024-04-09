@@ -8,7 +8,7 @@
 
 int init_spawn(MPI_Comm comm, MPI_Comm *child);
 int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int wait_completed);
-void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents);
+void malleability_connect_children(MPI_Comm *parents);
 
 
 void unset_spawn_postpone_flag(int outside_state);

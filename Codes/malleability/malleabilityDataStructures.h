@@ -39,7 +39,7 @@ typedef struct {
   int root, root_collectives;
   int num_parents, root_parents;
   pthread_t async_thread;
-  MPI_Comm comm, thread_comm;
+  MPI_Comm comm, thread_comm, original_comm;
   MPI_Comm intercomm, tmp_comm;
   MPI_Comm *user_comm;
   MPI_Datatype struct_type;
@@ -50,6 +50,7 @@ typedef struct {
   
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;
+  int internode_group;
 } malleability_t;
 
 /* --- VARIABLES --- */
@@ -60,7 +61,9 @@ extern int state;
 /* --- FUNCTIONS --- */
 void MAM_Def_main_datatype();
 void MAM_Free_main_datatype();
-void MAM_Comm_main_structures(int rootBcast);
+void MAM_Comm_main_structures(MPI_Comm comm, int rootBcast);
 
+void MAM_print_comms_state();
+void MAM_comms_update(MPI_Comm comm);
 
 #endif

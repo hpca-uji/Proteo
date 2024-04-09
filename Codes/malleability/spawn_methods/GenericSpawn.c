@@ -137,32 +137,30 @@ void unset_spawn_postpone_flag(int outside_state) {
  * para el paso de redistribucion de datos (Numeros de procesos y Id del Root).
  *
  */
-void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents) {
+void malleability_connect_children(MPI_Comm *parents) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
-  spawn_data->spawn_qty = mall->numP;
-  spawn_data->target_qty = mall->numP;
-  spawn_data->comm = comm;
 
-  MAM_Comm_main_structures(MALLEABILITY_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
-  //MPI_Comm_remote_size(*parents, &spawn_data->initial_qty);
+  MAM_Comm_main_structures(*parents, MALLEABILITY_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
   spawn_data->initial_qty = mall->num_parents;
+  spawn_data->target_qty = mall->numC;
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
 
   switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:
+      spawn_data->spawn_qty = spawn_data->target_qty;
       baseline(*spawn_data, parents);
       if(!spawn_data->spawn_is_intercomm) {
         intracomm_strategy(MALLEABILITY_CHILDREN, parents);
       }
       break;
     case MALL_SPAWN_MERGE:
-      spawn_data->target_qty += spawn_data->initial_qty;
+      spawn_data->spawn_qty = spawn_data->target_qty - spawn_data->initial_qty;
       merge(*spawn_data, parents, MALL_NOT_STARTED);
       break;
   }
-  //mall->num_parents = spawn_data->initial_qty;
   free(spawn_data);
 }
 
@@ -174,13 +172,16 @@ void malleability_connect_children(MPI_Comm comm, MPI_Comm *parents) {
 void set_spawn_configuration(MPI_Comm comm) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
 
+  spawn_data->total_spawns = 0;
   spawn_data->initial_qty = mall->numP;
   spawn_data->target_qty = mall->numC;
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single)); 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
   spawn_data->comm = comm;
   spawn_data->mapping_fill_method = MALL_DIST_STRING;
+  spawn_data->sets = NULL;
 
   switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:
@@ -196,7 +197,6 @@ void set_spawn_configuration(MPI_Comm comm) {
   if(spawn_data->spawn_is_async) {
     init_spawn_state();
   }
-  spawn_data->mapping = MPI_INFO_NULL;
 }
 
 /*
@@ -204,11 +204,23 @@ void set_spawn_configuration(MPI_Comm comm) {
  * junto a la destrucion de aquellas estructuras que utiliza.
  */
 void deallocate_spawn_data() {
+  int i;
+  MPI_Info *info;
   if(spawn_data == NULL) return;
 
-  if(spawn_data->mapping != MPI_INFO_NULL) {
-    MPI_Info_free(&(spawn_data->mapping));
+  for(i=0; i<spawn_data->total_spawns; i++) {
+    info = &(spawn_data->sets[i].mapping);
+    if(*info != MPI_INFO_NULL) {
+      MPI_Info_free(info);
+      *info = MPI_INFO_NULL;
+    }
   }
+
+  if(spawn_data->sets != NULL) {
+    free(spawn_data->sets);
+    spawn_data->sets = NULL;
+  }
+
   if(spawn_data->spawn_is_async) {
     free_spawn_state();
   }
@@ -230,7 +242,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
 
   // WORK
   if(mall->myId == mall->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
-    processes_dist(*spawn_data, &(spawn_data->mapping));
+    processes_dist(spawn_data);
   }
   switch(mall_conf->spawn_method) {
     case MALL_SPAWN_BASELINE:

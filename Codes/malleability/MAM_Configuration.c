@@ -34,7 +34,7 @@ mam_config_setting_t configSettings[] = {
     {NULL, 1, INT_MAX, {.set_config_complex = MAM_I_set_target_number }, MAM_NUM_TARGETS_ENV}
 };
 
-unsigned int masks_spawn[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_SPAWN_SINGLE, MAM_MASK_SPAWN_INTERCOMM};
+unsigned int masks_spawn[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_SPAWN_SINGLE, MAM_MASK_SPAWN_INTERCOMM, MAM_MASK_SPAWN_MULTIPLE};
 unsigned int masks_red[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_RED_WAIT_SOURCES, MAM_MASK_RED_WAIT_TARGETS};
 
 /**
@@ -189,7 +189,14 @@ void MAM_Set_initial_configuration() {
 }
 
 void MAM_Check_configuration() {
+  int global_internodes;
   if(mall->numC == mall->numP) { // Migrate
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
+  }
+
+  MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
+  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
+	&& global_internodes) { // Remove internode MPI_COMM_WORLDs
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
   }
 
@@ -269,6 +276,9 @@ int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies) {
       break;
     case MAM_STRAT_SPAWN_INTERCOMM:
       result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_INTERCOMM);
+      break;
+    case MAM_STRAT_SPAWN_MULTIPLE:
+      result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_MULTIPLE);
       break;
     default:
       //Unkown strategy
