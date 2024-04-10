@@ -16,7 +16,7 @@ typedef struct {
 } mam_user_reconf_t;
 
 int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(void *), void *user_args);
-void MAM_Finalize();
+int MAM_Finalize();
 int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args);
 void MAM_Resume_redistribution(int *mam_state);
 
