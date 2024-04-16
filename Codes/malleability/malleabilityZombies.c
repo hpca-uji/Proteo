@@ -94,7 +94,7 @@ void MAM_I_zombies_split() {
   MPI_Comm_split(mall->original_comm, color, myId, &new_original_comm);
 
   if(mall->original_comm != MPI_COMM_WORLD) MPI_Comm_free(&mall->original_comm);
-  MPI_Comm_set_name(new_original_comm, "MAM_ORIGINAL");
+  if(new_original_comm != MPI_COMM_NULL) MPI_Comm_set_name(new_original_comm, "MAM_ORIGINAL");
   mall->original_comm = new_original_comm;
 }
 

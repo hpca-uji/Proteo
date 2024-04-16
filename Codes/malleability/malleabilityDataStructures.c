@@ -1,5 +1,7 @@
 #include "malleabilityDataStructures.h"
 
+malleability_config_t *mall_conf = NULL;
+malleability_t *mall = NULL;
 int state = MALL_UNRESERVED;
 
 /*

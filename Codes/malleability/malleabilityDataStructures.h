@@ -54,8 +54,8 @@ typedef struct {
 } malleability_t;
 
 /* --- VARIABLES --- */
-malleability_config_t *mall_conf;
-malleability_t *mall;
+extern malleability_config_t *mall_conf;
+extern malleability_t *mall;
 extern int state;
 
 /* --- FUNCTIONS --- */
