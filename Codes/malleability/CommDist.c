@@ -375,7 +375,8 @@ void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win 
   //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
 
-  if(mall_conf->red_method == MALL_RED_RMA_LOCKALL || mall_conf->red_method == MALL_RED_RMA_LOCK) { MPI_Win_free(win); }
+  if((mall_conf->red_method == MALL_RED_RMA_LOCKALL || mall_conf->red_method == MALL_RED_RMA_LOCK) 
+		  && *win != MPI_WIN_NULL) { MPI_Win_free(win); }
 }
 
 /*

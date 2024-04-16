@@ -145,6 +145,7 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
 
   for(i=0; i<size; i++) { //calloc and memset does not ensure a NULL value
     data_struct->requests[i] = NULL;
+    data_struct->windows[i] = MPI_WIN_NULL;
     data_struct->arrays[i] = NULL;
   }
 }
@@ -176,6 +177,7 @@ void realloc_malleability_data_struct(malleability_data_t *data_struct, size_t q
 
   for(i=data_struct->max_entries; i<needed; i++) { //realloc does not ensure a NULL value
     requests_aux[i] = NULL;
+    windows_aux[i] = MPI_WIN_NULL;
     arrays_aux[i] = NULL;
   }
 
