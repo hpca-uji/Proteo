@@ -112,7 +112,6 @@ void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spa
     for(i=0; i< *used_nodes; i++) {
       (*qty)[i] = procs[i];
       if(procs[i]) (*total_spawns)++;
-    printf("procs[%d] = %d\n", i, procs[i]);
     }
   } else {
     *total_spawns = 1;
@@ -138,7 +137,11 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
 
   *used_nodes = mall->num_nodes;
   tamBl = spawn_data.target_qty / *used_nodes;
-  i = spawn_data.already_created ? spawn_data.already_created / tamBl : 0;
+  i = spawn_data.already_created / tamBl;
+  remainder = spawn_data.already_created % tamBl;
+  if(remainder) {
+    procs[i++] = tamBl - remainder;
+  }
   for(; i<*used_nodes; i++) {
     procs[i] = tamBl; 
   }
