@@ -1,5 +1,5 @@
-#ifndef MALLEABILITY_SPAWN_STATE_H
-#define MALLEABILITY_SPAWN_STATE_H
+#ifndef MAM_SPAWN_STATE_H
+#define MAM_SPAWN_STATE_H
 
 #include <stdio.h>
 #include <stdlib.h>

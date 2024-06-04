@@ -2,10 +2,11 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <string.h>
-#include "distribution_methods/block_distribution.h"
-#include "CommDist.h"
-#include "MAM_Configuration.h"
-#include "malleabilityDataStructures.h"
+#include "block_distribution.h"
+#include "Distributed_CommDist.h"
+#include "../MAM_Constants.h"
+#include "../MAM_Configuration.h"
+#include "../MAM_DataStructures.h"
 
 void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts);
 void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);

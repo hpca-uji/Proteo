@@ -1,5 +1,5 @@
-#ifndef MALLEABILITY_MANAGER_H
-#define MALLEABILITY_MANAGER_H
+#ifndef MAM_MANAGER_H
+#define MAM_MANAGER_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <mpi.h>
-#include "malleabilityStates.h"
 
 typedef struct {
   int numS, numT;

@@ -8,7 +8,7 @@
 #include "Main_datatypes.h"
 #include "configuration.h"
 #include "../IOcodes/results.h"
-#include "../malleability/CommDist.h"
+#include "../malleability/distribution_methods/Distributed_CommDist.h"
 #include "../malleability/MAM.h"
 
 #define DR_MAX_SIZE 1000000000

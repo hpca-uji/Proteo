@@ -1,11 +1,7 @@
-#ifndef COMMDIST_H
-#define COMMDIST_H
+#ifndef MAM_DISTRIBUTED_COMMDIST_H
+#define MAM_DISTRIBUTED_COMMDIST_H
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <mpi.h>
-#include <string.h>
-#include "malleabilityStates.h"
 
 void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm);
 

@@ -1,5 +1,5 @@
-#ifndef MALLEABILITY_DATA_STRUCTURES_H
-#define MALLEABILITY_DATA_STRUCTURES_H
+#ifndef MAM_DATA_STRUCTURES_H
+#define MAM_DATA_STRUCTURES_H
 
 /*
  * Shows available data structures for inner ussage.
@@ -8,9 +8,14 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <pthread.h>
-#include "malleabilityStates.h"
+#include "MAM_Constants.h"
 
 #define DEBUG_FUNC(debug_string, rank, numP) printf("MaM [P%d/%d]: %s -- %s:%s:%d\n", rank, numP, debug_string, __FILE__, __func__, __LINE__)
+
+/* --- MAM REAL STATES --- */
+enum mam_inner_states{MALL_UNRESERVED, MALL_NOT_STARTED, MALL_RMS_COMPLETED, MALL_SPAWN_PENDING, MALL_SPAWN_SINGLE_PENDING, 
+	MALL_SPAWN_SINGLE_COMPLETED, MALL_SPAWN_ADAPT_POSTPONE, MALL_SPAWN_COMPLETED, MALL_DIST_PENDING, MALL_DIST_COMPLETED, 
+	MALL_SPAWN_ADAPT_PENDING, MALL_USER_START, MALL_USER_PENDING, MALL_USER_COMPLETED, MALL_SPAWN_ADAPTED, MALL_COMPLETED};
 
 /* --- TIME CAPTURE STRUCTURE --- */
 typedef struct {

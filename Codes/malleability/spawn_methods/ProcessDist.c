@@ -6,6 +6,8 @@
 #include <string.h>
 #include <mpi.h>
 #include "ProcessDist.h"
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
 

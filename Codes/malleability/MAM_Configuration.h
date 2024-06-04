@@ -2,7 +2,7 @@
 #define MAM_CONFIGURATION_H
 
 #include <mpi.h>
-#include "malleabilityStates.h"
+#include "MAM_Constants.h"
 
 #define MAM_STRAT_CLEAR_VALUE 0
 

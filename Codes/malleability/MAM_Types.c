@@ -1,5 +1,5 @@
-#include "malleabilityTypes.h"
-#include "malleabilityDataStructures.h"
+#include "MAM_Types.h"
+#include "MAM_DataStructures.h"
 #include "MAM_Configuration.h"
 
 

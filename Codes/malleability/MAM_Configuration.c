@@ -1,6 +1,6 @@
 #include "MAM_Configuration.h"
 #include "MAM_Init_Configuration.h"
-#include "malleabilityDataStructures.h"
+#include "MAM_DataStructures.h"
 #include <limits.h>
 
 typedef struct {

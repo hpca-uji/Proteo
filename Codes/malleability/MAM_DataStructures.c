@@ -1,4 +1,4 @@
-#include "malleabilityDataStructures.h"
+#include "MAM_DataStructures.h"
 
 malleability_config_t *mall_conf = NULL;
 malleability_t *mall = NULL;

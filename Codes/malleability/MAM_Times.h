@@ -1,5 +1,5 @@
-#ifndef MALLEABILITY_TIMES_H
-#define MALLEABILITY_TIMES_H
+#ifndef MAM_TIMES_H
+#define MAM_TIMES_H
 
 #include <mpi.h>
 

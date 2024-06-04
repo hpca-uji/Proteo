@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include "../malleabilityStates.h"
-#include "../malleabilityDataStructures.h"
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
 #include "Baseline.h"
 #include "Spawn_state.h"
 

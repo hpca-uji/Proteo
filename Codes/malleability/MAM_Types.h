@@ -1,12 +1,12 @@
-#ifndef MALLEABILITY_TYPES_H
-#define MALLEABILITY_TYPES_H
+#ifndef MAM_TYPES_H
+#define MAM_TYPES_H
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include "malleabilityStates.h"
+#include "MAM_Constants.h"
 
 #define MALLEABILITY_INIT_DATA_QTY 100
 

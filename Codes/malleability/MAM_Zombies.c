@@ -5,7 +5,8 @@
 #include <unistd.h>
 #include <mpi.h>
 #include <signal.h>
-#include "malleabilityZombies.h"
+#include "MAM_Zombies.h"
+#include "MAM_DataStructures.h"
 
 #define PIDS_QTY 320
 //TODO Add option to allow the usage of signal USR2 or not.

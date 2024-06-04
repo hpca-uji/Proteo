@@ -1,16 +1,15 @@
 #include <pthread.h>
 #include <string.h>
-//#include "malleabilityManager.h"
 #include "MAM.h"
-#include "malleabilityStates.h"
-#include "malleabilityDataStructures.h"
-#include "malleabilityTypes.h"
-#include "malleabilityZombies.h"
-#include "malleabilityTimes.h"
-#include "malleabilityRMS.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
+#include "MAM_Types.h"
+#include "MAM_Zombies.h"
+#include "MAM_Times.h"
+#include "MAM_RMS.h"
 #include "MAM_Init_Configuration.h"
 #include "spawn_methods/GenericSpawn.h"
-#include "CommDist.h"
+#include "distribution_methods/Distributed_CommDist.h"
 
 #define MALLEABILITY_USE_SYNCHRONOUS 0
 #define MALLEABILITY_USE_ASYNCHRONOUS 1

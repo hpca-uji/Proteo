@@ -5,8 +5,8 @@
 #include <pthread.h>
 #include <mpi.h>
 #include <string.h>
-#include "../malleabilityStates.h"
-#include "../malleabilityDataStructures.h"
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
 #include "../MAM_Configuration.h"
 #include "ProcessDist.h"
 #include "GenericSpawn.h"

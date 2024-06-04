@@ -5,8 +5,8 @@
 #include <unistd.h>
 #include <sched.h>
 #include <mpi.h>
-#include "malleabilityRMS.h"
-#include "malleabilityDataStructures.h"
+#include "MAM_RMS.h"
+#include "MAM_DataStructures.h"
 
 
 #if USE_MAL_SLURM

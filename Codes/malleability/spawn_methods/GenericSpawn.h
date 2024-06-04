@@ -1,5 +1,5 @@
-#ifndef MALLEABILITY_GENERIC_SPAWN_H
-#define MALLEABILITY_GENERIC_SPAWN_H
+#ifndef MAM_GENERIC_SPAWN_H
+#define MAM_GENERIC_SPAWN_H
 
 #include <stdio.h>
 #include <stdlib.h>
