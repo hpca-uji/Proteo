@@ -17,6 +17,7 @@ typedef struct {
   double spawn_start, *spawn_time;
   double sync_end,  *sync_time;
   double async_end, *async_time;
+  double user_end, *user_time;
   double malleability_end, *malleability_time;
   double exec_start, exec_time;
   double wasted_time; // Time spent recalculating iter stages

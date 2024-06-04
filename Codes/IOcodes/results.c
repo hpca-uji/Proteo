@@ -46,14 +46,14 @@ void results_comm(results_data *results, int root, size_t resizes, MPI_Comm inte
  * En concreto son tres escalares y dos vectores de tamaño "resizes"
  */
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
-  int i, counts = 6;
-  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 7;
+  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
-  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = resizes;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_DOUBLE;
+  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] =  blocklengths[6] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
@@ -62,8 +62,9 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(&(results->wasted_time), &displs[1]);
   MPI_Get_address(results->sync_time, &displs[2]);
   MPI_Get_address(results->async_time, &displs[3]);
-  MPI_Get_address(results->spawn_time, &displs[4]);
-  MPI_Get_address(results->malleability_time, &displs[5]);
+  MPI_Get_address(results->user_time, &displs[4]);
+  MPI_Get_address(results->spawn_time, &displs[5]);
+  MPI_Get_address(results->malleability_time, &displs[6]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
@@ -270,6 +271,11 @@ void print_global_results(results_data results, size_t resizes) {
     printf("%lf ", results.async_time[i]);
   }
 
+  printf("\nT_US: ");
+  for(i=0; i < resizes; i++) {
+    printf("%lf ", results.user_time[i]);
+  }
+
   printf("\nT_Malleability: ");
   for(i=0; i < resizes; i++) {
     printf("%lf ", results.malleability_time[i]);
@@ -296,6 +302,7 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
   results->spawn_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
+  results->user_time = calloc(resizes, sizeof(double));
   results->malleability_time = calloc(resizes, sizeof(double));
   results->wasted_time = 0;
 
@@ -352,6 +359,10 @@ void free_results_data(results_data *results, size_t stages) {
     if(results->async_time != NULL) {
       free(results->async_time);
       results->async_time = NULL;
+    }
+    if(results->user_time != NULL) {
+      free(results->user_time);
+      results->user_time = NULL;
     }
     if(results->malleability_time != NULL) {
       free(results->malleability_time);

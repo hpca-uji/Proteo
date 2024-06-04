@@ -28,6 +28,6 @@ void MAM_Data_modify(void *data, size_t index, size_t total_qty, MPI_Datatype ty
 void MAM_Data_get_entries(int is_replicated, int is_constant, size_t *entries);
 void MAM_Data_get_pointer(void **data, size_t index, size_t *total_qty, MPI_Datatype *type, int is_replicated, int is_constant);
 
-void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time);
+void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time);
 
 #endif

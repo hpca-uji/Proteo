@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
-        MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
+        MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->user_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
@@ -101,11 +101,7 @@ int main(int argc, char *argv[]) {
           MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
         }
       }
-
-    int myId2, numP2;
-    MPI_Comm_size(comm, &numP2);
-    MPI_Comm_rank(comm, &myId2);
-    print_general_info(myId2, group->grp, numP2);
+    
       res = work();
 
       if(res==1) { // Se ha llegado al final de la aplicacion
@@ -521,6 +517,7 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
 //================ INIT MALLEABILITY ===================||
 //======================================================||
 //======================================================||
+//FIXME TENER EN CUENTA QUE ADR PUEDE SER 0
 
 void init_originals() {
   size_t i;

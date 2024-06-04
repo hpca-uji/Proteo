@@ -162,8 +162,8 @@ int MAM_Finalize() {
   MAM_Free_main_datatype();
   request_abort = MAM_Zombies_service_free();
   free_malleability_times();
-  if(mall->comm != MPI_COMM_WORLD && mall->comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->comm));
-  if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->thread_comm));
+  if(mall->comm != MPI_COMM_WORLD && mall->comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->comm));
+  if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->thread_comm));
   if(mall->intercomm != MPI_COMM_WORLD && mall->intercomm != MPI_COMM_NULL) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
   if(mall->original_comm != MPI_COMM_WORLD && mall->original_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->original_comm));
   free(mall);
@@ -265,8 +265,8 @@ void MAM_Commit(int *mam_state) {
   }
 
   // Free unneded communicators
-  if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->tmp_comm));
-  if(*(mall->user_comm) != MPI_COMM_WORLD && *(mall->user_comm) != MPI_COMM_NULL) MPI_Comm_free(mall->user_comm);
+  if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->tmp_comm));
+  if(*(mall->user_comm) != MPI_COMM_WORLD && *(mall->user_comm) != MPI_COMM_NULL) MPI_Comm_disconnect(mall->user_comm);
 
   // Zombies Treatment
   MAM_Zombies_update();
@@ -469,10 +469,11 @@ int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
  *  - double *sp_time:   A pointer where the spawn time will be saved.
  *  - double *sy_time:   A pointer where the sychronous data redistribution time will be saved.
  *  - double *asy_time:  A pointer where the asychronous data redistribution time will be saved.
+ *  - double *user_time: A pointer where the user data redistribution time will be saved.
  *  - double *mall_time: A pointer where the malleability time will be saved.
  */
-void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *mall_time) {
-  MAM_I_retrieve_times(sp_time, sy_time, asy_time, mall_time);
+void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time) {
+  MAM_I_retrieve_times(sp_time, sy_time, asy_time, user_time, mall_time);
 }
 
 //======================================================||
@@ -611,6 +612,10 @@ int MAM_St_red_pending(int wait_completed) {
 }
 
 int MAM_St_user_start(int *mam_state) {
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->intercomm);
+  #endif
+  mall_conf->times->user_start = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
     MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
   } else {
@@ -636,6 +641,10 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
   }
 
   if(state != MALL_USER_PENDING) {
+    #if USE_MAL_BARRIERS
+      MPI_Barrier(mall->intercomm);
+    #endif
+    if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
     #if USE_MAL_DEBUG
       if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
     #endif
@@ -778,6 +787,9 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     DEBUG_FUNC("Spawned have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->intercomm);
+  #endif
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
     MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
   } else {
@@ -789,6 +801,10 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     MAM_I_create_user_struct(MALLEABILITY_CHILDREN);
     user_function(user_args);
   }
+  #if USE_MAL_BARRIERS
+    MPI_Barrier(mall->intercomm);
+  #endif
+  mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
   comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
@@ -987,7 +1003,7 @@ int check_redistribution(int wait_completed) {
     MPI_Barrier(mall->intercomm);
   #endif
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return MALL_USER_PENDING;
+  return MALL_USER_START;
 }
 
 /*
@@ -1081,7 +1097,7 @@ int thread_check(int wait_completed) {
     MPI_Barrier(mall->intercomm);
   #endif
   if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return MALL_USER_PENDING;
+  return MALL_USER_START;
 }
 
 
