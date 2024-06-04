@@ -25,10 +25,10 @@ int MAM_I_add_strat(unsigned int *comm_strategies, unsigned int strategy);
 int MAM_I_remove_strat(unsigned int *comm_strategies, unsigned int strategy);
 
 mam_config_setting_t configSettings[] = { 
-    {NULL, MALL_SPAWN_MERGE, MAM_METHODS_SPAWN_LEN, {.set_config_simple = MAM_I_set_method }, MAM_SPAWN_METHOD_ENV},
+    {NULL, MAM_SPAWN_MERGE, MAM_METHODS_SPAWN_LEN, {.set_config_simple = MAM_I_set_method }, MAM_SPAWN_METHOD_ENV},
     {NULL, MAM_STRAT_SPAWN_CLEAR, MAM_STRATS_SPAWN_LEN, {.set_config_simple = MAM_I_set_spawn_strat }, MAM_SPAWN_STRATS_ENV},
-    {NULL, MALL_DIST_COMPACT, MAM_METHODS_PHYSICAL_DISTRIBUTION_LEN, {.set_config_simple = MAM_I_set_method }, MAM_PHYSICAL_DISTRIBUTION_METHOD_ENV},
-    {NULL, MALL_RED_BASELINE, MAM_METHODS_RED_LEN, {.set_config_simple = MAM_I_set_method }, MAM_RED_METHOD_ENV},
+    {NULL, MAM_PHY_DIST_COMPACT, MAM_METHODS_PHYSICAL_DISTRIBUTION_LEN, {.set_config_simple = MAM_I_set_method }, MAM_PHYSICAL_DISTRIBUTION_METHOD_ENV},
+    {NULL, MAM_RED_BASELINE, MAM_METHODS_RED_LEN, {.set_config_simple = MAM_I_set_method }, MAM_RED_METHOD_ENV},
     {NULL, MAM_STRAT_RED_CLEAR, MAM_STRATS_RED_LEN, {.set_config_simple = MAM_I_set_red_strat }, MAM_RED_STRATS_ENV},
 
     {NULL, 1, INT_MAX, {.set_config_complex = MAM_I_set_target_number }, MAM_NUM_TARGETS_ENV}
@@ -53,7 +53,7 @@ unsigned int masks_red[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_RE
 void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dist, int red_method, int red_strategies) {
   int i, aux;
   int aux_array[] = {spawn_method, spawn_strategies, spawn_dist, red_method, red_strategies};
-  if(state > MALL_NOT_STARTED) return;
+  if(state > MAM_I_NOT_STARTED) return;
 
   mam_config_setting_t *config = NULL;
   for (i = 0; i < MAM_KEY_COUNT-1; i++) { //FIXME Numero magico para no cambiar num_targets
@@ -88,8 +88,8 @@ void MAM_Set_key_configuration(int key, int required, int *provided) {
   int i, aux;
 
   if(provided == NULL) provided = &aux;
-  *provided = MALL_DENIED;
-  if(required < 0 || state > MALL_NOT_STARTED) return;
+  *provided = MAM_DENIED;
+  if(required < 0 || state > MAM_I_NOT_STARTED) return;
 
   mam_config_setting_t *config = NULL;
   for (i = 0; i < MAM_KEY_COUNT; i++) {
@@ -129,7 +129,7 @@ int MAM_Contains_strat(int key, unsigned int strategy, int *result) {
       len = MAM_STRATS_RED_LEN;
       break;
     default:
-      aux = MALL_DENIED;
+      aux = MAM_DENIED;
       break;
   }
 
@@ -196,16 +196,16 @@ void MAM_Set_initial_configuration() {
 void MAM_Check_configuration() {
   int global_internodes;
   if(mall->numC == mall->numP) { // Migrate
-    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
   }
 
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
 	&& global_internodes) { // Remove internode MPI_COMM_WORLDs
-    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MALL_SPAWN_BASELINE, NULL);
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
   }
 
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
     }
@@ -213,7 +213,7 @@ void MAM_Check_configuration() {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_SINGLE);
     }
   }
-  if(mall_conf->red_method == MALL_RED_RMA_LOCK || mall_conf->red_method == MALL_RED_RMA_LOCKALL) {
+  if(mall_conf->red_method == MAM_RED_RMA_LOCK || mall_conf->red_method == MAM_RED_RMA_LOCKALL) {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
     }
@@ -287,7 +287,7 @@ int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies) {
       break;
     default:
       //Unkown strategy
-      result = MALL_DENIED;
+      result = MAM_DENIED;
       break;
   }
 
@@ -329,7 +329,7 @@ int MAM_I_set_red_strat(unsigned int strategy, unsigned int *strategies) {
       break;
     default:
       //Unkown strategy
-      result = MALL_DENIED;
+      result = MAM_DENIED;
       break;
   }
 
@@ -340,7 +340,7 @@ int MAM_I_set_red_strat(unsigned int strategy, unsigned int *strategies) {
 }
 
 int MAM_I_set_target_number(unsigned int new_numC) {
-  if(state > MALL_NOT_STARTED || new_numC == 0) return MALL_DENIED;
+  if(state > MAM_I_NOT_STARTED || new_numC == 0) return MAM_DENIED;
 
   mall->numC = (int) new_numC;
   return new_numC;

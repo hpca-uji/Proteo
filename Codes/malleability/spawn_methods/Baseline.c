@@ -36,7 +36,7 @@ int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de err
     if(spawn_data.spawn_is_single) { single_strat_children(child); }
   }
 
-  return MALL_SPAWN_COMPLETED;
+  return MAM_I_SPAWN_COMPLETED;
 }
 
 //--------------PRIVATE FUNCTIONS---------------//
@@ -198,7 +198,7 @@ void single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MPI_ANY_SOURCE, MAM_TAG_STRAT_SINGLE, *child, MPI_STATUS_IGNORE);
 
-    set_spawn_state(MALL_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
+    set_spawn_state(MAM_I_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
     wakeup_completion();
   } else {
     port_name = malloc(1);

@@ -17,11 +17,11 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
   int is_children_group = 1;
 
   if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
-    if(data_state == MALL_DIST_COMPLETED) {
+    if(data_state == MAM_I_DIST_COMPLETED) {
       merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, mall->myId);
-      local_state = MALL_SPAWN_ADAPTED;
+      local_state = MAM_I_SPAWN_ADAPTED;
     } else {
-      local_state = MALL_SPAWN_ADAPT_POSTPONE;
+      local_state = MAM_I_SPAWN_ADAPT_POSTPONE;
     }
   } else { //Expand
     MPI_Comm_get_parent(&intercomm);
@@ -30,7 +30,7 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
 
     baseline(spawn_data, child);
     merge_adapt_expand(child, is_children_group);
-    local_state = MALL_SPAWN_COMPLETED;
+    local_state = MAM_I_SPAWN_COMPLETED;
   }
 
   return local_state;
@@ -38,7 +38,7 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
 
 int intracomm_strategy(int is_children_group, MPI_Comm *child) {
   merge_adapt_expand(child, is_children_group);
-  return MALL_SPAWN_COMPLETED;
+  return MAM_I_SPAWN_COMPLETED;
 }
 
 //--------------PRIVATE MERGE TYPE FUNCTIONS---------------//

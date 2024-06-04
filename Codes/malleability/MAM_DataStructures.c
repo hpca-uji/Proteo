@@ -2,7 +2,7 @@
 
 malleability_config_t *mall_conf = NULL;
 malleability_t *mall = NULL;
-int state = MALL_UNRESERVED;
+int state = MAM_I_UNRESERVED;
 
 /*
  * Crea un tipo derivado para mandar las dos estructuras principales

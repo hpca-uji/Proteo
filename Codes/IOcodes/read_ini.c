@@ -74,9 +74,9 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_group, pconfig->n_groups)) {
         pconfig->groups[pconfig->actual_group].factor =(float) atof(value);
     } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-	int aux_value = MALL_DIST_COMPACT;
+	int aux_value = MAM_PHY_DIST_COMPACT;
         if (strcmp(value, "spread") == 0) {
-          aux_value = MALL_DIST_SPREAD;
+          aux_value = MAM_PHY_DIST_SPREAD;
   	}
         pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
     } else if (MATCH(resize_name, "Redistribution_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {

@@ -77,8 +77,8 @@ void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype,
 
     /* PERFORM COMMUNICATION */
     switch(mall_conf->red_method) {
-      case MALL_RED_RMA_LOCKALL:
-      case MALL_RED_RMA_LOCK:
+      case MAM_RED_RMA_LOCKALL:
+      case MAM_RED_RMA_LOCK:
         if(is_children_group) {
 	  dist_data.tamBl = 0;
 	} else {
@@ -87,10 +87,10 @@ void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype,
         sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm);
 	break;
 
-      case MALL_RED_POINT:
+      case MAM_RED_POINT:
         sync_point2point(send, *recv, datatype, s_counts, r_counts, comm);
 	break;
-      case MALL_RED_BASELINE:
+      case MAM_RED_BASELINE:
       default:
         MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm);
 	break;
@@ -122,7 +122,7 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
     MPI_Type_size(datatype, &datasize);
     init = s_counts.idI;
     end = s_counts.idE;
-    if(mall_conf->spawn_method == MALL_SPAWN_MERGE && (s_counts.idI == mall->myId || s_counts.idE == mall->myId + 1)) {
+    if(mall_conf->spawn_method == MAM_SPAWN_MERGE && (s_counts.idI == mall->myId || s_counts.idE == mall->myId + 1)) {
       offset = s_counts.displs[mall->myId] * datasize;
       offset2 = r_counts.displs[mall->myId] * datasize;
       memcpy(recv+offset2, send+offset, s_counts.counts[mall->myId]);
@@ -145,7 +145,7 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
 
     init = r_counts.idI;
     end = r_counts.idE;
-    if(mall_conf->spawn_method == MALL_SPAWN_MERGE) {
+    if(mall_conf->spawn_method == MAM_SPAWN_MERGE) {
       if(r_counts.idI == mall->myId) init = r_counts.idI+1;
       else if(r_counts.idE == mall->myId + 1) end = r_counts.idE-1;
     }
@@ -190,10 +190,10 @@ void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_cou
     DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
   switch(mall_conf->red_method) {
-    case MALL_RED_RMA_LOCKALL:
+    case MAM_RED_RMA_LOCKALL:
       sync_rma_lockall(recv, datatype, r_counts, win);
       break;
-    case MALL_RED_RMA_LOCK:
+    case MAM_RED_RMA_LOCK:
       sync_rma_lock(recv, datatype, r_counts, win);
       break;
   }
@@ -293,8 +293,8 @@ void async_communication_start(void *send, void **recv, int qty, MPI_Datatype da
     /* PERFORM COMMUNICATION */
     switch(mall_conf->red_method) {
 
-      case MALL_RED_RMA_LOCKALL:
-      case MALL_RED_RMA_LOCK:
+      case MAM_RED_RMA_LOCKALL:
+      case MAM_RED_RMA_LOCK:
         if(is_children_group) {
 	  dist_data.tamBl = 0;
 	} else {
@@ -302,10 +302,10 @@ void async_communication_start(void *send, void **recv, int qty, MPI_Datatype da
 	}
         async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm, *requests, win);
 	break;
-      case MALL_RED_POINT:
+      case MAM_RED_POINT:
         async_point2point(send, *recv, datatype, s_counts, r_counts, comm, *requests);
 	break;
-      case MALL_RED_BASELINE:
+      case MAM_RED_BASELINE:
       default:
         MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm, &((*requests)[0]));
 	break;
@@ -376,7 +376,7 @@ void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win 
   //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
 
-  if((mall_conf->red_method == MALL_RED_RMA_LOCKALL || mall_conf->red_method == MALL_RED_RMA_LOCK) 
+  if((mall_conf->red_method == MAM_RED_RMA_LOCKALL || mall_conf->red_method == MAM_RED_RMA_LOCK) 
 		  && *win != MPI_WIN_NULL) { MPI_Win_free(win); }
 }
 
@@ -434,10 +434,10 @@ void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_co
   MPI_Type_size(datatype, &datasize);
   MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, win);
   switch(mall_conf->red_method) {
-    case MALL_RED_RMA_LOCKALL:
+    case MAM_RED_RMA_LOCKALL:
       async_rma_lockall(recv, datatype, r_counts, *win, requests);
       break;
-    case MALL_RED_RMA_LOCK:
+    case MAM_RED_RMA_LOCK:
       async_rma_lock(recv, datatype, r_counts, *win, requests);
       break;
   }
@@ -526,7 +526,7 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
   int datasize;
   struct Dist_data dist_data;
 
-  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) {
+  if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     offset_ids =  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL) ? 
 	    0 : numP;
   } else {
@@ -555,7 +555,7 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
     #endif
 
     prepare_comm_alltoall(mall->myId, numP, numO, qty, offset_ids, s_counts);
-    if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId < numO) {
+    if(mall_conf->spawn_method == MAM_SPAWN_MERGE && mall->myId < numO) {
       prepare_comm_alltoall(mall->myId, numO, numP, qty, offset_ids, r_counts);
       // Obtener distribución para este hijo y reservar vector de recibo
       get_block_dist(qty, mall->myId, numO, &dist_data);
@@ -587,10 +587,10 @@ void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request 
   MPI_Request *aux;
 
   switch(mall_conf->red_method) {
-    case MALL_RED_BASELINE:
+    case MAM_RED_BASELINE:
       sum = 1;
       break;
-    case MALL_RED_POINT:
+    case MAM_RED_POINT:
     default:
       sum = (size_t) s_counts.idE - s_counts.idI;
       sum += (size_t) r_counts.idE - r_counts.idI;

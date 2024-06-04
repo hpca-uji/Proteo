@@ -109,7 +109,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   dist_s_data->entries = 0;
   dist_a_data->entries = 0;
 
-  state = MALL_NOT_STARTED;
+  state = MAM_I_NOT_STARTED;
 
   MAM_Init_configuration();
   MAM_Zombies_service_init();
@@ -169,7 +169,7 @@ int MAM_Finalize() {
   free(mall_conf);
   free(user_reconf);
 
-  state = MALL_UNRESERVED;
+  state = MAM_I_UNRESERVED;
   return request_abort;
 }
 
@@ -189,54 +189,54 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
 
   //TODO This could be changed to an array with the functions to call in each case
   switch(state) {
-    case MALL_UNRESERVED:
+    case MAM_I_UNRESERVED:
       *mam_state = MAM_UNRESERVED;
       break;
-    case MALL_NOT_STARTED:
+    case MAM_I_NOT_STARTED:
       call_checkpoint = MAM_St_rms(mam_state);
       break;
-    case MALL_RMS_COMPLETED:
+    case MAM_I_RMS_COMPLETED:
       call_checkpoint = MAM_St_spawn_start();
       break;
 
-    case MALL_SPAWN_PENDING: // Comprueba si el spawn ha terminado
-    case MALL_SPAWN_SINGLE_PENDING:
+    case MAM_I_SPAWN_PENDING: // Comprueba si el spawn ha terminado
+    case MAM_I_SPAWN_SINGLE_PENDING:
       call_checkpoint = MAM_St_spawn_pending(wait_completed);
       break;
 
-    case MALL_SPAWN_ADAPT_POSTPONE:
-    case MALL_SPAWN_COMPLETED:
+    case MAM_I_SPAWN_ADAPT_POSTPONE:
+    case MAM_I_SPAWN_COMPLETED:
       call_checkpoint = MAM_St_red_start();
       break;
 
-    case MALL_DIST_PENDING:
+    case MAM_I_DIST_PENDING:
       call_checkpoint = MAM_St_red_pending(wait_completed);
       break;
 
-    case MALL_USER_START:
+    case MAM_I_USER_START:
       call_checkpoint = MAM_St_user_start(mam_state);
       break;
 
-    case MALL_USER_PENDING:
+    case MAM_I_USER_PENDING:
       call_checkpoint = MAM_St_user_pending(mam_state, wait_completed, user_function, user_args);
       break;
 
-    case MALL_USER_COMPLETED:
+    case MAM_I_USER_COMPLETED:
       call_checkpoint = MAM_St_user_completed();
       break;
 
-    case MALL_SPAWN_ADAPT_PENDING:
+    case MAM_I_SPAWN_ADAPT_PENDING:
       call_checkpoint = MAM_St_spawn_adapt_pending(wait_completed);
       break;
 
-    case MALL_SPAWN_ADAPTED:
-    case MALL_DIST_COMPLETED:
+    case MAM_I_SPAWN_ADAPTED:
+    case MAM_I_DIST_COMPLETED:
       call_checkpoint = MAM_St_completed(mam_state);
       break;
   }
 
   if(call_checkpoint) { MAM_Checkpoint(mam_state, wait_completed, user_function, user_args); }
-  if(state > MALL_NOT_STARTED && state < MALL_COMPLETED) *mam_state = MAM_PENDING;
+  if(state > MAM_I_NOT_STARTED && state < MAM_I_COMPLETED) *mam_state = MAM_PENDING;
   return state;
 }
 
@@ -244,7 +244,7 @@ int MAM_Checkpoint(int *mam_state, int wait_completed, void (*user_function)(voi
  * TODO
  */
 void MAM_Resume_redistribution(int *mam_state) {
-  state = MALL_USER_COMPLETED;
+  state = MAM_I_USER_COMPLETED;
   if(mam_state != NULL) *mam_state = MAM_PENDING;
 }
 
@@ -258,7 +258,7 @@ void MAM_Commit(int *mam_state) {
   #endif
 
   // Get times before commiting
-  if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) {
+  if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     // This communication is only needed when the root process will become a zombie
     malleability_times_broadcast(mall->root_collectives);
   }
@@ -280,20 +280,20 @@ void MAM_Commit(int *mam_state) {
   }
 
   // Reset/Free communicators
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MAM_comms_update(mall->intercomm); }
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { MAM_comms_update(mall->intercomm); }
   if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME Error en OpenMPI + Merge
 
   MPI_Comm_rank(mall->comm, &mall->myId);
   MPI_Comm_size(mall->comm, &mall->numP);
-  mall->root = mall_conf->spawn_method == MALL_SPAWN_BASELINE ? mall->root : mall->root_parents;
+  mall->root = mall_conf->spawn_method == MAM_SPAWN_BASELINE ? mall->root : mall->root_parents;
   mall->root_parents = mall->root;
-  state = MALL_NOT_STARTED;
+  state = MAM_I_NOT_STARTED;
   if(mam_state != NULL) *mam_state = MAM_COMPLETED;
 
   // Set new communicator
   MPI_Comm_dup(mall->comm, mall->user_comm);
-  //if(mall_conf->spawn_method == MALL_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
-  //else if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
+  //if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
+  //else if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
   #if USE_MAL_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
   #endif
@@ -324,9 +324,9 @@ void MAM_Data_add(void *data, size_t *index, size_t total_qty, MPI_Datatype type
       add_data(data, total_qty, type, total_reqs, rep_a_data);
       returned_index = rep_a_data->entries-1;
     } else {
-      if(mall_conf->red_method  == MALL_RED_BASELINE) {
+      if(mall_conf->red_method  == MAM_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
+      } else if(mall_conf->red_method  == MAM_RED_POINT || mall_conf->red_method  == MAM_RED_RMA_LOCK || mall_conf->red_method  == MAM_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
       } 
       
@@ -364,9 +364,9 @@ void MAM_Data_modify(void *data, size_t index, size_t total_qty, MPI_Datatype ty
       total_reqs = 1;
       modify_data(data, index, total_qty, type, total_reqs, rep_a_data); //FIXME total_reqs==0 ??? 
     } else {    
-      if(mall_conf->red_method  == MALL_RED_BASELINE) {
+      if(mall_conf->red_method  == MAM_RED_BASELINE) {
         total_reqs = 1;
-      } else if(mall_conf->red_method  == MALL_RED_POINT || mall_conf->red_method  == MALL_RED_RMA_LOCK || mall_conf->red_method  == MALL_RED_RMA_LOCKALL) {
+      } else if(mall_conf->red_method  == MAM_RED_POINT || mall_conf->red_method  == MAM_RED_RMA_LOCK || mall_conf->red_method  == MAM_RED_RMA_LOCKALL) {
         total_reqs = mall->numC;
       }
       
@@ -441,7 +441,7 @@ void MAM_Data_get_pointer(void **data, size_t index, size_t *total_qty, MPI_Data
 /*
  * @brief Returns a structure to perform data redistribution during a reconfiguration.
  *
- * This function is intended to be called when the state of MaM is MALL_USER_PENDING only. 
+ * This function is intended to be called when the state of MaM is MAM_I_USER_PENDING only. 
  * It is designed to provide the necessary information for the user to perform data redistribution.
  *
  * Parameters:
@@ -449,10 +449,10 @@ void MAM_Data_get_pointer(void **data, size_t index, size_t *total_qty, MPI_Data
  *
  * Return Value:
  *   - MAM_OK: If the function successfully retrieves the reconfiguration information.
- *   - MALL_DENIED: If the function is called when the state of the MaM is not MALL_USER_PENDING.
+ *   - MAM_DENIED: If the function is called when the state of the MaM is not MAM_I_USER_PENDING.
  */
 int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
-  if(state != MALL_USER_PENDING) return MALL_DENIED;
+  if(state != MAM_I_USER_PENDING) return MAM_DENIED;
 
   *reconf_info = *user_reconf;
   return MAM_OK;
@@ -553,10 +553,10 @@ int MAM_St_rms(int *mam_state) {
 
   MAM_Check_configuration();
   *mam_state = MAM_NOT_STARTED;
-  state = MALL_RMS_COMPLETED;
+  state = MAM_I_RMS_COMPLETED;
   mall->wait_targets_posted = 0;
 
-  //if(CHECK_RMS()) {return MALL_DENIED;}    
+  //if(CHECK_RMS()) {return MAM_DENIED;}    
   return 1;
 }
 
@@ -564,10 +564,10 @@ int MAM_St_spawn_start() {
   mall->num_parents = mall->numP;
   state = spawn_step();
   //FIXME Esto es necesario pero feo
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->myId >= mall->numC){ mall->zombie = 1; }
-  else if(mall_conf->spawn_method == MALL_SPAWN_BASELINE){ mall->zombie = 1; }
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE && mall->myId >= mall->numC){ mall->zombie = 1; }
+  else if(mall_conf->spawn_method == MAM_SPAWN_BASELINE){ mall->zombie = 1; }
 
-  if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPT_POSTPONE){
+  if (state == MAM_I_SPAWN_COMPLETED || state == MAM_I_SPAWN_ADAPT_POSTPONE){
     return 1;
   }
   return 0;
@@ -575,7 +575,7 @@ int MAM_St_spawn_start() {
 
 int MAM_St_spawn_pending(int wait_completed) {
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
-  if (state == MALL_SPAWN_COMPLETED || state == MALL_SPAWN_ADAPTED) {
+  if (state == MAM_I_SPAWN_COMPLETED || state == MAM_I_SPAWN_ADAPTED) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->comm);
     #endif
@@ -603,8 +603,8 @@ int MAM_St_red_pending(int wait_completed) {
     state = check_redistribution(wait_completed);
   }
 
-  if(state != MALL_DIST_PENDING) { 
-    state = MALL_USER_START;
+  if(state != MAM_I_DIST_PENDING) { 
+    state = MAM_I_USER_START;
     return 1;
   }
   return 0;
@@ -621,7 +621,7 @@ int MAM_St_user_start(int *mam_state) {
     MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
   }
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-  state = MALL_USER_PENDING;
+  state = MAM_I_USER_PENDING;
   *mam_state = MAM_USER_PENDING;
   return 1;
 }
@@ -634,16 +634,16 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
     MAM_I_create_user_struct(MAM_SOURCES);
     do {
       user_function(user_args);
-    } while(wait_completed && state == MALL_USER_PENDING);
+    } while(wait_completed && state == MAM_I_USER_PENDING);
   } else {
     MAM_Resume_redistribution(mam_state);
   }
 
-  if(state != MALL_USER_PENDING) {
+  if(state != MAM_I_USER_PENDING) {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
-    if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
+    if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
     #if USE_MAL_DEBUG
       if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
     #endif
@@ -714,7 +714,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   #endif
 
   malleability_connect_children(&(mall->intercomm));
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) { // For Merge Method, these processes will be added
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { // For Merge Method, these processes will be added
     MPI_Comm_rank(mall->intercomm, &mall->myId);
     MPI_Comm_size(mall->intercomm, &mall->numP);
   }
@@ -796,7 +796,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   }
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
   if(user_function != NULL) {
-    state = MALL_USER_PENDING;
+    state = MAM_I_USER_PENDING;
     MAM_I_create_user_struct(MAM_TARGETS);
     user_function(user_args);
   }
@@ -902,10 +902,10 @@ int start_redistribution() {
         MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
         mall->wait_targets_posted = 1;
       }
-      return MALL_DIST_PENDING; 
+      return MAM_I_DIST_PENDING; 
     }
   } 
-  return MALL_USER_START;
+  return MAM_I_USER_START;
 }
 
 
@@ -978,7 +978,7 @@ int check_redistribution(int wait_completed) {
     #endif
 
     MPI_Allreduce(&local_completed, &all_completed, 1, MPI_INT, MPI_MIN, mall->comm);
-    if(!all_completed) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
+    if(!all_completed) return MAM_I_DIST_PENDING; // Continue only if asynchronous send has ended 
   }
 
   #if USE_MAL_DEBUG >= 2
@@ -1001,8 +1001,8 @@ int check_redistribution(int wait_completed) {
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return MALL_USER_START;
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
+  return MAM_I_USER_START;
 }
 
 /*
@@ -1032,12 +1032,12 @@ int end_redistribution() {
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
-    if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
+    if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
   }
 
-  local_state = MALL_DIST_COMPLETED;
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE && mall->numP > mall->numC) { // Merge Shrink
-    local_state = MALL_SPAWN_ADAPT_PENDING;
+  local_state = MAM_I_DIST_COMPLETED;
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE && mall->numP > mall->numC) { // Merge Shrink
+    local_state = MAM_I_SPAWN_ADAPT_PENDING;
   }
 
   return local_state;
@@ -1056,7 +1056,7 @@ int comm_state; //FIXME Usar un handler
  * Crea una hebra para ejecutar una comunicación en segundo plano.
  */
 int thread_creation() {
-  comm_state = MALL_DIST_PENDING;
+  comm_state = MAM_I_DIST_PENDING;
   if(pthread_create(&(mall->async_thread), NULL, thread_async_work, NULL)) {
     printf("Error al crear el hilo\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
@@ -1074,7 +1074,7 @@ int thread_creation() {
 int thread_check(int wait_completed) {
   int all_completed = 0;
 
-  if(wait_completed && comm_state == MALL_DIST_PENDING) {
+  if(wait_completed && comm_state == MAM_I_DIST_PENDING) {
     if(pthread_join(mall->async_thread, NULL)) {
       printf("Error al esperar al hilo\n");
       MPI_Abort(MPI_COMM_WORLD, -1);
@@ -1084,7 +1084,7 @@ int thread_check(int wait_completed) {
 
   // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
   MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
-  if(all_completed != MALL_DIST_COMPLETED) return MALL_DIST_PENDING; // Continue only if asynchronous send has ended 
+  if(all_completed != MAM_I_DIST_COMPLETED) return MAM_I_DIST_PENDING; // Continue only if asynchronous send has ended 
 
   if(pthread_join(mall->async_thread, NULL)) {
     printf("Error al esperar al hilo\n");
@@ -1095,8 +1095,8 @@ int thread_check(int wait_completed) {
   #if USE_MAL_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
-  if(mall_conf->spawn_method == MALL_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
-  return MALL_USER_START;
+  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
+  return MAM_I_USER_START;
 }
 
 
@@ -1115,7 +1115,7 @@ void* thread_async_work() {
   for(i=0; i<rep_a_data->entries; i++) {
     MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm);
   } 
-  comm_state = MALL_DIST_COMPLETED;
+  comm_state = MAM_I_DIST_COMPLETED;
   pthread_exit(NULL);
 }
 

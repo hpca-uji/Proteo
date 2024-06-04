@@ -50,7 +50,7 @@ void* thread_work(void *args);
  * Si se pide en segundo plano, llamar a "check_spawn_state()" comprobara si la configuracion para
  * crearlos esta lista, y si es asi, los crea.
  *
- * Devuelve el estado de el procedimiento. Si no devuelve "MALL_SPAWN_COMPLETED", es necesario llamar a
+ * Devuelve el estado de el procedimiento. Si no devuelve "MAM_I_SPAWN_COMPLETED", es necesario llamar a
  * "check_spawn_state()".
  */
 int init_spawn(MPI_Comm comm, MPI_Comm *child) {
@@ -58,16 +58,16 @@ int init_spawn(MPI_Comm comm, MPI_Comm *child) {
   set_spawn_configuration(comm);
 
   if(!spawn_data->spawn_is_async) {
-    generic_spawn(child, MALL_NOT_STARTED);
+    generic_spawn(child, MAM_I_NOT_STARTED);
     local_state = get_spawn_state(spawn_data->spawn_is_async);
-    if (local_state == MALL_SPAWN_COMPLETED)
+    if (local_state == MAM_I_SPAWN_COMPLETED)
       deallocate_spawn_data();
 
   } else {
     local_state = spawn_data->spawn_is_single ? 
-	    MALL_SPAWN_SINGLE_PENDING : MALL_SPAWN_PENDING;
-    local_state = mall_conf->spawn_method == MALL_SPAWN_MERGE && spawn_data->initial_qty > spawn_data->target_qty ?
-	    MALL_SPAWN_ADAPT_POSTPONE : local_state;
+	    MAM_I_SPAWN_SINGLE_PENDING : MAM_I_SPAWN_PENDING;
+    local_state = mall_conf->spawn_method == MAM_SPAWN_MERGE && spawn_data->initial_qty > spawn_data->target_qty ?
+	    MAM_I_SPAWN_ADAPT_POSTPONE : local_state;
     set_spawn_state(local_state, 0);
     if((spawn_data->spawn_is_single && mall->myId == mall->root) || !spawn_data->spawn_is_single) {
       allocate_thread_spawn(child);
@@ -83,18 +83,18 @@ int init_spawn(MPI_Comm comm, MPI_Comm *child) {
  */
 int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int wait_completed) { 
   int local_state;
-  int global_state=MALL_NOT_STARTED;
+  int global_state=MAM_I_NOT_STARTED;
 
   if(spawn_data->spawn_is_async) { // Async
     local_state = get_spawn_state(spawn_data->spawn_is_async);
 
-    if(local_state == MALL_SPAWN_SINGLE_PENDING || local_state == MALL_SPAWN_SINGLE_COMPLETED) { // Single
+    if(local_state == MAM_I_SPAWN_SINGLE_PENDING || local_state == MAM_I_SPAWN_SINGLE_COMPLETED) { // Single
       global_state = check_single_state(comm, child, local_state, wait_completed);
 
-    } else if(local_state == MALL_SPAWN_PENDING || local_state == MALL_SPAWN_COMPLETED || local_state == MALL_SPAWN_ADAPTED) { // Generic
+    } else if(local_state == MAM_I_SPAWN_PENDING || local_state == MAM_I_SPAWN_COMPLETED || local_state == MAM_I_SPAWN_ADAPTED) { // Generic
       global_state = check_generic_state(comm, local_state, wait_completed);
 
-    } else if(local_state == MALL_SPAWN_ADAPT_POSTPONE) {
+    } else if(local_state == MAM_I_SPAWN_ADAPT_POSTPONE) {
       global_state = local_state;
       
     } else {
@@ -102,18 +102,18 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int wait_completed) {
       MPI_Abort(MPI_COMM_WORLD, -1);
       return -10;
     }
-  } else if(mall_conf->spawn_method == MALL_SPAWN_MERGE){ // Start Merge shrink Sync
-    generic_spawn(child, MALL_DIST_COMPLETED);
+  } else if(mall_conf->spawn_method == MAM_SPAWN_MERGE){ // Start Merge shrink Sync
+    generic_spawn(child, MAM_I_DIST_COMPLETED);
     global_state = get_spawn_state(spawn_data->spawn_is_async);
   }
-  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED)
+  if(global_state == MAM_I_SPAWN_COMPLETED || global_state == MAM_I_SPAWN_ADAPTED)
     deallocate_spawn_data();
 
   return global_state;
 }
 
 /*
- * Elimina la bandera bloqueante MALL_SPAWN_ADAPT_POSTPONE para los hilos 
+ * Elimina la bandera bloqueante MAM_I_SPAWN_ADAPT_POSTPONE para los hilos 
  * auxiliares. Esta bandera los bloquea para que el metodo Merge shrink no 
  * avance hasta que se complete la redistribucion de datos. Por tanto,
  * al modificar la bandera los hilos pueden continuar.
@@ -123,8 +123,8 @@ int check_spawn_state(MPI_Comm *child, MPI_Comm comm, int wait_completed) {
  */
 void unset_spawn_postpone_flag(int outside_state) {
   int local_state = get_spawn_state(spawn_data->spawn_is_async);
-  if(local_state == MALL_SPAWN_ADAPT_POSTPONE && outside_state == MALL_SPAWN_ADAPT_PENDING && spawn_data->spawn_is_async) { 
-    set_spawn_state(MALL_SPAWN_PENDING, spawn_data->spawn_is_async);
+  if(local_state == MAM_I_SPAWN_ADAPT_POSTPONE && outside_state == MAM_I_SPAWN_ADAPT_PENDING && spawn_data->spawn_is_async) { 
+    set_spawn_state(MAM_I_SPAWN_PENDING, spawn_data->spawn_is_async);
     wakeup_redistribution();
   }
 }
@@ -149,16 +149,16 @@ void malleability_connect_children(MPI_Comm *parents) {
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
 
   switch(mall_conf->spawn_method) {
-    case MALL_SPAWN_BASELINE:
+    case MAM_SPAWN_BASELINE:
       spawn_data->spawn_qty = spawn_data->target_qty;
       baseline(*spawn_data, parents);
       if(!spawn_data->spawn_is_intercomm) {
         intracomm_strategy(MAM_TARGETS, parents);
       }
       break;
-    case MALL_SPAWN_MERGE:
+    case MAM_SPAWN_MERGE:
       spawn_data->spawn_qty = spawn_data->target_qty - spawn_data->initial_qty;
-      merge(*spawn_data, parents, MALL_NOT_STARTED);
+      merge(*spawn_data, parents, MAM_I_NOT_STARTED);
       break;
   }
   free(spawn_data);
@@ -180,15 +180,15 @@ void set_spawn_configuration(MPI_Comm comm) {
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
   spawn_data->comm = comm;
-  spawn_data->mapping_fill_method = MALL_DIST_STRING;
+  spawn_data->mapping_fill_method = MAM_PHY_TYPE_STRING;
   spawn_data->sets = NULL;
 
   switch(mall_conf->spawn_method) {
-    case MALL_SPAWN_BASELINE:
+    case MAM_SPAWN_BASELINE:
       spawn_data->spawn_qty = spawn_data->target_qty;
       spawn_data->already_created = 0;
       break;
-    case MALL_SPAWN_MERGE:
+    case MAM_SPAWN_MERGE:
       spawn_data->spawn_qty = spawn_data->target_qty - spawn_data->initial_qty;
       spawn_data->already_created = spawn_data->initial_qty;
       break;
@@ -245,19 +245,19 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
     processes_dist(spawn_data);
   }
   switch(mall_conf->spawn_method) {
-    case MALL_SPAWN_BASELINE:
+    case MAM_SPAWN_BASELINE:
       local_state = baseline(*spawn_data, child);
       if(!spawn_data->spawn_is_intercomm) {
         local_state = intracomm_strategy(MAM_SOURCES, child);
       }
       break;
-    case MALL_SPAWN_MERGE:
+    case MAM_SPAWN_MERGE:
       local_state = merge(*spawn_data, child, data_stage);
       break;
   }
   // END WORK
   aux_state = get_spawn_state(spawn_data->spawn_is_async);
-  if(!(aux_state == MALL_SPAWN_PENDING && local_state == MALL_SPAWN_ADAPT_POSTPONE)) {
+  if(!(aux_state == MAM_I_SPAWN_PENDING && local_state == MAM_I_SPAWN_ADAPT_POSTPONE)) {
     set_spawn_state(local_state, spawn_data->spawn_is_async);
   }
 }
@@ -295,14 +295,14 @@ void* thread_work(void *args) {
   int local_state;
   MPI_Comm *child = (MPI_Comm *) args;
  
-  generic_spawn(child, MALL_NOT_STARTED);
+  generic_spawn(child, MAM_I_NOT_STARTED);
 
   local_state = get_spawn_state(spawn_data->spawn_is_async);
-  if(local_state == MALL_SPAWN_ADAPT_POSTPONE || local_state == MALL_SPAWN_PENDING) {
+  if(local_state == MAM_I_SPAWN_ADAPT_POSTPONE || local_state == MAM_I_SPAWN_PENDING) {
     // El grupo de procesos se terminara de juntar tras la redistribucion de datos
 
     local_state = wait_redistribution();
-    generic_spawn(child, MALL_DIST_COMPLETED);
+    generic_spawn(child, MAM_I_DIST_COMPLETED);
   }
   wakeup_completion();
 
@@ -313,22 +313,22 @@ void* thread_work(void *args) {
  * Comprueba si una creacion de procesos asincrona en el
  * paso "single" ha terminado. 
  * Si no ha terminado se mantiene el estado 
- * "MALL_SPAWN_SINGLE_PENDING".
+ * "MAM_I_SPAWN_SINGLE_PENDING".
  *
  * Si ha terminado se crean los hilos auxiliares para 
  * los procesos no root y se devuelve el estado
- * "MALL_SPAWN_PENDING".
+ * "MAM_I_SPAWN_PENDING".
  */
 int check_single_state(MPI_Comm comm, MPI_Comm *child, int global_state, int wait_completed) {
-  while(wait_completed && mall->myId == mall->root && global_state == MALL_SPAWN_SINGLE_PENDING) {
+  while(wait_completed && mall->myId == mall->root && global_state == MAM_I_SPAWN_SINGLE_PENDING) {
     global_state = wait_completion();
   }
   MPI_Bcast(&global_state, 1, MPI_INT, mall->root, comm);
 
   // Non-root processes join root to finalize the spawn
   // They also must join if the application has ended its work
-  if(global_state == MALL_SPAWN_SINGLE_COMPLETED) { 
-    global_state = MALL_SPAWN_PENDING;
+  if(global_state == MAM_I_SPAWN_SINGLE_COMPLETED) { 
+    global_state = MAM_I_SPAWN_PENDING;
     set_spawn_state(global_state, spawn_data->spawn_is_async);
 
     if(mall->myId != mall->root) {
@@ -342,18 +342,18 @@ int check_single_state(MPI_Comm comm, MPI_Comm *child, int global_state, int wai
  * Comprueba si una creación de procesos asincrona en el
  * paso "generic" ha terminado.
  * Si no ha terminado devuelve el estado 
- * "MALL_SPAWN_PENDING".
+ * "MAM_I_SPAWN_PENDING".
  *
  * Si ha terminado libera la memoria asociada a spawn_data
- * y devuelve el estado "MALL_SPAWN_COMPLETED".
+ * y devuelve el estado "MAM_I_SPAWN_COMPLETED".
  */
 int check_generic_state(MPI_Comm comm, int local_state, int wait_completed) {
   int global_state;
 
-  while(wait_completed && local_state == MALL_SPAWN_PENDING) local_state = wait_completion();
+  while(wait_completed && local_state == MAM_I_SPAWN_PENDING) local_state = wait_completion();
 
   MPI_Allreduce(&local_state, &global_state, 1, MPI_INT, MPI_MIN, comm);
-  if(global_state == MALL_SPAWN_COMPLETED || global_state == MALL_SPAWN_ADAPTED) {
+  if(global_state == MAM_I_SPAWN_COMPLETED || global_state == MAM_I_SPAWN_ADAPTED) {
     set_spawn_state(global_state, spawn_data->spawn_is_async);
   }
   return global_state;

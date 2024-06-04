@@ -54,7 +54,7 @@ void processes_dist(Spawn_data *spawn_data) {
   spawn_data->sets = (Spawn_set *) malloc(spawn_data->total_spawns * sizeof(Spawn_set));
 #if USE_MAL_SLURM
   switch(spawn_data->mapping_fill_method) {
-    case MALL_DIST_STRING:
+    case MAM_PHY_TYPE_STRING:
 //      if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
       if(spawn_data->spawn_is_multiple) {
         generate_multiple_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
@@ -62,7 +62,7 @@ void processes_dist(Spawn_data *spawn_data) {
         generate_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       }
       break;
-    case MALL_DIST_HOSTFILE: // FIXME Does not consider multiple spawn strat
+    case MAM_PHY_TYPE_HOSTFILE: // FIXME Does not consider multiple spawn strat
       generate_info_hostfile_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       break;
   }
@@ -98,10 +98,10 @@ void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spa
 
   /* GET NEW DISTRIBUTION  */
   switch(mall_conf->spawn_dist) {
-    case MALL_DIST_SPREAD: // DIST NODES @deprecated
+    case MAM_PHY_DIST_SPREAD: // DIST NODES @deprecated
       spread_dist(spawn_data, used_nodes, procs);
       break;
-    case MALL_DIST_COMPACT: // DIST CPUs
+    case MAM_PHY_DIST_COMPACT: // DIST CPUs
       compact_dist(spawn_data, used_nodes, procs);
       break;
   }
