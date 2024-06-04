@@ -57,7 +57,7 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 
   MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
 
-  MPI_Comm_free(child);
+  MPI_Comm_disconnect(child);
   *child = new_comm;
 }
 
@@ -72,6 +72,7 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId) {
   int color = MPI_UNDEFINED;
 
+  if(*child != MPI_COMM_NULL && *child != MPI_COMM_WORLD) MPI_Comm_disconnect(child);
   if(myId < numC) {
       color = 1;  
   }

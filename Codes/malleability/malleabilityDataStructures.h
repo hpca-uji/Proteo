@@ -18,6 +18,7 @@ typedef struct {
   double spawn_start, spawn_time;
   double sync_start,  sync_end;
   double async_start, async_end;
+  double user_start, user_end;
   double malleability_start, malleability_end;
 
   MPI_Datatype times_type;

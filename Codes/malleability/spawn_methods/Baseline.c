@@ -116,7 +116,7 @@ void multiple_strat_parents(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *inte
 
   MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, comm, child);
   for(i=0; i<spawn_data.total_spawns; i++) {
-    MPI_Comm_free(&intercomms[i]);
+    MPI_Comm_disconnect(&intercomms[i]);
   }
   free(port_name);
 }
@@ -153,7 +153,7 @@ void multiple_strat_children(MPI_Comm *parents) {
     MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, mall->comm, &intercomm);
     MPI_Bcast(&total_spawns, 1, MPI_INT, mall->root, intercomm); // FIXME Seems inneficient - Should be performed by parent root?
     MPI_Intercomm_merge(intercomm, 1, &newintracomm); // Get last ranks
-    MPI_Comm_free(&intercomm);
+    MPI_Comm_disconnect(&intercomm);
   } else { 
     start = 1; 
     MPI_Comm_dup(mall->comm, &newintracomm);
@@ -163,9 +163,9 @@ void multiple_strat_children(MPI_Comm *parents) {
   for(i=start; i<total_spawns; i++) {
     MPI_Comm_accept(port_name, MPI_INFO_NULL, mall->root, newintracomm, &intercomm);
     MPI_Bcast(&total_spawns, 1, MPI_INT, rootBcast, intercomm); // FIXME Seems inneficient - Should be performed by parent root?
-    if(newintracomm != MPI_COMM_WORLD) MPI_Comm_free(&newintracomm);
+    if(newintracomm != MPI_COMM_WORLD) MPI_Comm_disconnect(&newintracomm);
     MPI_Intercomm_merge(intercomm, 0, &newintracomm); // Get first ranks
-    MPI_Comm_free(&intercomm);
+    MPI_Comm_disconnect(&intercomm);
 
     if(new_root) {
       MPI_Send(&aux, 1, MPI_CHAR, stat.MPI_SOURCE, stat.MPI_TAG, parents_comm); // Ensures order in the created intracommunicator
@@ -181,8 +181,8 @@ void multiple_strat_children(MPI_Comm *parents) {
 
   if(new_root) MPI_Close_port(port_name);
   free(port_name);
-  MPI_Comm_free(&newintracomm);
-  MPI_Comm_free(parents);
+  MPI_Comm_disconnect(&newintracomm);
+  MPI_Comm_disconnect(parents);
   *parents = intercomm;
 }
 
@@ -207,7 +207,7 @@ void single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
   MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, spawn_data.comm, &newintercomm);
 
   if(mall->myId == mall->root)
-    MPI_Comm_free(child);
+    MPI_Comm_disconnect(child);
   free(port_name);
   *child = newintercomm;
 }
@@ -237,6 +237,6 @@ void single_strat_children(MPI_Comm *parents) {
     MPI_Close_port(port_name);
   }
   free(port_name);
-  MPI_Comm_free(parents);
+  MPI_Comm_disconnect(parents);
   *parents = newintercomm;
 }

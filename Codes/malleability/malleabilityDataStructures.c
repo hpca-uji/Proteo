@@ -84,8 +84,8 @@ void MAM_print_comms_state() {
  * Función para modificar los comunicadores principales de MaM
  */
 void MAM_comms_update(MPI_Comm comm) {
-  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->thread_comm));
-  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_free(&(mall->comm));
+  if(mall->thread_comm != MPI_COMM_WORLD) MPI_Comm_disconnect(&(mall->thread_comm));
+  if(mall->comm != MPI_COMM_WORLD) MPI_Comm_disconnect(&(mall->comm));
 
   MPI_Comm_dup(comm, &(mall->thread_comm));
   MPI_Comm_dup(comm, &(mall->comm));
