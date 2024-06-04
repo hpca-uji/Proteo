@@ -287,7 +287,7 @@ void async_communication_start(void *send, void **recv, int qty, MPI_Datatype da
 
     /* PREPARE COMMUNICATION */
     prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts); 
-    check_requests(s_counts, r_counts, requests, request_qty);
+    check_requests(s_counts, r_counts, requests, request_qty); //FIXME Error related to second reconf if Merge Shrink + P2P -->Invalid requests
 
     /* PERFORM COMMUNICATION */
     switch(mall_conf->red_method) {
