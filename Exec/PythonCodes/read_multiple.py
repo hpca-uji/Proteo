@@ -67,13 +67,16 @@ def convert_to_number(number):
   res = None
   try:
     res = float(number)
-    if res == int(number):
-      res = int(number)
   except ValueError:
     if isinstance(number, str):
       res = number
     else:
       print("Unable to convert to number - Not a fatal error")
+  if isinstance(res, float):
+    try:
+      res = int(number)
+    except ValueError:
+      print("Unable to convert float to int - Not a fatal error")
   return res
 
 def process_line(line, data):
