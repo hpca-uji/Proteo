@@ -13,9 +13,6 @@ ifeq ($(MAM_USE_SLURM),1)
 endif
 DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
 
-
-.PHONY : clean clear install
-
 # Final binary
 BIN = a.out
 CONFIG = config.txt
@@ -33,6 +30,20 @@ OBJ = $(C_FILES:%.c=$(BUILD_DIR)/%.o)
 # Gcc will create these .d files containing dependencies.
 DEP = $(OBJ:%.o=%.d)
 
+# BASIC RULES
+.PHONY : clean clear install
+
+all: install
+
+clean:
+	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
+clear:
+	-rm -rf $(BUILD_DIR)
+
+install: $(BIN) $(CONFIG)
+	echo "Done"
+
+# SPECIFIC RULES
 # Default configuration file
 $(CONFIG) : $(BUILD_DIR)/$(CONFIG)
 # Default target named after the binary.
@@ -60,14 +71,3 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 $(BUILD_DIR)/%.o : %.c
 	@mkdir -p $(@D)
 	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
-
-
-clean:
-	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
-clear:
-	-rm -rf $(BUILD_DIR)
-
-all: install
-
-install: $(BIN) $(CONFIG)
-	echo "Done"
