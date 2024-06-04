@@ -133,7 +133,7 @@ void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spa
  * FIXME Tener en cuenta localizacion de procesos ya creados (already_created)
  */
 void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
-  int i, tamBl;
+  int i, tamBl, remainder;
 
   *used_nodes = mall->num_nodes;
   tamBl = spawn_data.target_qty / *used_nodes;

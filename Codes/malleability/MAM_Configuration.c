@@ -163,6 +163,11 @@ void MAM_Init_configuration() {
     MPI_Abort(MPI_COMM_WORLD, -50);
   }
 
+  mall_conf->spawn_method = MAM_STRAT_CLEAR_VALUE;
+  mall_conf->spawn_strategies = MAM_STRAT_CLEAR_VALUE;
+  mall_conf->red_method = MAM_STRAT_CLEAR_VALUE;
+  mall_conf->red_strategies = MAM_STRAT_CLEAR_VALUE;
+
   configSettings[MAM_SPAWN_METHOD].value = &mall_conf->spawn_method;
   configSettings[MAM_SPAWN_STRATEGIES].value = &mall_conf->spawn_strategies;
   configSettings[MAM_PHYSICAL_DISTRIBUTION].value = &mall_conf->spawn_dist;
