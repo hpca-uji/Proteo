@@ -9,7 +9,7 @@
 #include "MAM_DataStructures.h"
 
 
-#if USE_MAL_SLURM
+#if MAM_USE_SLURM
 #include <slurm/slurm.h>
 int MAM_I_slurm_getenv_hosts_info();
 int MAM_I_slurm_getjob_hosts_info();
@@ -21,7 +21,7 @@ int GetCPUCount();
 void MAM_check_hosts() {
   int not_filled = 1;
   
-  #if USE_MAL_SLURM
+  #if MAM_USE_SLURM
     not_filled = MAM_I_slurm_getenv_hosts_info();
     if(not_filled) {
       if(mall->nodelist != NULL) {
@@ -48,7 +48,7 @@ void MAM_check_hosts() {
     MPI_Abort(mall->comm, -50);
   }
 
-  #if USE_MAL_DEBUG >= 2
+  #if MAM_DEBUG >= 2
     if(mall->myId == mall->root) {
       DEBUG_FUNC("Obtained Nodelist", mall->myId, mall->numP); 
       printf("NODELIST: %s\nNODE_COUNT: %d NUM_CPUS_PER_NODE: %d\n", mall->nodelist, mall->num_nodes, mall->num_cpus);
@@ -196,7 +196,7 @@ int GetCPUCount() {
   return count;
 }
 
-#if USE_MAL_SLURM
+#if MAM_USE_SLURM
 /*
  * TODO
  */

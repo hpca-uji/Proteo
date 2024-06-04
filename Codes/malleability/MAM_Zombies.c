@@ -65,7 +65,7 @@ void MAM_I_zombies_collect(int new_zombies) {
   pids_counts = (int *) malloc(numP * sizeof(int));
   pids_displs = (int *) malloc(numP * sizeof(int));
 
-  #if USE_MAL_DEBUG > 2
+  #if MAM_DEBUG > 2
     if(myId == MAM_ROOT){ DEBUG_FUNC("Collecting zombies", mall->myId, mall->numP); } fflush(stdout);
   #endif
 

@@ -22,7 +22,7 @@ void set_mapping_host(int qty, char *host, size_t index, Spawn_data *spawn_data)
 void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str);
 int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_name);
 //--------------------------------SLURM USAGE-------------------------------------//
-#if USE_MAL_SLURM
+#if MAM_USE_SLURM
 #include <slurm/slurm.h>
 void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
@@ -52,7 +52,7 @@ void processes_dist(Spawn_data *spawn_data) {
   // GET NEW DISTRIBUTION 
   node_dist(*spawn_data, &procs_array, &used_nodes, &spawn_data->total_spawns);
   spawn_data->sets = (Spawn_set *) malloc(spawn_data->total_spawns * sizeof(Spawn_set));
-#if USE_MAL_SLURM
+#if MAM_USE_SLURM
   switch(spawn_data->mapping_fill_method) {
     case MAM_PHY_TYPE_STRING:
 //      if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
@@ -323,7 +323,7 @@ int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_na
 }
 
 //--------------------------------SLURM USAGE-------------------------------------//
-#if USE_MAL_SLURM
+#if MAM_USE_SLURM
 /*
  * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
  * en el que se indica el mappeado a utilizar en los nuevos

@@ -4,7 +4,7 @@
 void def_malleability_times(MPI_Datatype *new_type);
 
 void init_malleability_times() {
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Initializing recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
   #endif
 
@@ -17,7 +17,7 @@ void init_malleability_times() {
   reset_malleability_times();
   def_malleability_times(&mall_conf->times->times_type);
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Initialized recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
   #endif
 }
@@ -31,7 +31,7 @@ void reset_malleability_times() {
 }
 
 void free_malleability_times() {
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Freeing recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
   if(mall_conf->times != NULL) {
@@ -41,7 +41,7 @@ void free_malleability_times() {
     }
     free(mall_conf->times);
   }
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Freed recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
 }

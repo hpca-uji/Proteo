@@ -186,7 +186,7 @@ void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_cou
   MPI_Type_size(datatype, &datasize);
   MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, &win);
 
-  #if USE_MAL_DEBUG >= 3
+  #if MAM_DEBUG >= 3
     DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
   switch(mall_conf->red_method) {
@@ -197,7 +197,7 @@ void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_cou
       sync_rma_lock(recv, datatype, r_counts, win);
       break;
   }
-  #if USE_MAL_DEBUG >= 3
+  #if MAM_DEBUG >= 3
     DEBUG_FUNC("Completed synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
   MPI_Win_free(&win);
@@ -357,7 +357,7 @@ int async_communication_check(int is_children_group, MPI_Request *requests, size
  */
 void async_communication_wait(MPI_Request *requests, size_t request_qty) {
   MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); 
-  #if USE_MAL_DEBUG >= 3
+  #if MAM_DEBUG >= 3
     DEBUG_FUNC("Processes Waitall completed", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 }
@@ -545,12 +545,12 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
     get_block_dist(qty, mall->myId, numP, &dist_data);
     *recv = malloc(dist_data.tamBl * datasize);
 
-    #if USE_MAL_DEBUG >= 4
+    #if MAM_DEBUG >= 4
       get_block_dist(qty, mall->myId, numP, &dist_data);
       print_counts(dist_data, r_counts->counts, r_counts->displs, numO+offset_ids, 0, "Targets Recv");
     #endif
   } else {
-    #if USE_MAL_DEBUG >= 4
+    #if MAM_DEBUG >= 4
       get_block_dist(qty, mall->myId, numP, &dist_data);
     #endif
 
@@ -560,11 +560,11 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
       // Obtener distribución para este hijo y reservar vector de recibo
       get_block_dist(qty, mall->myId, numO, &dist_data);
       *recv = malloc(dist_data.tamBl * datasize);
-      #if USE_MAL_DEBUG >= 4
+      #if MAM_DEBUG >= 4
         print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
       #endif
     }
-    #if USE_MAL_DEBUG >= 4
+    #if MAM_DEBUG >= 4
       print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Sources Send");
     #endif
   }

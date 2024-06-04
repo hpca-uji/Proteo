@@ -75,7 +75,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   MPI_Comm_rank(*comm, &(mall->myId));
   MPI_Comm_size(*comm, &(mall->numP));
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Initializing MaM", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(*comm);
   #endif
 
@@ -128,12 +128,12 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   mall->internode_group = MAM_Is_internode_group();
   MAM_Set_initial_configuration();
 
-  #if USE_MAL_BARRIERS && USE_MAL_DEBUG
+  #if MAM_USE_BARRIERS && MAM_DEBUG
     if(mall->myId == mall->root)
       printf("MaM: Using barriers to record times.\n");
   #endif
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("MaM has been initialized correctly as parents", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(*comm);
   #endif
 
@@ -253,7 +253,7 @@ void MAM_Resume_redistribution(int *mam_state) {
  */
 void MAM_Commit(int *mam_state) {
   int request_abort;
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     if(mall->myId == mall->root){ DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); } fflush(stdout);
   #endif
 
@@ -270,7 +270,7 @@ void MAM_Commit(int *mam_state) {
   // Zombies Treatment
   MAM_Zombies_update();
   if(mall->zombie) {
-    #if USE_MAL_DEBUG >= 1
+    #if MAM_DEBUG >= 1
       DEBUG_FUNC("Is terminating as zombie", mall->myId, mall->numP); fflush(stdout);
     #endif
     request_abort = MAM_Finalize();
@@ -294,11 +294,11 @@ void MAM_Commit(int *mam_state) {
   MPI_Comm_dup(mall->comm, mall->user_comm);
   //if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
   //else if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
   #endif
 
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_end = MPI_Wtime();
@@ -546,7 +546,7 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
 
 int MAM_St_rms(int *mam_state) {
   reset_malleability_times();
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
@@ -576,7 +576,7 @@ int MAM_St_spawn_start() {
 int MAM_St_spawn_pending(int wait_completed) {
   state = check_spawn_state(&(mall->intercomm), mall->comm, wait_completed);
   if (state == MAM_I_SPAWN_COMPLETED || state == MAM_I_SPAWN_ADAPTED) {
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->comm);
     #endif
     mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
@@ -611,7 +611,7 @@ int MAM_St_red_pending(int wait_completed) {
 }
 
 int MAM_St_user_start(int *mam_state) {
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
   mall_conf->times->user_start = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
@@ -627,7 +627,7 @@ int MAM_St_user_start(int *mam_state) {
 }
 
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
   #endif
   if(user_function != NULL) {
@@ -640,11 +640,11 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
   }
 
   if(state != MAM_I_USER_PENDING) {
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
-    #if USE_MAL_DEBUG
+    #if MAM_DEBUG
       if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
     #endif
     return 1;
@@ -659,7 +659,7 @@ int MAM_St_user_completed() {
 
 int MAM_St_spawn_adapt_pending(int wait_completed) {
   wait_completed = MAM_WAIT_COMPLETION;
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->spawn_start = MPI_Wtime();
@@ -670,7 +670,7 @@ int MAM_St_spawn_adapt_pending(int wait_completed) {
  * NO es posible debido a que solo se puede hacer tras enviar los datos variables 
  * y por tanto pierden validez dichos datos
   if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->comm);
     #endif
     mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->spawn_start;
@@ -678,7 +678,7 @@ int MAM_St_spawn_adapt_pending(int wait_completed) {
   }
   return 0;
   */
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->spawn_start;
@@ -709,7 +709,7 @@ int MAM_St_completed(int *mam_state) {
 void Children_init(void (*user_function)(void *), void *user_args) {
   size_t i;
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("MaM will now initialize spawned processes", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
@@ -726,16 +726,16 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     mall->internode_group = MAM_Is_internode_group();
   }
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Spawned have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   comm_data_info(rep_a_data, dist_a_data, MAM_TARGETS);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
-    #if USE_MAL_DEBUG >= 2
+    #if MAM_DEBUG >= 2
       DEBUG_FUNC("Spawned start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     #endif
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
 
@@ -750,7 +750,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
       } 
-      #if USE_MAL_DEBUG >= 2
+      #if MAM_DEBUG >= 2
         DEBUG_FUNC("Spawned started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
 
@@ -766,7 +766,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
         MPI_Wait(&mall->wait_targets, MPI_STATUS_IGNORE);
       }
 
-      #if USE_MAL_DEBUG >= 2
+      #if MAM_DEBUG >= 2
         DEBUG_FUNC("Spawned waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
@@ -777,16 +777,16 @@ void Children_init(void (*user_function)(void *), void *user_args) {
       }
     }
 
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->async_end= MPI_Wtime(); // Obtener timestamp de cuando termina comm asincrona
   }
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Spawned have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
@@ -800,14 +800,14 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     MAM_I_create_user_struct(MAM_TARGETS);
     user_function(user_args);
   }
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
   mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
   comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     recv_data(mall->num_parents, dist_s_data, MAM_USE_SYNCHRONOUS);
@@ -815,18 +815,18 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
     } 
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->sync_end = MPI_Wtime(); // Obtener timestamp de cuando termina comm sincrona
   }
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("Targets have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
   MAM_Commit(NULL);
 
-  #if USE_MAL_DEBUG
+  #if MAM_DEBUG
     DEBUG_FUNC("MaM has been initialized correctly for new ranks", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 }
@@ -844,7 +844,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
  * Si se pide en segundo plano devuelve el estado actual.
  */
 int spawn_step(){
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->spawn_start = MPI_Wtime();
@@ -852,7 +852,7 @@ int spawn_step(){
   state = init_spawn(mall->thread_comm, &(mall->intercomm));
 
   if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, NULL)) {
-      #if USE_MAL_BARRIERS
+      #if MAM_USE_BARRIERS
         MPI_Barrier(mall->comm);
       #endif
       mall_conf->times->spawn_time = MPI_Wtime() - mall_conf->times->malleability_start;
@@ -886,7 +886,7 @@ int start_redistribution() {
 
   comm_data_info(rep_a_data, dist_a_data, MAM_SOURCES);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->async_start = MPI_Wtime();
@@ -929,7 +929,7 @@ int check_redistribution(int wait_completed) {
   MPI_Request *req_completed;
   MPI_Win window;
   local_completed = 1;
-  #if USE_MAL_DEBUG >= 2
+  #if MAM_DEBUG >= 2
     DEBUG_FUNC("Sources are testing for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
@@ -973,7 +973,7 @@ int check_redistribution(int wait_completed) {
         MPI_Test(&mall->wait_targets, &local_completed, MPI_STATUS_IGNORE); //TODO - Figure out if last process takes profit from calling here
       }
     }
-    #if USE_MAL_DEBUG >= 2
+    #if MAM_DEBUG >= 2
       DEBUG_FUNC("Sources will now check a global decision", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
     #endif
 
@@ -981,7 +981,7 @@ int check_redistribution(int wait_completed) {
     if(!all_completed) return MAM_I_DIST_PENDING; // Continue only if asynchronous send has ended 
   }
 
-  #if USE_MAL_DEBUG >= 2
+  #if MAM_DEBUG >= 2
     DEBUG_FUNC("Sources sent asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
@@ -998,7 +998,7 @@ int check_redistribution(int wait_completed) {
     async_communication_end(req_completed, req_qty, &window);
   }
 
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
   if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only
@@ -1019,7 +1019,7 @@ int end_redistribution() {
 
   comm_data_info(rep_s_data, dist_s_data, MAM_SOURCES);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->sync_start = MPI_Wtime();
@@ -1029,7 +1029,7 @@ int end_redistribution() {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
     }
 
-    #if USE_MAL_BARRIERS
+    #if MAM_USE_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
@@ -1092,7 +1092,7 @@ int thread_check(int wait_completed) {
     return -2;
   } 
 
-  #if USE_MAL_BARRIERS
+  #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
   if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->async_end = MPI_Wtime(); // Merge method only

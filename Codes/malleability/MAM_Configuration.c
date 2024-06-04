@@ -185,7 +185,7 @@ void MAM_Set_initial_configuration() {
     MPI_Abort(mall->comm, -50);
   }
 
-  #if USE_MAL_DEBUG >= 2
+  #if MAM_DEBUG >= 2
     if(mall->myId == mall->root) {
       DEBUG_FUNC("Initial configuration settled", mall->myId, mall->numP); 
       fflush(stdout); 
