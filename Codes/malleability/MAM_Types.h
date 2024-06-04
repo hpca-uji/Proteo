@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include "MAM_Constants.h"
 
-#define MALLEABILITY_INIT_DATA_QTY 100
+#define MAM_TYPES_INIT_DATA_QTY 100
 
 typedef struct {
   size_t entries; // Indica numero de vectores a comunicar (replicated data)

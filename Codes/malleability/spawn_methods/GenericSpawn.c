@@ -140,7 +140,7 @@ void unset_spawn_postpone_flag(int outside_state) {
 void malleability_connect_children(MPI_Comm *parents) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
 
-  MAM_Comm_main_structures(*parents, MALLEABILITY_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
+  MAM_Comm_main_structures(*parents, MAM_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
   spawn_data->initial_qty = mall->num_parents;
   spawn_data->target_qty = mall->numC;
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
@@ -153,7 +153,7 @@ void malleability_connect_children(MPI_Comm *parents) {
       spawn_data->spawn_qty = spawn_data->target_qty;
       baseline(*spawn_data, parents);
       if(!spawn_data->spawn_is_intercomm) {
-        intracomm_strategy(MALLEABILITY_CHILDREN, parents);
+        intracomm_strategy(MAM_TARGETS, parents);
       }
       break;
     case MALL_SPAWN_MERGE:
@@ -248,7 +248,7 @@ void generic_spawn(MPI_Comm *child, int data_stage) {
     case MALL_SPAWN_BASELINE:
       local_state = baseline(*spawn_data, child);
       if(!spawn_data->spawn_is_intercomm) {
-        local_state = intracomm_strategy(MALLEABILITY_NOT_CHILDREN, child);
+        local_state = intracomm_strategy(MAM_SOURCES, child);
       }
       break;
     case MALL_SPAWN_MERGE:

@@ -106,10 +106,10 @@ void multiple_strat_parents(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *inte
   if(mall->myId == mall->root) {
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     tag = MAM_TAG_STRAT_MULTIPLE_FIRST;
-    MPI_Send(&spawn_data.total_spawns, 1, MPI_INT, MALLEABILITY_ROOT, tag, intercomms[0]); 
+    MPI_Send(&spawn_data.total_spawns, 1, MPI_INT, MAM_ROOT, tag, intercomms[0]); 
     MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MPI_ANY_SOURCE, tag, intercomms[0], MPI_STATUS_IGNORE);
     for(i=1; i<spawn_data.total_spawns; i++) {
-      MPI_Send(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MALLEABILITY_ROOT, tag+i, intercomms[i]);
+      MPI_Send(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MAM_ROOT, tag+i, intercomms[i]);
       MPI_Recv(&aux, 1, MPI_CHAR, MPI_ANY_SOURCE, MAM_TAG_STRAT_MULTIPLE_FIRST, intercomms[0], MPI_STATUS_IGNORE);
     }
   } else { port_name = malloc(1); }

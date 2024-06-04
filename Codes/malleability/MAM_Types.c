@@ -26,9 +26,9 @@ void add_data(void *data, size_t total_qty, MPI_Datatype type, size_t request_qt
   size_t i;
   
   if(data_struct->entries == 0) {
-    init_malleability_data_struct(data_struct, MALLEABILITY_INIT_DATA_QTY);
+    init_malleability_data_struct(data_struct, MAM_TYPES_INIT_DATA_QTY);
   } else if(data_struct->entries == data_struct->max_entries) {
-    realloc_malleability_data_struct(data_struct, MALLEABILITY_INIT_DATA_QTY);
+    realloc_malleability_data_struct(data_struct, MAM_TYPES_INIT_DATA_QTY);
   }
   
   data_struct->qty[data_struct->entries] = total_qty;

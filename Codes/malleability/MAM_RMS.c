@@ -85,13 +85,13 @@ int MAM_Is_internode_group() {
   MPI_Allreduce(&name_len, &max_name_len, 1, MPI_INT, MPI_MAX, mall->original_comm);
   my_host[max_name_len] = '\0';
   max_name_len++; // Len does not consider terminating character
-  if(myId == MALLEABILITY_ROOT) {
+  if(myId == MAM_ROOT) {
     all_hosts = (char *) malloc(numP * max_name_len * sizeof(char));
   }
   //FIXME Should be a Gatherv as each host could have unitialised chars between name_len and max_name_len
-  MPI_Gather(my_host, max_name_len, MPI_CHAR, all_hosts, max_name_len, MPI_CHAR, MALLEABILITY_ROOT, mall->original_comm);
+  MPI_Gather(my_host, max_name_len, MPI_CHAR, all_hosts, max_name_len, MPI_CHAR, MAM_ROOT, mall->original_comm);
 
-  if(myId == MALLEABILITY_ROOT) {
+  if(myId == MAM_ROOT) {
     for (i = 1; i < numP; i++) {
       tested_host = all_hosts + (i * max_name_len);
       if (strcmp(my_host, tested_host) != 0) {
@@ -101,7 +101,7 @@ int MAM_Is_internode_group() {
     }
     free(all_hosts);
   }
-  MPI_Bcast(&unique_count, 1, MPI_INT, MALLEABILITY_ROOT, mall->original_comm);
+  MPI_Bcast(&unique_count, 1, MPI_INT, MAM_ROOT, mall->original_comm);
   free(my_host);
   return unique_count;
 }

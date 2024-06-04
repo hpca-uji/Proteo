@@ -11,8 +11,8 @@
 #include "spawn_methods/GenericSpawn.h"
 #include "distribution_methods/Distributed_CommDist.h"
 
-#define MALLEABILITY_USE_SYNCHRONOUS 0
-#define MALLEABILITY_USE_ASYNCHRONOUS 1
+#define MAM_USE_SYNCHRONOUS 0
+#define MAM_USE_ASYNCHRONOUS 1
 
 void MAM_Commit(int *mam_state);
 
@@ -120,7 +120,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   MPI_Comm_get_parent(&(mall->intercomm));
   if(mall->intercomm != MPI_COMM_NULL) { 
     Children_init(user_function, user_args);
-    return MALLEABILITY_CHILDREN;
+    return MAM_TARGETS;
   }
 
   //TODO Check potential improvement - If check_hosts does not use slurm, internode_group could be obtained there
@@ -137,7 +137,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
     DEBUG_FUNC("MaM has been initialized correctly as parents", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(*comm);
   #endif
 
-  return MALLEABILITY_NOT_CHILDREN;
+  return MAM_SOURCES;
 }
 
 /*
@@ -494,7 +494,7 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN,  
+      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES,  
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
@@ -502,7 +502,7 @@ void send_data(int numP_children, malleability_data_t *data_struct, int is_async
     for(i=0; i < data_struct->entries; i++) {
       aux_send = data_struct->arrays[i];
       aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MALLEABILITY_NOT_CHILDREN, mall->intercomm);
+      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES, mall->intercomm);
       if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
     }
   }
@@ -520,14 +520,14 @@ void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynch
   if(is_asynchronous) {
     for(i=0; i < data_struct->entries; i++) {
       aux = data_struct->arrays[i];
-      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MALLEABILITY_CHILDREN,
+      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS,
 		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
       data_struct->arrays[i] = aux;
     }
   } else {
     for(i=0; i < data_struct->entries; i++) {
       aux = data_struct->arrays[i];
-      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MALLEABILITY_CHILDREN, mall->intercomm);
+      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS, mall->intercomm);
       data_struct->arrays[i] = aux;
     }
   }
@@ -616,7 +616,7 @@ int MAM_St_user_start(int *mam_state) {
   #endif
   mall_conf->times->user_start = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
-    MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_NOT_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
+    MPI_Intercomm_merge(mall->intercomm, MAM_SOURCES, &mall->tmp_comm); //El que pone 0 va primero
   } else {
     MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
   }
@@ -631,7 +631,7 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
     if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
   #endif
   if(user_function != NULL) {
-    MAM_I_create_user_struct(MALLEABILITY_NOT_CHILDREN);
+    MAM_I_create_user_struct(MAM_SOURCES);
     do {
       user_function(user_args);
     } while(wait_completed && state == MALL_USER_PENDING);
@@ -730,7 +730,7 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     DEBUG_FUNC("Spawned have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_CHILDREN);
+  comm_data_info(rep_a_data, dist_a_data, MAM_TARGETS);
   if(dist_a_data->entries || rep_a_data->entries) { // Recibir datos asincronos
     #if USE_MAL_DEBUG >= 2
       DEBUG_FUNC("Spawned start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
@@ -740,12 +740,12 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     #endif
 
     if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
-      recv_data(mall->num_parents, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+      recv_data(mall->num_parents, dist_a_data, MAM_USE_SYNCHRONOUS);
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm);
       } 
     } else {
-      recv_data(mall->num_parents, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS); 
+      recv_data(mall->num_parents, dist_a_data, MAM_USE_ASYNCHRONOUS); 
 
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
@@ -790,14 +790,14 @@ void Children_init(void (*user_function)(void *), void *user_args) {
     MPI_Barrier(mall->intercomm);
   #endif
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
-    MPI_Intercomm_merge(mall->intercomm, MALLEABILITY_CHILDREN, &mall->tmp_comm); //El que pone 0 va primero
+    MPI_Intercomm_merge(mall->intercomm, MAM_TARGETS, &mall->tmp_comm); //El que pone 0 va primero
   } else {
     MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
   }
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
   if(user_function != NULL) {
     state = MALL_USER_PENDING;
-    MAM_I_create_user_struct(MALLEABILITY_CHILDREN);
+    MAM_I_create_user_struct(MAM_TARGETS);
     user_function(user_args);
   }
   #if USE_MAL_BARRIERS
@@ -805,12 +805,12 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   #endif
   mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
-  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_CHILDREN);
+  comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
-    recv_data(mall->num_parents, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
+    recv_data(mall->num_parents, dist_s_data, MAM_USE_SYNCHRONOUS);
 
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
@@ -884,7 +884,7 @@ int start_redistribution() {
     MPI_Comm_dup(mall->comm, &(mall->intercomm));
   }
 
-  comm_data_info(rep_a_data, dist_a_data, MALLEABILITY_NOT_CHILDREN);
+  comm_data_info(rep_a_data, dist_a_data, MAM_SOURCES);
   if(dist_a_data->entries || rep_a_data->entries) { // Enviar datos asincronos
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
@@ -893,7 +893,7 @@ int start_redistribution() {
     if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
       return thread_creation();
     } else {
-      send_data(mall->numC, dist_a_data, MALLEABILITY_USE_ASYNCHRONOUS);
+      send_data(mall->numC, dist_a_data, MAM_USE_ASYNCHRONOUS);
       for(i=0; i<rep_a_data->entries; i++) {
         MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
       } 
@@ -957,13 +957,13 @@ int check_redistribution(int wait_completed) {
       for(i=0; i<dist_a_data->entries; i++) {
         req_completed = dist_a_data->requests[i];
         req_qty = dist_a_data->request_qty[i];
-        completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, req_completed, req_qty);
+        completed = async_communication_check(MAM_SOURCES, req_completed, req_qty);
         local_completed = local_completed && completed;
       }
       for(i=0; i<rep_a_data->entries; i++) {
         req_completed = rep_a_data->requests[i];
         req_qty = rep_a_data->request_qty[i];
-        completed = async_communication_check(MALLEABILITY_NOT_CHILDREN, req_completed, req_qty);
+        completed = async_communication_check(MAM_SOURCES, req_completed, req_qty);
         local_completed = local_completed && completed;
       }
 
@@ -1017,13 +1017,13 @@ int end_redistribution() {
   size_t i;
   int local_state;
 
-  comm_data_info(rep_s_data, dist_s_data, MALLEABILITY_NOT_CHILDREN);
+  comm_data_info(rep_s_data, dist_s_data, MAM_SOURCES);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     #if USE_MAL_BARRIERS
       MPI_Barrier(mall->intercomm);
     #endif
     mall_conf->times->sync_start = MPI_Wtime();
-    send_data(mall->numC, dist_s_data, MALLEABILITY_USE_SYNCHRONOUS);
+    send_data(mall->numC, dist_s_data, MAM_USE_SYNCHRONOUS);
 
     for(i=0; i<rep_s_data->entries; i++) {
       MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
@@ -1111,7 +1111,7 @@ int thread_check(int wait_completed) {
 void* thread_async_work() {
   size_t i;
 
-  send_data(mall->numC, dist_a_data, MALLEABILITY_USE_SYNCHRONOUS);
+  send_data(mall->numC, dist_a_data, MAM_USE_SYNCHRONOUS);
   for(i=0; i<rep_a_data->entries; i++) {
     MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm);
   } 
