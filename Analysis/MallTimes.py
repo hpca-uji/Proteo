@@ -115,9 +115,10 @@ def record_stage_line(lineS, dataG_it, stage):
 # and stores them in the dataframe
 # Is needed to indicate to which group refers
 # the resize line
+# Group 0: Iters=3, Procs=80, Factors=0.037500, Dist=2, RM=0, SM=0, RS=0, SS=0
 def record_group_line(lineS, dataG_it, group):
   array_groups = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
-          G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
+          G_enum.RED_METHOD.value, G_enum.SPAWN_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_STRATEGY.value]
   offset_lines = 2
   for i in range(len(array_groups)):
     value = get_value(lineS, i+offset_lines)
