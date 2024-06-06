@@ -8,7 +8,7 @@
 # Parameter 1 - Base directory of the malleability benchmark
 # Parameter 2 - Number of cores in a single machine
 # Parameter 3 - Configuration file name for the emulation.
-# Parameter 4 - Use Extrae(1) or not(0).
+# Parameter 4 - Use Valgrind(1), Extrae(2) or nothing(0).
 # Parameter 5 - Index to use for the output files. Must be a positive integer.
 # Parameter 6 - Amount of executions per file. Must be a positive number.
 #====== Do not modify these values =======
@@ -22,7 +22,7 @@ echo "START TEST"
 #$1 == baseDir
 #$2 == cores
 #$3 == configFile
-#$4 == use_extrae
+#$4 == use_external
 #$5 == outFileIndex
 #$6 == qty
 
@@ -37,7 +37,7 @@ fi
 dir=$1
 cores=$2
 configFile=$3
-use_extrae=$4
+use_external=$4
 outFileIndex=$5
 qty=1
 if [ $# -ge 5 ]
@@ -57,7 +57,7 @@ initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP 
 
 #EXECUTE RUN
 echo "Nodes=$nodelist"
-if [ $use_extrae -ne 1 ]
+if [ $use_external -eq 0 ] #NORMAL
 then
   for ((i=0; i<qty; i++))
   do
@@ -65,10 +65,19 @@ then
     mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex
     echo "Run $i ends"
   done
-else
+elif [ $use_external -eq 1 ] #VALGRIND
+then
+  cp $dir$execDir/Valgrind/worker_valgrind.sh .
+  for ((i=0; i<qty; i++))
+  do
+    echo "Run $i starts"
+    mpirun -hosts $initial_nodelist -np $numP valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=vg.sp.%p.$SLURM_JOB_ID.$i $dir$codeDir/a.out $configFile $outIndex 
+    echo "Run $i ends"
+  done
+else #EXTRAE
   cp $dir$execDir/Extrae/extrae.xml .
   cp $dir$execDir/Extrae/trace.sh .
-  cp $dir$execDir/Extrae/trace_worker.sh .
+  cp $dir$execDir/Extrae/worker_extrae.sh .
   for ((i=0; i<qty; i++))
   do
     #FIXME Extrae not tested keeping in mind the initial nodelist - Could have some errors

@@ -19,7 +19,7 @@ echo "START TEST"
 #$1 == baseDir
 #$2 == cores
 #$3 == configFile
-#$4 == use_extrae
+#$4 == use_external
 #$5 == outFileIndex
 #$6 == qty
 
@@ -34,13 +34,13 @@ fi
 dir=$1
 cores=$2
 configFile=$3
-use_extrae=0
+use_external=0
 outFileIndex=0
 qty=1
 
 if [ $# -ge 4 ]
 then
-  use_extrae=$4
+  use_external=$4
 fi
 
 if [ $# -ge 5 ]
@@ -65,16 +65,27 @@ fi
 
 #EXECUTE RUN
 echo "Nodes=$nodelist"
-if [ $use_extrae -ne 1 ]
+if [ $use_external -eq 0 ]
 then
   for ((i=0; i<qty; i++))
   do
+    echo "Run $i starts"
     mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex
+    echo "Run $i ends"
+  done
+elif [ $use_external -eq 1 ] #VALGRIND
+then
+  cp $dir$execDir/Valgrind/worker_valgrind.sh .
+  for ((i=0; i<qty; i++))
+  do
+    echo "Run $i starts"
+    mpirun -hosts $initial_nodelist -np $numP valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=vg.sp.%p.$SLURM_JOB_ID.$i $dir$codeDir/a.out $configFile $outIndex 
+    echo "Run $i ends"
   done
 else
   cp $dir$execDir/Extrae/extrae.xml .
   cp $dir$execDir/Extrae/trace.sh .
-  cp $dir$execDir/Extrae/trace_worker.sh .
+  cp $dir$execDir/Extrae/worker_extrae.sh .
   for ((i=0; i<qty; i++))
   do
     mpirun -hosts $initial_nodelist -np $numP ./trace.sh $dir$codeDir/a.out $configFile $outFileIndex 

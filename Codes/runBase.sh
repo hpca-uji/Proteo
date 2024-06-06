@@ -20,7 +20,7 @@ then
   outIndex=$2
 fi
 
-echo "MPICH"
+echo "MPICH provider=$FI_PROVIDER"
 mpirun --version
 numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
