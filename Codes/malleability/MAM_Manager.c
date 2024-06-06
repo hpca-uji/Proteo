@@ -456,23 +456,6 @@ int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
   return MAM_OK;
 }
 
-/*
- * @brief Returns the times used for the different steps of last reconfiguration.
- *
- * This function is intended to be called when a reconfiguration has ended. 
- * It is designed to provide the necessary information for the user to perform data redistribution.
- *
- * Parameters:
- *  - double *sp_time:   A pointer where the spawn time will be saved.
- *  - double *sy_time:   A pointer where the sychronous data redistribution time will be saved.
- *  - double *asy_time:  A pointer where the asychronous data redistribution time will be saved.
- *  - double *user_time: A pointer where the user data redistribution time will be saved.
- *  - double *mall_time: A pointer where the malleability time will be saved.
- */
-void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time) {
-  MAM_I_retrieve_times(sp_time, sy_time, asy_time, user_time, mall_time);
-}
-
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
 //================DATA COMMUNICATION====================||

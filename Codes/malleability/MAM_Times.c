@@ -46,17 +46,30 @@ void free_malleability_times() {
   #endif
 }
 
-void malleability_times_broadcast(int root) {
-  MPI_Bcast(mall_conf->times, 1, mall_conf->times->times_type, root, mall->intercomm);
-}
-
-void MAM_I_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time) {
+/*
+ * @brief Returns the times used for the different steps of last reconfiguration.
+ *
+ * This function is intended to be called when a reconfiguration has ended. 
+ * It is designed to provide the necessary information for the user to perform data redistribution.
+ *
+ * Parameters:
+ *  - double *sp_time:   A pointer where the spawn time will be saved.
+ *  - double *sy_time:   A pointer where the sychronous data redistribution time will be saved.
+ *  - double *asy_time:  A pointer where the asychronous data redistribution time will be saved.
+ *  - double *user_time: A pointer where the user data redistribution time will be saved.
+ *  - double *mall_time: A pointer where the malleability time will be saved.
+ */
+void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time) {
   malleability_times_t *times = mall_conf->times;
   *sp_time = times->spawn_time;
   *sy_time = times->sync_end - times->sync_start;
   *asy_time = times->async_end - times->async_start;
   *user_time = times->user_end - times->user_start;
   *mall_time = times->malleability_end - times->malleability_start;
+}
+
+void malleability_times_broadcast(int root) {
+  MPI_Bcast(mall_conf->times, 1, mall_conf->times->times_type, root, mall->intercomm);
 }
 
 void def_malleability_times(MPI_Datatype *new_type) {
