@@ -292,8 +292,6 @@ void MAM_Commit(int *mam_state) {
 
   // Set new communicator
   MPI_Comm_dup(mall->comm, mall->user_comm);
-  //if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) { *(mall->user_comm) = MPI_COMM_WORLD; }
-  //else if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { MPI_Comm_dup(mall->comm, mall->user_comm); }
   #if MAM_DEBUG
     if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
   #endif
@@ -1034,6 +1032,9 @@ int end_redistribution() {
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->sync_end = MPI_Wtime(); // Merge method only
   }
+  #if MAM_DEBUG
+    DEBUG_FUNC("Sources have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
 
   local_state = MAM_I_DIST_COMPLETED;
   if(mall_conf->spawn_method == MAM_SPAWN_MERGE && mall->numP > mall->numC) { // Merge Shrink

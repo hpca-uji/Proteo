@@ -61,7 +61,9 @@ if [ $use_extrae -ne 1 ]
 then
   for ((i=0; i<qty; i++))
   do
+    echo "Run $i starts"
     mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/a.out $configFile $outFileIndex
+    echo "Run $i ends"
   done
 else
   cp $dir$execDir/Extrae/extrae.xml .

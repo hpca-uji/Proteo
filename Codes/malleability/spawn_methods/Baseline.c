@@ -101,8 +101,6 @@ void multiple_strat_parents(Spawn_data spawn_data, MPI_Comm comm, MPI_Comm *inte
   int i, tag;
   char *port_name, aux;
 
-  //MPI_Barrier(MPI_COMM_WORLD);
-  //printf("P%d TEST END - set[%d] spw=%d\n", mall->myId, i, spawn_data.sets[i].spawn_qty); fflush(stdout);
   if(mall->myId == mall->root) {
     port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
     tag = MAM_TAG_STRAT_MULTIPLE_FIRST;
