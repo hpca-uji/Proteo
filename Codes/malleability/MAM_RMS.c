@@ -22,14 +22,14 @@ void MAM_check_hosts() {
   int not_filled = 1;
   
   #if MAM_USE_SLURM
-    not_filled = MAM_I_slurm_getenv_hosts_info();
+    not_filled = MAM_I_slurm_getjob_hosts_info();
     if(not_filled) {
       if(mall->nodelist != NULL) {
         free(mall->nodelist);
 	mall->nodelist = NULL;
       }
 
-      not_filled = MAM_I_slurm_getjob_hosts_info();
+      not_filled = MAM_I_slurm_getenv_hosts_info();
     }
   #endif
   if(not_filled) {
@@ -281,7 +281,7 @@ int MAM_I_slurm_getjob_hosts_info() {
   last_record = j_info->job_array[j_info->record_count - 1];
 
   mall->num_nodes = last_record.num_nodes;
-  mall->num_cpus = last_record.num_cpus;
+  mall->num_cpus = last_record.num_cpus / last_record.num_nodes;
 
   mall->nodelist_len = strlen(last_record.nodes)+1;
   mall->nodelist = (char *) malloc(mall->nodelist_len * sizeof(char));
