@@ -102,7 +102,7 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   if(is_children_group) {
     for(i=0; i < data_struct_rep->entries; i++) {
       MPI_Type_size(data_struct_rep->types[i], &type_size);
-      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * type_size);
+      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * type_size); //FIXME This memory is not freed -- How should be done?
       data_struct_rep->requests[i] = (MPI_Request *) malloc(data_struct_rep->request_qty[i] * sizeof(MPI_Request));
       for(j=0; j < data_struct_rep->request_qty[i]; j++) {
         data_struct_rep->requests[i][j] = MPI_REQUEST_NULL;

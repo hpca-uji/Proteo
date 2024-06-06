@@ -7,11 +7,15 @@ LD_FLAGS = -lm -pthread
 MAM_USE_SLURM ?= 0
 MAM_USE_BARRIERS ?= 0
 MAM_DEBUG ?= 0
+DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
 
 ifeq ($(MAM_USE_SLURM),1)
     LD_FLAGS += -lslurm
 endif
-DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
+
+ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
+    C_FLAGS += -g
+endif
 
 # Final binary
 BIN = a.out

@@ -482,6 +482,18 @@ void free_application_data() {
 void free_zombie_process() {
   free_results_data(results, config_file->n_stages);
   free(results);
+  
+  size_t i;
+  if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
+    free(group->async_array);
+    group->async_array = NULL;
+  }
 
   free_config(config_file);
 }
