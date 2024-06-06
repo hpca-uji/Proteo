@@ -7,6 +7,7 @@
 
 typedef struct {
   int spawn_qty;
+  char *cmd;
   MPI_Info mapping;
 } Spawn_set;
 

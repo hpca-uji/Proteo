@@ -62,6 +62,8 @@ int main(int argc, char *argv[]) {
     init_group_struct(argv, argc, myId, numP);
     im_child = MAM_Init(ROOT, &comm, argv[0], user_redistribution, NULL);
 
+    //MAM_Use_valgrind(1);
+
     if(im_child) {
       update_targets();
 

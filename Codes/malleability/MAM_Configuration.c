@@ -151,6 +151,33 @@ int MAM_Set_target_number(unsigned int numC){
   return MAM_I_set_target_number(numC);
 }
 
+
+/*
+ * //TODO
+ * Tiene que ser llamado fuera de reconfig
+ */
+void MAM_Use_valgrind(int flag) {
+  if(state > MAM_I_NOT_STARTED) return;
+
+  mall_conf->external_usage = flag ? MAM_USE_VALGRIND: 0;
+  #if MAM_DEBUG
+    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Valgrind Wrapper", mall->myId, mall->numP); fflush(stdout);
+  #endif
+}
+
+/*
+ * //TODO
+ * Tiene que ser llamado fuera de reconfig
+ */
+void MAM_Use_extrae(int flag) {
+  if(state > MAM_I_NOT_STARTED) return;
+
+  mall_conf->external_usage = flag ? MAM_USE_EXTRAE: 0;
+  #if MAM_DEBUG
+    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Extrae Wrapper", mall->myId, mall->numP); fflush(stdout);
+  #endif
+}
+
 //======================================================||
 //===============MAM_INIT FUNCTIONS=====================||
 //======================================================||
@@ -167,6 +194,7 @@ void MAM_Init_configuration() {
   mall_conf->spawn_strategies = MAM_STRAT_CLEAR_VALUE;
   mall_conf->red_method = MAM_STRAT_CLEAR_VALUE;
   mall_conf->red_strategies = MAM_STRAT_CLEAR_VALUE;
+  mall_conf->external_usage = 0;
 
   configSettings[MAM_SPAWN_METHOD].value = &mall_conf->spawn_method;
   configSettings[MAM_SPAWN_STRATEGIES].value = &mall_conf->spawn_strategies;

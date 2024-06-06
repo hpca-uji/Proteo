@@ -14,6 +14,7 @@
 void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns);
 void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
 void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
+void set_spawn_cmd(size_t nodes, Spawn_data *spawn_data);
 
 void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
@@ -55,7 +56,6 @@ void processes_dist(Spawn_data *spawn_data) {
 #if MAM_USE_SLURM
   switch(spawn_data->mapping_fill_method) {
     case MAM_PHY_TYPE_STRING:
-//      if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
       if(spawn_data->spawn_is_multiple) {
         generate_multiple_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       } else {
@@ -67,13 +67,13 @@ void processes_dist(Spawn_data *spawn_data) {
       break;
   }
 #else
-//  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
   if(spawn_data->spawn_is_multiple) {
     generate_multiple_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
   } else {
     generate_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
   }
 #endif
+  set_spawn_cmd(used_nodes, spawn_data);
   free(procs_array);
 }
 
@@ -192,6 +192,34 @@ void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
   if(*used_nodes > mall->num_nodes) *used_nodes = mall->num_nodes;  //FIXME Si ocurre esto no es un error?
 }
 
+//--------------PRIVATE FUNCTIONS---------------//
+//-------------------CMD SET--------------------//
+
+/*
+ * Comprueba que comando hay que llamar al realizar
+ * el spawn. Todos los sets tienen que hacer el mismo
+ * comando.
+ *
+ */
+void set_spawn_cmd(size_t nodes, Spawn_data *spawn_data) {
+  size_t index = 0;
+  char *cmd_aux;
+  switch(mall_conf->external_usage) {
+    case MAM_USE_VALGRIND:
+      cmd_aux = MAM_VALGRIND_SCRIPT;
+      break;
+    case MAM_USE_EXTRAE: 
+      cmd_aux = MAM_EXTRAE_SCRIPT;
+      break;
+    default:
+      cmd_aux = mall->name_exec;
+      break;
+  }
+
+  for(; index<nodes; index++) {
+    spawn_data->sets[index].cmd = cmd_aux;
+  }
+}
 
 //--------------PRIVATE FUNCTIONS---------------//
 //-------------------INFO SET-------------------//

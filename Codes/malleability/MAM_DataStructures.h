@@ -12,10 +12,17 @@
 
 #define DEBUG_FUNC(debug_string, rank, numP) printf("MaM [P%d/%d]: %s -- %s:%s:%d\n", rank, numP, debug_string, __FILE__, __func__, __LINE__)
 
-/* --- MAM REAL STATES --- */
+/* --- MAM INNER CONSTANTS --- */
+#define MAM_ROOT 0
 enum mam_inner_states{MAM_I_UNRESERVED, MAM_I_NOT_STARTED, MAM_I_RMS_COMPLETED, MAM_I_SPAWN_PENDING, MAM_I_SPAWN_SINGLE_PENDING, 
 	MAM_I_SPAWN_SINGLE_COMPLETED, MAM_I_SPAWN_ADAPT_POSTPONE, MAM_I_SPAWN_COMPLETED, MAM_I_DIST_PENDING, MAM_I_DIST_COMPLETED, 
 	MAM_I_SPAWN_ADAPT_PENDING, MAM_I_USER_START, MAM_I_USER_PENDING, MAM_I_USER_COMPLETED, MAM_I_SPAWN_ADAPTED, MAM_I_COMPLETED};
+
+#define MAM_USE_VALGRIND 1
+#define MAM_USE_EXTRAE 2
+
+#define MAM_VALGRIND_SCRIPT "./worker_valgrind.sh"
+#define MAM_EXTRAE_SCRIPT "./worker_extrae.sh"
 
 /* --- TIME CAPTURE STRUCTURE --- */
 typedef struct {
@@ -36,6 +43,8 @@ typedef struct {
   unsigned int spawn_strategies;
   unsigned int red_method;
   unsigned int red_strategies;
+
+  int external_usage; // Whether a different application should be called by Spawn and which
 
   malleability_times_t *times;
 } malleability_config_t;

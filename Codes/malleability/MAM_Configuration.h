@@ -21,4 +21,6 @@ void MAM_Set_configuration(int spawn_method, int spawn_strategies, int spawn_dis
 void MAM_Set_key_configuration(int key, int required, int *provided);
 int MAM_Set_target_number(unsigned int numC);
 
+void MAM_Use_valgrind(int flag);
+void MAM_Use_extrae(int flag);
 #endif

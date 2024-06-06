@@ -86,7 +86,7 @@ int baseline_spawn(Spawn_set spawn_set, MPI_Comm comm, MPI_Comm *child) {
   int rootBcast = MPI_PROC_NULL;
   if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
-  int spawn_err = MPI_Comm_spawn(mall->name_exec, MPI_ARGV_NULL, spawn_set.spawn_qty, spawn_set.mapping, mall->root, comm, child, MPI_ERRCODES_IGNORE); 
+  int spawn_err = MPI_Comm_spawn(spawn_set.cmd, MPI_ARGV_NULL, spawn_set.spawn_qty, spawn_set.mapping, mall->root, comm, child, MPI_ERRCODES_IGNORE); 
 
   if(spawn_err != MPI_SUCCESS) {
     printf("Error creating new set of %d procs.\n", spawn_set.spawn_qty);

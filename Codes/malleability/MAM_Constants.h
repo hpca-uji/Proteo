@@ -26,8 +26,6 @@ enum mam_key_values{MAM_SPAWN_METHOD=0, MAM_SPAWN_STRATEGIES, MAM_PHYSICAL_DISTR
 #define MAM_RED_STRATS_ENV                   "MAM_RED_STRATS"
 #define MAM_NUM_TARGETS_ENV                  "MAM_NUM_TARGETS"
 
-#define MAM_ROOT 0
-
 #define MAM_CHECK_COMPLETION 0
 #define MAM_WAIT_COMPLETION 1
 
