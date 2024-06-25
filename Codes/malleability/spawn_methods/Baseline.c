@@ -62,9 +62,15 @@ void baseline_parents(Spawn_data spawn_data, MPI_Comm *child) {
     spawn_data.sets = (Spawn_set *) malloc(spawn_data.total_spawns * sizeof(Spawn_set));
   }
 
+  #if MAM_DEBUG >= 3
+    DEBUG_FUNC("Starting spawning of processes", mall->myId, mall->numP); fflush(stdout);
+  #endif
   for(i=0; i<spawn_data.total_spawns; i++) {
     baseline_spawn(spawn_data.sets[i], comm, &intercomms[i]);
   }
+  #if MAM_DEBUG >= 3
+    DEBUG_FUNC("Sources have created the new processes. Performing additional actions if required.", mall->myId, mall->numP); fflush(stdout);
+  #endif
 
   // TODO Improvement - Deactivate Multiple spawn before spawning if total_spawns == 1
   if(spawn_data.spawn_is_multiple) { multiple_strat_parents(spawn_data, comm, intercomms, child); }
