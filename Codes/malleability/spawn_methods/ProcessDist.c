@@ -6,94 +6,75 @@
 #include <string.h>
 #include <mpi.h>
 #include "ProcessDist.h"
-
-//#define USE_SLURM
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
 
-void node_dist( struct physical_dist dist, int **qty, int *used_nodes);
-void spread_dist(struct physical_dist dist, int *used_nodes, int *procs);
-void compact_dist(struct physical_dist dist, int *used_nodes, int *procs);
+void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns);
+void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
+void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
+void set_spawn_cmd(size_t nodes, Spawn_data *spawn_data);
 
-void generate_info_string(int target_qty, MPI_Info *info);
+void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
+void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
+
+void set_mapping_host(int qty, char *host, size_t index, Spawn_data *spawn_data);
+void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str);
+int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_name);
 //--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
+#if MAM_USE_SLURM
 #include <slurm/slurm.h>
-void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info);
-void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str);
+void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
+void generate_multiple_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
+void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str);
 //@deprecated functions
-void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, MPI_Info *info);
+void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, Spawn_data *spawn_data); 
 void fill_hostfile_slurm(char *nodelist, int ptr, int *qty, int used_nodes);
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
 
-int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name);
 //@deprecated functions
 int create_hostfile(char **file_name);
 int write_hostfile_node(int ptr, int qty, char *node_name);
 
 //--------------PUBLIC FUNCTIONS---------------//
-/*
- * Pone los datos para una estructura que guarda los parametros
- * para realizar un mappeado de los procesos.
- *
- * Si la memoria no esta reservada devuelve falso y no hace nada.
- * Si puede realizar los cambios devuelve verdadero.
- *
- * IN parameters -->
- * target_qty: Numero de procesos tras la reconfiguracion
- * alreadyCreated: Numero de procesos padre a considerar
- *   La resta de target_qty-alreadyCreated es el numero de hijos a crear
- * num_cpus: Numero de cpus totales (En uso o no)
- * num_nodes: Numero de nodos disponibles por esta aplicacion
- * info_type: Indica como realizar el mappeado, si indicarlo
- *   en una cadena (MALL_DIST_STRING) o en un hostfile
- *   (MALL_DIST_HOSTFILE)
- * dist_type: Indica como sera el mappeado, si intentar rellenar
- *   primero los nodos con cpus ya usados (CPUS/BEST/COMPACT) o
- *   que todos los nodos tengan el mismo numero de cpus usados
- *   (NODES/WORST/SPREAD)
- */
-int physical_struct_create(int target_qty, int already_created, int num_cpus, int num_nodes, char *nodelist, int dist_type, int info_type, struct physical_dist *dist) {
-
-  dist->target_qty = target_qty;
-  dist->already_created = already_created;
-  dist->num_cpus = num_cpus;
-  dist->num_nodes = num_nodes;
-  dist->nodelist = nodelist;
-  dist->dist_type = dist_type;
-  dist->info_type = info_type;
-
-  return 1;
-}
 
 /*
  * Configura la creacion de un nuevo grupo de procesos, reservando la memoria
  * para una llamada a MPI_Comm_spawn, obteniendo una distribucion fisica
  * para los procesos y creando un fichero hostfile.
  *
- * OUT parameters -->
- * info_spawn: Objeto MPI_Info en el que se indica el mappeado
- *   a usar al crear los procesos.
  */
-void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
-#ifdef USE_SLURM
+void processes_dist(Spawn_data *spawn_data) {
   int used_nodes=0;
   int *procs_array;
+
   // GET NEW DISTRIBUTION 
-  node_dist(dist, &procs_array, &used_nodes);
-  switch(dist.info_type) {
-    case MALL_DIST_STRING:
-      generate_info_string_slurm(dist.nodelist, procs_array, used_nodes, info_spawn);
+  node_dist(*spawn_data, &procs_array, &used_nodes, &spawn_data->total_spawns);
+  spawn_data->sets = (Spawn_set *) malloc(spawn_data->total_spawns * sizeof(Spawn_set));
+#if MAM_USE_SLURM
+  switch(spawn_data->mapping_fill_method) {
+    case MAM_PHY_TYPE_STRING:
+      if(spawn_data->spawn_is_multiple) {
+        generate_multiple_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
+      } else {
+        generate_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
+      }
       break;
-    case MALL_DIST_HOSTFILE:
-      generate_info_hostfile_slurm(dist.nodelist, procs_array, used_nodes, info_spawn);
+    case MAM_PHY_TYPE_HOSTFILE: // FIXME Does not consider multiple spawn strat
+      generate_info_hostfile_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       break;
   }
-  free(procs_array);
 #else
-  generate_info_string(dist.target_qty, info_spawn);
+  if(spawn_data->spawn_is_multiple) {
+    generate_multiple_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
+  } else {
+    generate_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
+  }
 #endif
+  set_spawn_cmd(used_nodes, spawn_data);
+  free(procs_array);
 }
 
 
@@ -101,35 +82,44 @@ void processes_dist(struct physical_dist dist, MPI_Info *info_spawn) {
 //-----------------DISTRIBUTION-----------------//
 /*
  * Obtiene la distribucion fisica del grupo de procesos a crear, devolviendo
- * cuantos nodos se van a utilizar y la cantidad de procesos que alojara cada
- * nodo.
+ * cuantos nodos se van a utilizar, la cantidad de procesos que alojara cada
+ * nodo y cuantas creaciones de procesos seran necesarias.
  *
- * Se permiten dos tipos de distribuciones fisicas segun el valor de "dist_type":
+ * Se permiten dos tipos de distribuciones fisicas segun el valor de "spawn_dist":
  *
  *  COMM_PHY_NODES (1): Orientada a equilibrar el numero de procesos entre
  *                      todos los nodos disponibles.
  *  COMM_PHY_CPU   (2): Orientada a completar la capacidad de un nodo antes de
  *                      ocupar otro nodo.
  */
-void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
+void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns) {
   int i, *procs;
-
-  procs = calloc(dist.num_nodes, sizeof(int)); // Numero de procesos por nodo
+  procs = calloc(mall->num_nodes, sizeof(int)); // Numero de procesos por nodo
 
   /* GET NEW DISTRIBUTION  */
-  switch(dist.dist_type) {
-    case MALL_DIST_SPREAD: // DIST NODES @deprecated
-      spread_dist(dist, used_nodes, procs);
+  switch(mall_conf->spawn_dist) {
+    case MAM_PHY_DIST_SPREAD: // DIST NODES @deprecated
+      spread_dist(spawn_data, used_nodes, procs);
       break;
-    case MALL_DIST_COMPACT: // DIST CPUs
-      compact_dist(dist, used_nodes, procs);
+    case MAM_PHY_DIST_COMPACT: // DIST CPUs
+      compact_dist(spawn_data, used_nodes, procs);
       break;
   }
 
   //Copy results to output vector qty
   *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
-  for(i=0; i< *used_nodes; i++) {
-    (*qty)[i] = procs[i];
+
+//  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
+  if(spawn_data.spawn_is_multiple) {
+    for(i=0; i< *used_nodes; i++) {
+      (*qty)[i] = procs[i];
+      if(procs[i]) (*total_spawns)++;
+    }
+  } else {
+    *total_spawns = 1;
+    for(i=0; i< *used_nodes; i++) {
+      (*qty)[i] = procs[i];
+    }
   }
   free(procs);
 }
@@ -139,18 +129,22 @@ void node_dist(struct physical_dist dist, int **qty, int *used_nodes) {
  * para que todos los nodos tengan el mismo numero. Devuelve el total de
  * nodos utilizados y el numero de procesos a crear en cada nodo.
  *
- * TODO Tener en cuenta procesos ya creados (already_created)
+ * Asume que los procesos que ya existen estan en los nodos mas bajos
+ * con el mismo tamBl. //FIXME No deberia asumir el tamBl.
+ *
+ * FIXME Tener en cuenta localizacion de procesos ya creados (already_created)
  */
-void spread_dist(struct physical_dist dist, int *used_nodes, int *procs) {
+void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
   int i, tamBl, remainder;
 
-  *used_nodes = dist.num_nodes;
-  tamBl = dist.target_qty / dist.num_nodes;
-  remainder = dist.target_qty % dist.num_nodes;
-  for(i=0; i<remainder; i++) {
-    procs[i] = tamBl + 1; 
+  *used_nodes = mall->num_nodes;
+  tamBl = spawn_data.target_qty / *used_nodes;
+  i = spawn_data.already_created / tamBl;
+  remainder = spawn_data.already_created % tamBl;
+  if(remainder) {
+    procs[i++] = tamBl - remainder;
   }
-  for(i=remainder; i<dist.num_nodes; i++) {
+  for(; i<*used_nodes; i++) {
     procs[i] = tamBl; 
   }
 }
@@ -163,41 +157,69 @@ void spread_dist(struct physical_dist dist, int *used_nodes, int *procs) {
  * Tiene en cuenta los procesos ya existentes para el mappeado de 
  * los procesos a crear.
  */
-void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
+void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
   int i, asigCores;
   int tamBl, remainder;
 
-  tamBl = dist.num_cpus / dist.num_nodes;
-  asigCores = dist.already_created;
-  i = *used_nodes = dist.already_created / tamBl;
-  remainder = dist.already_created % tamBl;
+  tamBl = mall->num_cpus;
+  asigCores = spawn_data.already_created;
+  i = *used_nodes = spawn_data.already_created / tamBl;
+  remainder = spawn_data.already_created % tamBl;
 
   //FIXME REFACTOR Que pasa si los nodos 1 y 2 tienen espacios libres
   //First nodes could already have existing procs
   //Start from the first with free spaces
-  if (remainder) {
+  if (remainder && asigCores + (tamBl - remainder) < spawn_data.target_qty) {
     procs[i] = tamBl - remainder;
     asigCores += procs[i];
-    i = (i+1) % dist.num_nodes;
+    i = (i+1) % mall->num_nodes;
     (*used_nodes)++;
   }
 
   //Assign tamBl to each node
-  while(asigCores+tamBl <= dist.target_qty) {
+  while(asigCores+tamBl <= spawn_data.target_qty) {
     asigCores += tamBl;
     procs[i] += tamBl;
-    i = (i+1) % dist.num_nodes;
+    i = (i+1) % mall->num_nodes;
     (*used_nodes)++;
   }
 
   //Last node could have less procs than tamBl
-  if(asigCores < dist.target_qty) { 
-    procs[i] += dist.target_qty - asigCores;
+  if(asigCores < spawn_data.target_qty) { 
+    procs[i] += spawn_data.target_qty - asigCores;
     (*used_nodes)++;
   }
-  if(*used_nodes > dist.num_nodes) *used_nodes = dist.num_nodes;  //FIXME Si ocurre esto no es un error?
+  if(*used_nodes > mall->num_nodes) *used_nodes = mall->num_nodes;  //FIXME Si ocurre esto no es un error?
 }
 
+//--------------PRIVATE FUNCTIONS---------------//
+//-------------------CMD SET--------------------//
+
+/*
+ * Comprueba que comando hay que llamar al realizar
+ * el spawn. Todos los sets tienen que hacer el mismo
+ * comando.
+ *
+ */
+void set_spawn_cmd(size_t nodes, Spawn_data *spawn_data) {
+  size_t index = 0;
+  char *cmd_aux;
+  switch(mall_conf->external_usage) {
+    case MAM_USE_VALGRIND:
+      cmd_aux = MAM_VALGRIND_SCRIPT;
+      break;
+    case MAM_USE_EXTRAE: 
+      cmd_aux = MAM_EXTRAE_SCRIPT;
+      break;
+    default:
+      cmd_aux = mall->name_exec;
+      break;
+  }
+
+  for(; index<nodes; index++) {
+    spawn_data->sets[index].cmd = cmd_aux;
+  }
+}
 
 //--------------PRIVATE FUNCTIONS---------------//
 //-------------------INFO SET-------------------//
@@ -207,73 +229,94 @@ void compact_dist(struct physical_dist dist, int *used_nodes, int *procs) {
  * en el que se indica el mappeado a utilizar en los nuevos
  * procesos.
  *
- * Actualmente no considera que puedan haber varios nodos
- * y lleva todos al mismo. Las funciones "generate_info_string_slurm"
- * o "generate_info_hostfile_slurm" permiten utilizar varios
- * nodos, pero es necesario activar Slurm.
+ *
  */
-void generate_info_string(int target_qty, MPI_Info *info){
-  char *host_string, *host;
-  int len, err;
+void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data){
+  char *host_str;
 
-  host = "localhost";
-  //host = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
-  //MPI_Get_processor_name(host, &len);
-  // CREATE AND SET STRING HOSTS
-  err = write_str_node(&host_string, 0, target_qty, host);
-  if (err<0) {printf("Error when generating mapping: %d\n", err); MPI_Abort(MPI_COMM_WORLD, err);}
+  fill_str_hosts(nodelist, procs_array, nodes, &host_str);
   // SET MAPPING
-  MPI_Info_create(info);
-  MPI_Info_set(*info, "hosts", host_string);
-  //free(host);
-  free(host_string);
+  set_mapping_host(spawn_data->spawn_qty, host_str, 0, spawn_data);
+  free(host_str);
 }
 
-//--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
 /*
  * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
  * en el que se indica el mappeado a utilizar en los nuevos
  * procesos.
- * Es necesario usar Slurm para usarlo.
+ *
+ *
  */
-void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, MPI_Info *info){
-  // CREATE AND SET STRING HOSTS
-  char *hoststring;
-  fill_str_hosts_slurm(nodelist, procs_array, nodes, &hoststring);
-  MPI_Info_create(info);
-  MPI_Info_set(*info, "hosts", hoststring);
-  free(hoststring);
+void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data){
+  char *host, *aux, *token, *hostlist_str;
+  size_t i=0,j=0,len=0;
+
+  aux = (char *) malloc((strlen(nodelist)+1) * sizeof(char));
+  strcpy(aux, nodelist);
+  token = strtok(aux, ",");
+  while (token != NULL && i < nodes) {
+    host = strdup(token);
+    if (procs_array[i] != 0) {
+      write_str_node(&hostlist_str, len, procs_array[i], host);
+      set_mapping_host(procs_array[i], hostlist_str, j, spawn_data);
+      free(hostlist_str); hostlist_str = NULL;
+      j++;
+    }
+    i++;
+    free(host);
+    token = strtok(NULL, ",");
+  }
+  free(aux);
+  if(hostlist_str != NULL) { free(hostlist_str); }
 }
 
+
+//--------------PRIVATE FUNCTIONS---------------//
+//---------------MAPPING UTILITY----------------//
+//----------------------------------------------//
+
+/*
+ * Anyade en la siguiente entrada de spawns la
+ * distribucion fisica a utilizar con un par 
+ * host/mapping y el total de procesos.
+ */
+void set_mapping_host(int qty, char *host, size_t index, Spawn_data *spawn_data) {
+  MPI_Info *info;
+
+  spawn_data->sets[index].spawn_qty = qty;
+  info = &(spawn_data->sets[index].mapping);
+  MPI_Info_create(info);
+  MPI_Info_set(*info, "hosts", host);
+}
 
 /*
  * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
  * al crear procesos e indicar donde tienen que ser creados.
  */
-void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostfile_str) {
-  char *host;
+void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str) {
+  char *host, *aux, *token;
   size_t i=0,len=0;
-  hostlist_t hostlist;
-  
-  hostlist = slurm_hostlist_create(nodelist);
-  while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
-    if(qty[i] != 0) {
-      len = write_str_node(hostfile_str, len, qty[i], host);
+
+  aux = (char *) malloc((strlen(nodelist)+1) * sizeof(char));
+  strcpy(aux, nodelist);
+  token = strtok(aux, ",");
+  while (token != NULL && i < used_nodes) {
+    host = strdup(token);
+    if (qty[i] != 0) {
+      len = write_str_node(hostlist_str, len, qty[i], host);
     }
     i++;
     free(host);
+    token = strtok(NULL, ",");
   }
-  slurm_hostlist_destroy(hostlist);
+  free(aux);
 }
 
-#endif
-//--------------------------------SLURM USAGE-------------------------------------//
 /*
  * Añade en una cadena "qty" entradas de "node_name".
  * Realiza la reserva de memoria y la realoja si es necesario.
  */
-int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_name) {
+int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_name) {
   int err;
   char *ocurrence;
   size_t i, len, len_node;
@@ -282,11 +325,11 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
   len = qty * len_node; // Number of times the node is used
 
   if(len_og == 0) { // Memoria no reservada
-    *hostfile_str = (char *) malloc((len+1) * sizeof(char));
+    *hostlist_str = (char *) malloc((len+1) * sizeof(char));
   } else { // Cadena ya tiene datos
-    *hostfile_str = (char *) realloc(*hostfile_str, (len_og + len + 1) * sizeof(char));
+    *hostlist_str = (char *) realloc(*hostlist_str, (len_og + len + 1) * sizeof(char));
   }
-  if(hostfile_str == NULL) return -1; // No ha sido posible alojar la memoria
+  if(hostlist_str == NULL) return -1; // No ha sido posible alojar la memoria
 
   ocurrence = (char *) malloc((len_node+1) * sizeof(char));
   if(ocurrence == NULL) return -2; // No ha sido posible alojar la memoria
@@ -296,15 +339,80 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
   i=0;
   if(len_og == 0) { // Si se inicializa, la primera es una copia
     i++;
-    strcpy(*hostfile_str, node_name);
+    strcpy(*hostlist_str, node_name);
   }
   for(; i<qty; i++){ // Las siguientes se conctanenan
-    strcat(*hostfile_str, ocurrence);
+    strcat(*hostlist_str, ocurrence);
   }
 
   
   free(ocurrence);
   return len+len_og;
+}
+
+//--------------------------------SLURM USAGE-------------------------------------//
+#if MAM_USE_SLURM
+/*
+ * Crea y devuelve un objeto MPI_Info con un par hosts/mapping
+ * en el que se indica el mappeado a utilizar en los nuevos
+ * procesos.
+ * Es necesario usar Slurm para usarlo.
+ */
+void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data){
+  char *hoststring;
+
+  // CREATE AND SET STRING HOSTS
+  fill_str_hosts_slurm(nodelist, procs_array, nodes, &hoststring);
+  set_mapping_host(spawn_data->spawn_qty, hoststring, 0, spawn_data);
+  free(hoststring);
+}
+
+/*
+ * Crea y devuelve un conjunto de objetos MPI_Info con 
+ * un par host/mapping en el que se indica el mappeado 
+ * a utilizar en los nuevos procesos dividido por nodos.
+ * Es necesario Slurm para usarlo.
+ */
+void generate_multiple_info_string_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data) {
+  char *host, *hostlist_str;
+  size_t i=0,j=0,len=0;
+  hostlist_t hostlist;
+  
+  hostlist_str = NULL;
+  hostlist = slurm_hostlist_create(nodelist);
+  while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
+    if(qty[i] != 0) {
+      write_str_node(&hostlist_str, len, qty[i], host);
+      set_mapping_host(qty[i], hostlist_str, j, spawn_data);
+      free(hostlist_str); hostlist_str = NULL;
+      j++;
+    }
+    i++;
+    free(host);
+  }
+  slurm_hostlist_destroy(hostlist);
+  if(hostlist_str != NULL) { free(hostlist_str); }
+}
+
+
+/*
+ * Crea y devuelve una cadena para ser utilizada por la llave "hosts"
+ * al crear procesos e indicar donde tienen que ser creados.
+ */
+void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str) {
+  char *host;
+  size_t i=0,len=0;
+  hostlist_t hostlist;
+  
+  hostlist = slurm_hostlist_create(nodelist);
+  while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
+    if(qty[i] != 0) {
+      len = write_str_node(hostlist_str, len, qty[i], host);
+    }
+    i++;
+    free(host);
+  }
+  slurm_hostlist_destroy(hostlist);
 }
 
 //====================================================
@@ -313,16 +421,18 @@ int write_str_node(char **hostfile_str, size_t len_og, size_t qty, char *node_na
 //====================================================
 //====================================================
 
-//--------------------------------SLURM USAGE-------------------------------------//
-#ifdef USE_SLURM
 /* FIXME Por revisar
  * @deprecated
  * Genera un fichero hostfile y lo anyade a un objeto
  * MPI_Info para ser utilizado.
  */
-void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, MPI_Info *info){
+void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, Spawn_data *spawn_data){
     char *hostfile;
     int ptr;
+    MPI_Info *info;
+
+    spawn_data->sets[0].spawn_qty = spawn_data->spawn_qty;
+    info = &(spawn_data->sets[0].mapping);
 
     // CREATE/UPDATE HOSTFILE 
     ptr = create_hostfile(&hostfile);
@@ -413,17 +523,3 @@ int write_hostfile_node(int ptr, int qty, char *node_name) {
 }
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
-
-
-//TODO REFACTOR PARA CUANDO SE COMUNIQUE CON RMS
-    // Get Slurm job info
-    //int jobId;
-    //char *tmp;
-    //job_info_msg_t *j_info;
-    //slurm_job_info_t last_record;
-    //tmp = getenv("SLURM_JOB_ID");
-    //jobId = atoi(tmp);
-    //slurm_load_job(&j_info, jobId, 1);
-    //last_record = j_info->job_array[j_info->record_count - 1];
-    // Free JOB INFO
-    //slurm_free_job_info_msg(j_info);

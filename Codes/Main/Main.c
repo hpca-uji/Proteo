@@ -8,9 +8,8 @@
 #include "Main_datatypes.h"
 #include "configuration.h"
 #include "../IOcodes/results.h"
-#include "../malleability/CommDist.h"
-#include "../malleability/malleabilityManager.h"
-#include "../malleability/malleabilityStates.h"
+#include "../malleability/distribution_methods/Distributed_CommDist.h"
+#include "../malleability/MAM.h"
 
 #define DR_MAX_SIZE 1000000000
 
@@ -23,16 +22,23 @@ void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
 void obtain_op_times();
 void free_application_data();
+void free_zombie_process();
 
 void print_general_info(int myId, int grp, int numP);
 int print_local_results();
 int print_final_results();
 int create_out_file(char *nombre, int *ptr, int newstdout);
 
+
+void init_originals();
+void init_targets();
+void update_targets();
+void user_redistribution(void *args);
+
 configuration *config_file;
 group_data *group;
 results_data *results;
-MPI_Comm comm;
+MPI_Comm comm, new_comm;
 int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
@@ -41,19 +47,11 @@ int main(int argc, char *argv[]) {
     int im_child;
     size_t i;
 
-    int num_cpus, num_nodes;
-    char *nodelist = NULL;
-    num_cpus = 20; //FIXME NUMERO MAGICO //TODO Usar openMP para obtener el valor con un pragma
-    if (argc >= 5) {
-      nodelist = argv[3];
-      num_nodes = atoi(argv[4]);
-      num_cpus = num_nodes * num_cpus;
-    }
-
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
     MPI_Comm_size(MPI_COMM_WORLD, &numP);
     comm = MPI_COMM_WORLD;
+    new_comm = MPI_COMM_NULL;
 
     if(req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
@@ -62,128 +60,72 @@ int main(int argc, char *argv[]) {
     }
 
     init_group_struct(argv, argc, myId, numP);
-    im_child = init_malleability(myId, numP, ROOT, comm, argv[0], nodelist, num_cpus, num_nodes);
+    im_child = MAM_Init(ROOT, &comm, argv[0], user_redistribution, NULL);
 
-    if(!im_child) { //TODO REFACTOR Simplificar inicio
+    //MAM_Use_valgrind(1);
+
+    if(im_child) {
+      update_targets();
+
+    } else {
       init_application();
-
-      set_benchmark_grp(group->grp);
-      set_benchmark_configuration(config_file);
-      set_benchmark_results(results);
-
-      if(config_file->n_groups > 1) {
-        set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-  	  config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-        set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
-
-        malleability_add_data(&(group->grp), 1, MAL_INT, 1, 1);
-        malleability_add_data(&run_id, 1, MAL_INT, 1, 1);
-        malleability_add_data(&(group->iter_start), 1, MAL_INT, 1, 1);
-
-        if(config_file->sdr) {
-	  for(i=0; i<group->sync_data_groups; i++) {
-            malleability_add_data(group->sync_array[i], group->sync_qty[i], MAL_CHAR, 0, 1);
-	  }
-        }
-        if(config_file->adr) {
-	  for(i=0; i<group->async_data_groups; i++) {
-            malleability_add_data(group->async_array[i], group->async_qty[i], MAL_CHAR, 0, 0);
-	  }
-        }
-      }
+      init_originals();
 
       MPI_Barrier(comm);
       results->exec_start = MPI_Wtime();
-    } else { //Init hijos
-
-      get_malleability_user_comm(&comm);
-      get_benchmark_configuration(&config_file);
-      get_benchmark_results(&results);
-
-      // TODO Refactor - Que sea una unica funcion
-      // Obtiene las variables que van a utilizar los hijos
-      void *value = NULL;
-      size_t entries;
-      malleability_get_data(&value, 0, 1, 1);
-      group->grp = *((int *)value);
-
-      malleability_get_data(&value, 1, 1, 1);
-      run_id = *((int *)value);
-      
-      malleability_get_data(&value, 2, 1, 1);
-      group->iter_start = *((int *)value);
-
-      if(config_file->sdr) {
-        malleability_get_entries(&entries, 0, 1);
-        group->sync_array = (char **) malloc(entries * sizeof(char *));
-	for(i=0; i<entries; i++) {
-          malleability_get_data(&value, i, 0, 1);
-          group->sync_array[i] = (char *)value;
-	}
-      }
-      if(config_file->adr) {
-        malleability_get_entries(&entries, 0, 0);
-        group->async_array = (char **) malloc(entries * sizeof(char *));
-	for(i=0; i<entries; i++) {
-          malleability_get_data(&value, i, 0, 0);
-          group->async_array[i] = (char *)value;
-	}
-      }
-
-      group->grp = group->grp + 1;
-      realloc_results_iters(results, config_file->n_stages, config_file->groups[group->grp].iters);
     }
 
     //
     // EMPIEZA LA EJECUCION-------------------------------
     //
-    group->grp = group->grp - 1; // TODO REFACTOR???
     do {
-
-      get_malleability_user_comm(&comm);
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
-      group->grp = group->grp + 1;
-      set_benchmark_grp(group->grp);
 
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
-        set_results_post_reconfig(results, group->grp, config_file->sdr, config_file->adr);
+        MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->user_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
 
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
-        set_malleability_configuration(config_file->groups[group->grp+1].sm, config_file->groups[group->grp+1].ss, 
-			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, config_file->groups[group->grp+1].rs);
-        set_children_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
+        MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
+			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
+	for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
+	  MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
+	}
+	for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
+	  MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
+	}
+        MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
-          malleability_modify_data(&(group->grp), 0, 1, MAL_INT, 1, 1);
+          MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+          MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
         }
       }
-
+    
       res = work();
-      if(res == MALL_ZOMBIE) break;
+
       if(res==1) { // Se ha llegado al final de la aplicacion
         MPI_Barrier(comm);
         results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
+        print_local_results();
       }
+      
 
-      print_local_results();
       reset_results_index(results);
-    } while(config_file->n_groups > group->grp + 1 && config_file->groups[group->grp+1].sm == MALL_SPAWN_MERGE);
+
+      group->grp = group->grp + 1;
+    } while(config_file->n_groups > group->grp);
 
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
-    //
+    // 
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
     MPI_Barrier(comm);
     if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
-    }
-
-    if(group->myId == ROOT && config_file->groups[group->grp].sm == MALL_SPAWN_MERGE) {
-      MPI_Abort(MPI_COMM_WORLD, -100);
     }
     free_application_data();
 
@@ -208,31 +150,31 @@ int main(int argc, char *argv[]) {
  */
 int work() {
   int iter, maxiter, state, res;
+  int wait_completed = MAM_CHECK_COMPLETION;
 
   maxiter = config_file->groups[group->grp].iters;
-  state = MALL_NOT_STARTED;
-
+  state = MAM_NOT_STARTED;
   res = 0;
+
   for(iter=group->iter_start; iter < maxiter; iter++) {
     iterate(state);
   }
 
   if(config_file->n_groups != group->grp + 1)
-    state = malleability_checkpoint();
+    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
 
   iter = 0;
-  while(state == MALL_DIST_PENDING || state == MALL_SPAWN_PENDING || state == MALL_SPAWN_SINGLE_PENDING || state == MALL_SPAWN_ADAPT_POSTPONE || state == MALL_SPAWN_ADAPT_PENDING) {
+  while(state == MAM_PENDING || state == MAM_USER_PENDING) {
     if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
       iterate(state);
       iter++;
       group->iter_start = iter;
-    }
-    state = malleability_checkpoint();
+    } else { wait_completed = MAM_WAIT_COMPLETION; }
+    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
   }
 
-  
-  if(config_file->n_groups == group->grp + 1) res=1;
-  if(state == MALL_ZOMBIE) res=state;
+  //if(state == MAM_COMPLETED) {}
+  if(config_file->n_groups == group->grp + 1) { res=1; }
   return res;
 }
 
@@ -263,8 +205,8 @@ double iterate(int async_comm) {
   }
 
   // Se esta realizando una redistribucion de datos asincrona
-  if(async_comm == MALL_DIST_PENDING || async_comm == MALL_SPAWN_PENDING || async_comm == MALL_SPAWN_SINGLE_PENDING) { 
-  // TODO Que diferencie entre ambas en el IO
+  if(async_comm == MAM_PENDING || async_comm == MAM_USER_PENDING) { 
+    // TODO Que diferencie entre tipo de partes asincronas?
     results->iters_async += 1;
   }
 
@@ -318,9 +260,9 @@ double iterate_rigid(double *time, double *times_stages) {
   start_time = MPI_Wtime();
 
   for(i=0; i < config_file->n_stages; i++) {
-    MPI_Barrier(comm);
     start_time_stage = MPI_Wtime();
     aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
+    MPI_Barrier(comm);
     times_stages[i] = MPI_Wtime() - start_time_stage;
   }
 
@@ -345,7 +287,8 @@ void print_general_info(int myId, int grp, int numP) {
   char *version = malloc(MPI_MAX_LIBRARY_VERSION_STRING * sizeof(char));
   MPI_Get_processor_name(name, &len);
   MPI_Get_library_version(version, &len);
-  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
+  //printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
+  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s -- PID=%d\n", myId, grp, numP, name, getpid());
 
   free(name);
   free(version);
@@ -359,8 +302,8 @@ int print_local_results() {
   int ptr_local, ptr_out, err;
   char *file_name;
 
-  compute_results_iter(results, group->myId, group->numP, ROOT, comm);
-  compute_results_stages(results, group->myId, group->numP, config_file->n_stages, ROOT, comm);
+  // This function causes an overhead in the recorded time for last group
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -394,7 +337,7 @@ int print_final_results() {
 
   if(group->myId == ROOT) {
 
-    if(config_file->n_groups == group->grp+1) {
+    if(config_file->n_groups == group->grp) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
       if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
@@ -504,6 +447,7 @@ void obtain_op_times(int compute) {
  * Libera toda la memoria asociada con la aplicacion
  */
 void free_application_data() {
+  int abort_needed;
   size_t i;
 
   if(config_file->sdr && group->sync_array != NULL) {
@@ -527,14 +471,33 @@ void free_application_data() {
     free(group->async_array);
     group->async_array = NULL;
   }
-  free_malleability();
+  abort_needed = MAM_Finalize();
+  free_zombie_process();
+  free(group);
+  if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
+}
 
+
+/*
+ * Libera la memoria asociada a un proceso Zombie
+ */
+void free_zombie_process() {
   free_results_data(results, config_file->n_stages);
   free(results);
+  
+  size_t i;
+  if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
+    free(group->async_array);
+    group->async_array = NULL;
+  }
 
   free_config(config_file);
-  
-  free(group);
 }
 
 
@@ -560,4 +523,108 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
   }
 
   return 0;
+}
+
+
+//======================================================||
+//======================================================||
+//================ INIT MALLEABILITY ===================||
+//======================================================||
+//======================================================||
+//FIXME TENER EN CUENTA QUE ADR PUEDE SER 0
+
+void init_originals() {
+  size_t i;
+
+  if(config_file->n_groups > 1) {
+    MAM_Data_add(&(group->grp), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+    MAM_Data_add(&(group->iter_start), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+
+    if(config_file->sdr) {
+      for(i=0; i<group->sync_data_groups; i++) {
+        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+      }
+    }
+    if(config_file->adr) {
+      for(i=0; i<group->async_data_groups; i++) {
+        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+      }
+    }
+  }
+}
+
+void init_targets() {
+  size_t i, entries, total_qty;
+  void *value = NULL;
+  MPI_Datatype type;
+
+  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+  group->grp = *((int *)value);
+  group->grp = group->grp + 1;
+
+
+  recv_config_file(ROOT, new_comm, &config_file);
+  results = malloc(sizeof(results_data));
+  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+  results_comm(results, ROOT, config_file->n_resizes, new_comm);
+
+  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+  run_id = *((int *)value);
+      
+  if(config_file->adr) {
+    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
+    group->async_qty = (int *) malloc(entries * sizeof(int));
+    group->async_array = (char **) malloc(entries * sizeof(char *));
+    for(i=0; i<entries; i++) {
+      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+      group->async_array[i] = (char *)value;
+      group->async_qty[i] = DR_MAX_SIZE;
+    }
+    group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->async_data_groups = entries;
+  }
+}
+
+void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
+  size_t i, entries, total_qty;
+  void *value = NULL;
+  MPI_Datatype type;
+
+  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+  group->iter_start = *((int *)value);
+
+  if(config_file->sdr) {
+    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
+    group->sync_qty = (int *) malloc(entries * sizeof(int));
+    group->sync_array = (char **) malloc(entries * sizeof(char *));
+    for(i=0; i<entries; i++) {
+      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+      group->sync_array[i] = (char *)value;
+      group->sync_qty[i] = DR_MAX_SIZE;
+    }
+    group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->sync_data_groups = entries;
+  }
+}
+
+void user_redistribution(void *args) {
+  int commited;
+  mam_user_reconf_t user_reconf;
+
+  MAM_Get_Reconf_Info(&user_reconf);
+  new_comm = user_reconf.comm;
+  if(user_reconf.rank_state == MAM_PROC_NEW_RANK) {
+    init_targets();
+  } else {
+    send_config_file(config_file, ROOT, new_comm);
+    results_comm(results, ROOT, config_file->n_resizes, new_comm);
+
+    print_local_results();
+    if(user_reconf.rank_state == MAM_PROC_ZOMBIE) {
+      free_zombie_process();
+    }
+  }
+
+  MAM_Resume_redistribution(&commited);
 }

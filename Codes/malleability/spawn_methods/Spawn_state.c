@@ -4,19 +4,21 @@
 #include "Spawn_state.h"
 
 pthread_mutex_t spawn_mutex;
-pthread_cond_t spawn_cond;
+pthread_cond_t spawn_cond, completion_cond;
 int spawn_state;
-int waiting_redistribution=0;
+int waiting_redistribution=0, waiting_completion=0;
 
 void init_spawn_state() {
   pthread_mutex_init(&spawn_mutex,NULL);
   pthread_cond_init(&spawn_cond,NULL);
+  pthread_cond_init(&completion_cond,NULL);
   set_spawn_state(1,0); //FIXME First parameter is a horrible magical number
 }
 
 void free_spawn_state() {
   pthread_mutex_destroy(&spawn_mutex);
   pthread_cond_destroy(&spawn_cond);
+  pthread_cond_destroy(&completion_cond);
 }
 
 int get_spawn_state(int is_async) {
@@ -41,7 +43,7 @@ void set_spawn_state(int value, int is_async) {
   }
 }
 
-int wait_wakeup() {
+int wait_redistribution() {
   pthread_mutex_lock(&spawn_mutex);
   if(!waiting_redistribution) {
     waiting_redistribution=1;
@@ -52,11 +54,31 @@ int wait_wakeup() {
   return get_spawn_state(1);
 }
 
-void wakeup() {
+void wakeup_redistribution() {
   pthread_mutex_lock(&spawn_mutex);
   if(waiting_redistribution) {
     pthread_cond_signal(&spawn_cond);
   }
   waiting_redistribution=1;
+  pthread_mutex_unlock(&spawn_mutex);
+}
+
+int wait_completion() {
+  pthread_mutex_lock(&spawn_mutex);
+  if(!waiting_completion) {
+    waiting_completion=1;
+    pthread_cond_wait(&completion_cond, &spawn_mutex);
+  }
+  waiting_completion=0;
+  pthread_mutex_unlock(&spawn_mutex);
+  return get_spawn_state(1);
+}
+
+void wakeup_completion() {
+  pthread_mutex_lock(&spawn_mutex);
+  if(waiting_completion) {
+    pthread_cond_signal(&completion_cond);
+  }
+  waiting_completion=1;
   pthread_mutex_unlock(&spawn_mutex);
 }

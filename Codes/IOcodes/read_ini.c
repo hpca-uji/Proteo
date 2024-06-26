@@ -3,10 +3,11 @@
 #include <string.h>
 #include "read_ini.h"
 #include "ini.h"
-#include "../malleability/spawn_methods/ProcessDist.h"
+#include "../malleability/MAM.h"
 
 
 ext_functions_t *user_functions;
+void get_numbers_from_string(const char *input, size_t *res_len, int **res);
 
 /*
  * Funcion utilizada para leer el fichero de configuracion
@@ -18,6 +19,8 @@ ext_functions_t *user_functions;
 static int handler(void* user, const char* section, const char* name,
                    const char* value) {
     int ret_value=1;
+    int *aux;
+    size_t aux_len;
     configuration* pconfig = (configuration*)user;
 
     if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_stage >= pconfig->n_stages) {
@@ -47,6 +50,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->adr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
+    } else if (MATCH("general", "Capture_Method")) {
+        pconfig->capture_method = atoi(value);
 
     // Iter stage
     } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
@@ -55,6 +60,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
     } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
         pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
+        pconfig->stages[pconfig->actual_stage].id = atoi(value);
     } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
         pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
         pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
@@ -67,19 +74,23 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_group, pconfig->n_groups)) {
         pconfig->groups[pconfig->actual_group].factor =(float) atof(value);
     } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-	int aux_value = MALL_DIST_COMPACT;
+	int aux_value = MAM_PHY_DIST_COMPACT;
         if (strcmp(value, "spread") == 0) {
-          aux_value = MALL_DIST_SPREAD;
+          aux_value = MAM_PHY_DIST_SPREAD;
   	}
         pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
     } else if (MATCH(resize_name, "Redistribution_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
         pconfig->groups[pconfig->actual_group].rm = atoi(value);
     } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].rs = atoi(value);
+        get_numbers_from_string(value, &aux_len, &aux);
+        pconfig->groups[pconfig->actual_group].rs = aux;
+        pconfig->groups[pconfig->actual_group].rs_len = aux_len;
     } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
         pconfig->groups[pconfig->actual_group].sm = atoi(value);
     } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].ss = atoi(value);
+        get_numbers_from_string(value, &aux_len, &aux);
+        pconfig->groups[pconfig->actual_group].ss = aux;
+        pconfig->groups[pconfig->actual_group].ss_len = aux_len;
         pconfig->actual_group = pconfig->actual_group+1; // Ultimo elemento de la estructura
 
     // Unkown case
@@ -90,6 +101,50 @@ static int handler(void* user, const char* section, const char* name,
     free(resize_name);
     free(stage_name);
     return ret_value;
+}
+
+/**
+ * @brief Extracts numbers from a comma-separated string and stores them in an array.
+ *
+ * This function takes a string containing a sequence of numbers separated by commas,
+ * converts each number to an integer, and stores them in a dynamically allocated array.
+ *
+ * @param input The input string containing comma-separated numbers.
+ * @param res_len Pointer to an integer that will hold the length of the resulting array.
+ *            Note: Null can be passed if the caller does not need it.
+ * @param res Pointer to an integer array where the extracted numbers will be stored.
+ *            Note: The memory for this array is dynamically allocated and should be freed by the caller.
+ */
+void get_numbers_from_string(const char *input, size_t *res_len, int **res) {
+  char *aux, *token;
+  int num;
+  size_t len, malloc_len;
+  len = 0;
+  malloc_len = 10;
+  *res = (int *) malloc(malloc_len * sizeof(int));
+  aux = (char *) malloc((strlen(input)+1) * sizeof(char));
+  strcpy(aux, input);
+
+  token = strtok(aux, ",");
+  while (token != NULL) {
+    num = atoi(token);
+
+    if(len == malloc_len) {
+      malloc_len += 10;
+      *res = (int *) realloc(*res, malloc_len * sizeof(int));
+    }
+    (*res)[len] = num;
+    len++;
+
+    token = strtok(NULL, ",");
+    }
+
+  if(res_len != NULL) *res_len = len;
+  if(len != malloc_len) {
+    *res = (int *) realloc(*res, len * sizeof(int));
+  }
+
+  free(aux);
 }
 
 /*
@@ -107,6 +162,8 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
+    config->capture_method = 0;
+    config->rigid_times = 0;
     config->n_resizes = 0;
     config->n_groups = 1;
     config->n_stages = 1;

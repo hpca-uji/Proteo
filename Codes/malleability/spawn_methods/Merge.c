@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include "../malleabilityStates.h"
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
 #include "Merge.h"
 #include "Baseline.h"
 
@@ -16,11 +17,11 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
   int is_children_group = 1;
 
   if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
-    if(data_state == MALL_DIST_COMPLETED) {
-      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, spawn_data.myId);
-      local_state = MALL_SPAWN_ADAPTED;
+    if(data_state == MAM_I_DIST_COMPLETED) {
+      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, mall->myId);
+      local_state = MAM_I_SPAWN_ADAPTED;
     } else {
-      local_state = MALL_SPAWN_ADAPT_POSTPONE;
+      local_state = MAM_I_SPAWN_ADAPT_POSTPONE;
     }
   } else { //Expand
     MPI_Comm_get_parent(&intercomm);
@@ -29,10 +30,15 @@ int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
 
     baseline(spawn_data, child);
     merge_adapt_expand(child, is_children_group);
-    local_state = MALL_SPAWN_COMPLETED;
+    local_state = MAM_I_SPAWN_COMPLETED;
   }
 
   return local_state;
+}
+
+int intracomm_strategy(int is_children_group, MPI_Comm *child) {
+  merge_adapt_expand(child, is_children_group);
+  return MAM_I_SPAWN_COMPLETED;
 }
 
 //--------------PRIVATE MERGE TYPE FUNCTIONS---------------//
@@ -51,13 +57,8 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 
   MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
 
-  MPI_Comm_free(child); //POSIBLE ERROR?
+  MPI_Comm_disconnect(child);
   *child = new_comm;
-
-  //*numP = numC; //TODO REFACTOR Llevar a otra parte -- Hacer solo si MALL_SPAWN_ADAPTED
-  //if(*comm != MPI_COMM_WORLD && *comm != MPI_COMM_NULL) {
-  //  MPI_Comm_free(comm);
-  //}
 }
 
 
@@ -71,6 +72,7 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId) {
   int color = MPI_UNDEFINED;
 
+  if(*child != MPI_COMM_NULL && *child != MPI_COMM_WORLD) MPI_Comm_disconnect(child);
   if(myId < numC) {
       color = 1;  
   }

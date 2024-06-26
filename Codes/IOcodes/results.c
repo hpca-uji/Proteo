@@ -7,6 +7,11 @@
 
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type);
 
+void compute_max(results_data *results, double *computed_array, int myId, int root, MPI_Comm comm);
+void compute_mean(results_data *results, double *computed_array, int myId, int numP, int root, MPI_Comm comm);
+void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm);
+void match_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm);
+
 //======================================================||
 //======================================================||
 //================MPI RESULTS FUNCTIONS=================||
@@ -22,7 +27,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
  * de ese grupo el valor "MPI_PROC_NULL". Los procesos del otro grupo tienen que
  * indicar el Id del proceso raiz que ha puesto "MPI_ROOT".
  */
-void comm_results(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
+void results_comm(results_data *results, int root, size_t resizes, MPI_Comm intercomm) {
   MPI_Datatype results_type;
 
   // Obtener un tipo derivado para enviar todos los
@@ -42,13 +47,13 @@ void comm_results(results_data *results, int root, size_t resizes, MPI_Comm inte
  */
 void def_results_type(results_data *results, int resizes, MPI_Datatype *results_type) {
   int i, counts = 7;
-  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1};
+  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Rellenar vector types
   types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_DOUBLE;
-  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = blocklengths[6] = resizes;
+  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] =  blocklengths[6] = resizes;
 
   // Rellenar vector displs
   MPI_Get_address(results, &dir);
@@ -57,7 +62,7 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Get_address(&(results->wasted_time), &displs[1]);
   MPI_Get_address(results->sync_time, &displs[2]);
   MPI_Get_address(results->async_time, &displs[3]);
-  MPI_Get_address(results->spawn_real_time, &displs[4]);
+  MPI_Get_address(results->user_time, &displs[4]);
   MPI_Get_address(results->spawn_time, &displs[5]);
   MPI_Get_address(results->malleability_time, &displs[6]);
 
@@ -66,30 +71,12 @@ void def_results_type(results_data *results, int resizes, MPI_Datatype *results_
   MPI_Type_create_struct(counts, blocklengths, displs, types, results_type);
   MPI_Type_commit(results_type);
 }
+
 //======================================================||
 //======================================================||
 //================SET RESULTS FUNCTIONS=================||
 //======================================================||
 //======================================================||
-
-/*
- * Guarda los resultados respecto a la redistribución de datos
- * tras una reconfiguración. A llamar por los hijos tras
- * terminar la redistribución y obtener la configuración.
- */
-void set_results_post_reconfig(results_data *results, int grp, int sdr, int adr) {
-  if(sdr) { // Si no hay datos sincronos, el tiempo es 0
-    results->sync_time[grp-1]  = results->sync_end - results->sync_time[grp-1];
-  } else {
-    results->sync_time[grp-1]  = 0;
-  }
-  if(adr) { // Si no hay datos asincronos, el tiempo es 0
-    results->async_time[grp-1]  = results->async_end - results->async_time[grp-1];
-  } else {
-    results->async_time[grp-1]  = 0;
-  }
-  results->malleability_time[grp-1]  = results->malleability_end - results->malleability_time[grp-1];
-}
 
 /*
  * Pone el indice del siguiente elemento a escribir a 0 para los vectores
@@ -105,13 +92,6 @@ void reset_results_index(results_data *results) {
   results->iters_async = 0;
 }
 
-//=============================================================== FIXME BORRAR?
-int compare(const void *_a, const void *_b) { 
-        double *a, *b;
-        a = (double *) _a;
-        b = (double *) _b;
-        return (*a - *b);
-}
 /*
  * Obtiene para cada iteracion, el tiempo maximo entre todos los procesos
  * que han participado.
@@ -119,64 +99,116 @@ int compare(const void *_a, const void *_b) {
  * Es necesario obtener el maximo, pues es el que representa el tiempo real
  * que se ha utilizado.
  */
-void compute_results_iter(results_data *results, int myId, int numP, int root, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
-  if(myId == root) {
-    MPI_Reduce(MPI_IN_PLACE, results->iters_time, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
-    /*
-    for(size_t i=0; i<results->iter_index; i++) {
-      results->iters_time[i] = results->iters_time[i] / numP;
-    }*/
-  } else {
-    MPI_Reduce(results->iters_time, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+void compute_results_iter(results_data *results, int myId, int numP, int root, size_t stages, int capture_method, MPI_Comm comm) {
+  size_t i, *used_ids;
+  switch(capture_method) {
+    case RESULTS_MAX:
+      compute_max(results, results->iters_time, myId, root, comm);
+      for(i=0; i<stages; i++) {
+        compute_max(results, results->stage_times[i], myId, root, comm);
+      }
+      break;
+    case RESULTS_MEAN:
+      compute_mean(results, results->iters_time, myId, numP, root, comm);
+      for(i=0; i<stages; i++) {
+        compute_mean(results, results->stage_times[i], myId, numP, root, comm);
+      }
+      break;
+    case RESULTS_MEDIAN:
+      used_ids = malloc(results->iter_index * sizeof(size_t));
+      compute_median(results, results->iters_time, used_ids, myId, numP, root, comm);
+      for(i=0; i<stages; i++) {
+        //compute_median(results, results->stage_times[i], myId, numP, root, comm);
+        match_median(results, results->stage_times[i], used_ids, myId, numP, root, comm);
+      }
+      free(used_ids);
+      break;
   }
-  /*
-  double *aux_all_iters, *aux_id_iters, median;
+}
+
+void compute_max(results_data *results, double *computed_array, int myId, int root, MPI_Comm comm) {
+  if(myId == root) {
+    MPI_Reduce(MPI_IN_PLACE, computed_array, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  } else {
+    MPI_Reduce(computed_array, NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  }
+}
+
+void compute_mean(results_data *results, double *computed_array, int myId, int numP, int root, MPI_Comm comm) {
+  if(myId == root) {
+    MPI_Reduce(MPI_IN_PLACE, computed_array, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+    for(size_t i=0; i<results->iter_index; i++) {
+      computed_array[i] = results->iters_time[i] / numP;
+    }
+  } else {
+    MPI_Reduce(computed_array, NULL, results->iter_index, MPI_DOUBLE, MPI_SUM, root, comm);
+  }
+}
+
+
+
+struct TimeWithIndex {
+    double time;
+    size_t index;
+};
+
+int compare(const void *a, const void *b) {
+  return ((struct TimeWithIndex *)a)->time - ((struct TimeWithIndex *)b)->time;
+}
+
+/*
+ * Calcula la mediana de un vector de tiempos replicado entre "numP" procesos.
+ * Se calcula la mediana para cada elemento del vector final y se devuelve este.
+ *
+ * Además se devuelve en el vector "used_ids" de que proceso se ha obtenido la mediana de cada elemento.
+ */
+void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
+  double *aux_all_iters, median;
+  struct TimeWithIndex *aux_id_iters;
   if(myId == root) {
     aux_all_iters = malloc(numP *results->iter_index * sizeof(double));
+    aux_id_iters = malloc(numP * sizeof(struct TimeWithIndex));
   }
-  MPI_Gather(results->iters_time, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
+  MPI_Gather(computed_array, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
   if(myId == root) {
-    aux_id_iters = malloc(numP * sizeof(double));
     for(size_t i=0; i<results->iter_index; i++) {
       for(int j=0; j<numP; j++) {
-        aux_id_iters[j] = aux_all_iters[i+(results->iter_index*j)];
+        aux_id_iters[j].time = aux_all_iters[i+(results->iter_index*j)];
+        aux_id_iters[j].index = (size_t) j;
       }
       // Get Median
-      qsort(aux_id_iters, numP, sizeof(double), &compare);
-      median = aux_id_iters[numP/2];
-      if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1] + aux_id_iters[numP/2]) / 2;
-      results->iters_time[i] = median;
+      qsort(aux_id_iters, numP, sizeof(struct TimeWithIndex), &compare);
+      median = aux_id_iters[numP/2].time;
+      if (numP % 2 == 0) median = (aux_id_iters[numP/2 - 1].time + aux_id_iters[numP/2].time) / 2;
+      computed_array[i] = median;
+      used_ids[i] = aux_id_iters[numP/2].index; //FIXME What should be the index when numP is even?
     }
     free(aux_all_iters);
     free(aux_id_iters);
   }
-  */
 }
 
-
 /*
- * Obtiene para cada stage de cada iteracion, el tiempo maximo entre todos los procesos
- * que han participado.
+ * Obtiene las medianas de un vector de tiempos replicado entre "numP" procesos.
+ * La mediana de cada elemento se obtiene consultando el vector "used_ids", que contiene
+ * que proceso tiene la mediana.
  *
- * Es necesario obtener el maximo, pues es el que representa el tiempo real
- * que se ha utilizado.
+ * Como resultado devuelve un vector con la mediana calculada.
  */
-void compute_results_stages(results_data *results, int myId, int numP, int root, int stages, MPI_Comm comm) { //TODO Probar a quedarse la MEDIA en vez de MAX?
-  int i;
+void match_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
+  double *aux_all_iters;
+  size_t matched_id;
   if(myId == root) {
-    for(i=0; i<stages; i++) {
-      MPI_Reduce(MPI_IN_PLACE, results->stage_times[i], results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
-     /* for(size_t j=0; j<results->iter_index; j++) {
-        results->stage_times[i][j] = results->stage_times[i][j] / numP;
-      }*/
-    }
+    aux_all_iters = malloc(numP * results->iter_index * sizeof(double));
   }
-  else {
-    for(i=0; i<stages; i++) {
-      MPI_Reduce(results->stage_times[i], NULL, results->iter_index, MPI_DOUBLE, MPI_MAX, root, comm);
+  MPI_Gather(computed_array, results->iter_index, MPI_DOUBLE, aux_all_iters, results->iter_index, MPI_DOUBLE, root, comm);
+  if(myId == root) {
+    for(size_t i=0; i<results->iter_index; i++) {
+      matched_id = used_ids[i];
+      computed_array[i] = aux_all_iters[i+(results->iter_index*matched_id)];
     }
+    free(aux_all_iters);
   }
-  //MPI_Barrier(comm); //FIXME Esto debería de borrarse
 }
 
 //======================================================||
@@ -229,11 +261,6 @@ void print_global_results(results_data results, size_t resizes) {
     printf("%lf ", results.spawn_time[i]);
   }
 
-  printf("\nT_spawn_real: ");
-  for(i=0; i< resizes; i++) {
-    printf("%lf ", results.spawn_real_time[i]);
-  }
-
   printf("\nT_SR: ");
   for(i=0; i < resizes; i++) {
     printf("%lf ", results.sync_time[i]);
@@ -242,6 +269,11 @@ void print_global_results(results_data results, size_t resizes) {
   printf("\nT_AR: ");
   for(i=0; i < resizes; i++) {
     printf("%lf ", results.async_time[i]);
+  }
+
+  printf("\nT_US: ");
+  for(i=0; i < resizes; i++) {
+    printf("%lf ", results.user_time[i]);
   }
 
   printf("\nT_Malleability: ");
@@ -268,9 +300,9 @@ void init_results_data(results_data *results, size_t resizes, size_t stages, siz
   size_t i;
 
   results->spawn_time = calloc(resizes, sizeof(double));
-  results->spawn_real_time = calloc(resizes, sizeof(double));
   results->sync_time = calloc(resizes, sizeof(double));
   results->async_time = calloc(resizes, sizeof(double));
+  results->user_time = calloc(resizes, sizeof(double));
   results->malleability_time = calloc(resizes, sizeof(double));
   results->wasted_time = 0;
 
@@ -320,10 +352,6 @@ void free_results_data(results_data *results, size_t stages) {
       free(results->spawn_time);
       results->spawn_time = NULL;
     }
-    if(results->spawn_real_time != NULL) {
-      free(results->spawn_real_time);
-      results->spawn_real_time = NULL;
-    }
     if(results->sync_time != NULL) {
       free(results->sync_time);
       results->sync_time = NULL;
@@ -331,6 +359,10 @@ void free_results_data(results_data *results, size_t stages) {
     if(results->async_time != NULL) {
       free(results->async_time);
       results->async_time = NULL;
+    }
+    if(results->user_time != NULL) {
+      free(results->user_time);
+      results->user_time = NULL;
     }
     if(results->malleability_time != NULL) {
       free(results->malleability_time);
