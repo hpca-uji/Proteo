@@ -39,7 +39,7 @@ The following requisites are optional and only needed to process and analyse the
 
     ```bash
     $ cd Codes/
-    $ make install_slurm
+    $ make
     ```
 
     This command compiles the code using the MPI (MPICH) library.
