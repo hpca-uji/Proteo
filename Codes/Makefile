@@ -1,77 +1,58 @@
-CC = gcc
-MCC = mpicc
-#C_FLAGS_ALL = -Wconversion -Wpedantic
-C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
-LD_FLAGS = -lm -pthread
-
 MAM_USE_SLURM ?= 0
 MAM_USE_BARRIERS ?= 0
 MAM_DEBUG ?= 0
-DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
 
-ifeq ($(MAM_USE_SLURM),1)
-    LD_FLAGS += -lslurm
-endif
-
-ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
-    C_FLAGS += -g
-endif
-
-# Final binary
-BIN = a.out
 CONFIG = config.txt
+PROTEO_HOME := $(shell realpath -z $$(echo "$$(pwd)/..") | tr -d '\0')
+
 # Put all auto generated stuff to this build dir.
 BUILD_DIR = ./build
 
-# List of all directories where source files are located
-SRCDIRS = IOcodes Main malleability malleability/spawn_methods malleability/distribution_methods
-
-# List of all .c source files.
-C_FILES = $(foreach dire, $(SRCDIRS), $(wildcard $(dire)/*.c))
-
-# All .o files go to build dir.
-OBJ = $(C_FILES:%.c=$(BUILD_DIR)/%.o)
-# Gcc will create these .d files containing dependencies.
-DEP = $(OBJ:%.o=%.d)
-
 # BASIC RULES
-.PHONY : clean clear install
+.PHONY : all install sam mam clean sam_clean mam_clean clear sam_clear mam_clear
 
 all: install
 
-clean:
-	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
-clear:
-	-rm -rf $(BUILD_DIR)
-
-install: $(BIN) $(CONFIG)
-	echo "Done"
-
-# SPECIFIC RULES
 # Default configuration file
 $(CONFIG) : $(BUILD_DIR)/$(CONFIG)
-# Default target named after the binary.
-$(BIN) : $(BUILD_DIR)/$(BIN)
+$(BUILD_DIR)/$(CONFIG):
+	@ mkdir -p $(@D)
+	@ echo "export PROTEO_HOME=$(PROTEO_HOME)" > $(BUILD_DIR)/$(CONFIG)
+	@ echo "export PROTEO_BIN=$(PROTEO_HOME)/Codes/SAM/build/a.out" >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "export PATH=\$$PATH:\$$PROTEO_HOME/Codes/MaM" >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "export LD_LIBRARY_PATH=\$$LD_LIBRARY_PATH:\$$PROTEO_HOME/Codes/MaM/build" >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "codeDir=\"/Codes\"" >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "execDir=\"/Exec\"" >> $(BUILD_DIR)/$(CONFIG)
 
-$(BUILD_DIR)/$(CONFIG) :
-	@mkdir -p $(@D)
-	@ echo -n "dir=\"" > $(BUILD_DIR)/$(CONFIG)
-	@ realpath -z $$(echo "$$(pwd)/..") | tr -d '\0' >> $(BUILD_DIR)/$(CONFIG)
-	@ echo "\"" >> $(BUILD_DIR)/$(CONFIG)
 
-# Actual target of the binary - depends on all .o files.
-$(BUILD_DIR)/$(BIN) : $(OBJ)
-	$(MCC) $(C_FLAGS) $^ -o $@ $(LD_FLAGS)
+mam:
+	@echo "Compiling MaM"
+	$(MAKE) -C MaM MAM_USE_SLURM=$(MAM_USE_SLURM) MAM_USE_BARRIERS=$(MAM_USE_BARRIERS) MAM_DEBUG=$(MAM_DEBUG)
 
-# Include all .d files
-# .d files are used for knowing the dependencies of each source file
--include $(DEP)
+sam: mam
+	@echo "Compiling SAM"
+	$(MAKE) -C SAM
 
-# Build target for every single object file.
-# The potential dependency on header files is covered
-# by calling `-include $(DEP)`.
-# The -MMD flags additionaly creates a .d file with
-# the same name as the .o file.
-$(BUILD_DIR)/%.o : %.c
-	@mkdir -p $(@D)
-	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
+install: mam sam $(CONFIG)
+	echo "Done"
+
+#Clean rules
+sam_clean:
+	@echo "Cleaning SAM"
+	$(MAKE) -C SAM clean
+mam_clean:
+	@echo "Cleaning MaM"
+	$(MAKE) -C MaM clean
+clean: sam_clean mam_clean
+	-rm $(BUILD_DIR)/$(CONFIG)
+
+#Clear rules
+sam_clear:
+	@echo "Clearing SAM"
+	$(MAKE) -C SAM clear
+mam_clear:
+	@echo "Clearing MaM"
+	$(MAKE) -C MaM clear
+clear: sam_clear mam_clear
+	-rm -rf $(BUILD_DIR)
+

@@ -3,7 +3,7 @@
 #include <string.h>
 #include "read_ini.h"
 #include "ini.h"
-#include "../malleability/MAM.h"
+#include "../MaM/MAM.h"
 
 
 ext_functions_t *user_functions;

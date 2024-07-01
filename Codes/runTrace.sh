@@ -6,9 +6,7 @@
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/build/config.txt
-codeDir="/Codes/build"
 resultsDir="/Results"
-execDir="/Exec"
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
@@ -17,13 +15,13 @@ outIndex=$2
 
 echo "MPICH"
 
-numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
+numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 
 name_res="Extrae_"$nodes"_Test_"$numP
-dir_name_res=$dir$resultsDir"/"$name_res
+dir_name_res=$PROTEO_HOME$resultsDir"/"$name_res
 
-#mpirun -np $numP $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
-srun -n$numP --mpi=pmi2 ./trace.sh $dir$codeDir/a.out $configFile $outIndex $nodelist $nodes
+#mpirun -np $numP $PROTEO_BIN $configFile $outIndex $nodelist $nodes
+srun -n$numP --mpi=pmi2 ./trace.sh $PROTEO_BIN $configFile $outIndex $nodelist $nodes
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out

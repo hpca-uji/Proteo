@@ -6,9 +6,7 @@
 partition='P1'
 
 source build/config.txt
-codeDir="/Codes"
-execDir="/Exec"
-cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
+cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
@@ -22,11 +20,11 @@ fi
 
 echo "MPICH provider=$FI_PROVIDER"
 mpirun --version
-numP=$(bash $dir$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
-initial_nodelist=$(bash $dir$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
+numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
+initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
 echo $initial_nodelist
 echo "Test PreRUN $numP $nodelist"
-mpirun -hosts $initial_nodelist -np $numP $dir$codeDir/build/a.out $configFile $outIndex 
+mpirun -hosts $initial_nodelist -np $numP $PROTEO_BIN $configFile $outIndex 
 
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
