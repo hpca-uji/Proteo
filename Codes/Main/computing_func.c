@@ -7,16 +7,17 @@
 /*
  * Realiza una multiplicación de matrices de tamaño n
  */
-double computeMatrix(double *matrix, int n) { //FIXME No da tiempos repetibles
+double computeMatrix(double *matrix, int n) { 
   int row, col;
   double aux;
 
   aux=0;
   for(row=0; row<n; row++) {
     for(col=0; col<n; col++) {
-      aux += ( (int)(matrix[row*n + col] + exp(sqrt(row*col))) % n);
+      aux += (int)(matrix[row*n + col] * matrix[row*n + col]);
     }
   }
+ 
   return aux;
 }
 
@@ -42,18 +43,23 @@ double computePiSerial(int n) {
  */
 void initMatrix(double **matrix, size_t n) {
   size_t i, j;
+  double *aux = NULL;
+
+  freeMatrix(matrix);
 
   // Init matrix
-  if(matrix != NULL) {
-    *matrix = malloc(n * n * sizeof(double));
-    if(*matrix == NULL) { MPI_Abort(MPI_COMM_WORLD, -1);}
-    for(i=0; i < n; i++) {
-      for(j=0; j < n; j++) {
-        (*matrix)[i*n + j] = i+j;
-      }
+  aux = (double *) malloc(n * n * sizeof(double));
+  if(aux == NULL) { perror("Computing matrix could not be allocated"); MPI_Abort(MPI_COMM_WORLD, -1);}
+
+  for(i=0; i < n; i++) {
+    for(j=0; j < n; j++) {
+
+      aux[i*n + j] = (i+j) * 1.1;
     }
   }
+  *matrix = aux;
 }
+
 
 
 void freeMatrix(double **matrix) {

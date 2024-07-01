@@ -1,20 +1,8 @@
-#ifndef MALLEABILITY_SPAWN_PROCESS_DIST_H
-#define MALLEABILITY_SPAWN_PROCESS_DIST_H
+#ifndef MAM_SPAWN_PROCESS_DIST_H
+#define MAM_SPAWN_PROCESS_DIST_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <mpi.h>
-#include <string.h>
-#include "../malleabilityStates.h"
-#include "../malleabilityDataStructures.h"
+#include "Spawn_DataStructure.h"
 
-#define MALL_DIST_SPREAD 1
-#define MALL_DIST_COMPACT 2
-
-#define MALL_DIST_STRING 1
-#define MALL_DIST_HOSTFILE 2
-
-int physical_struct_create(int target_qty, int already_created, int num_cpus, int num_nodes, char *nodelist, int dist_type, int info_type, struct physical_dist *dist);
-void processes_dist(struct physical_dist dist, MPI_Info *info_spawn);
+void processes_dist(Spawn_data *spawn_data);
 
 #endif

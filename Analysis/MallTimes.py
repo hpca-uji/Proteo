@@ -115,9 +115,10 @@ def record_stage_line(lineS, dataG_it, stage):
 # and stores them in the dataframe
 # Is needed to indicate to which group refers
 # the resize line
+# Group 0: Iters=3, Procs=80, Factors=0.037500, Dist=2, RM=0, SM=0, RS=0, SS=0
 def record_group_line(lineS, dataG_it, group):
   array_groups = [G_enum.ITERS.value, G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, \
-          G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
+          G_enum.RED_METHOD.value, G_enum.SPAWN_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_STRATEGY.value]
   offset_lines = 2
   for i in range(len(array_groups)):
     value = get_value(lineS, i+offset_lines)
@@ -275,9 +276,8 @@ dataG = []
 
 for elem in lista:
   f = open(elem, "r")
-  id_run = elem.split("_Global.out")[0].split(common_name)[1] 
-  path_to_run = elem.split(common_name)[0]
-  lista_local = glob.glob(path_to_run + common_name + id_run + "_G*NP*.out")
+  id_run = elem.split("_Global.out")[0].split(common_name)[-1] 
+  lista_local = glob.glob(BaseDir + common_name + id_run + "_G*NP*.out")
 
   it,runs_in_file = read_global_file(f, dataG, it)
   f.close()

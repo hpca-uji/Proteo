@@ -3,13 +3,23 @@ MCC = mpicc
 #C_FLAGS_ALL = -Wconversion -Wpedantic
 C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
 LD_FLAGS = -lm -pthread
-DEF =
 
+MAM_USE_SLURM ?= 0
+MAM_USE_BARRIERS ?= 0
+MAM_DEBUG ?= 0
+DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
 
-.PHONY : clean clear install install_slurm
+ifeq ($(MAM_USE_SLURM),1)
+    LD_FLAGS += -lslurm
+endif
+
+ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
+    C_FLAGS += -g
+endif
 
 # Final binary
 BIN = a.out
+CONFIG = config.txt
 # Put all auto generated stuff to this build dir.
 BUILD_DIR = ./build
 
@@ -24,8 +34,30 @@ OBJ = $(C_FILES:%.c=$(BUILD_DIR)/%.o)
 # Gcc will create these .d files containing dependencies.
 DEP = $(OBJ:%.o=%.d)
 
+# BASIC RULES
+.PHONY : clean clear install
+
+all: install
+
+clean:
+	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
+clear:
+	-rm -rf $(BUILD_DIR)
+
+install: $(BIN) $(CONFIG)
+	echo "Done"
+
+# SPECIFIC RULES
+# Default configuration file
+$(CONFIG) : $(BUILD_DIR)/$(CONFIG)
 # Default target named after the binary.
 $(BIN) : $(BUILD_DIR)/$(BIN)
+
+$(BUILD_DIR)/$(CONFIG) :
+	@mkdir -p $(@D)
+	@ echo -n "dir=\"" > $(BUILD_DIR)/$(CONFIG)
+	@ realpath -z $$(echo "$$(pwd)/..") | tr -d '\0' >> $(BUILD_DIR)/$(CONFIG)
+	@ echo "\"" >> $(BUILD_DIR)/$(CONFIG)
 
 # Actual target of the binary - depends on all .o files.
 $(BUILD_DIR)/$(BIN) : $(OBJ)
@@ -41,19 +73,5 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 # The -MMD flags additionaly creates a .d file with
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 	$(MCC) $(C_FLAGS) $(DEF) -MMD -c $< -o $@
-
-clean:
-	-rm $(BUILD_DIR)/$(BIN) $(OBJ) $(DEP)
-clear:
-	-rm -rf $(BUILDDIR)
-
-
-install: $(BIN)
-	echo "Done"
-
-# Builds target with slurm
-install_slurm: LD_FLAGS += -lslurm
-install_slurm: DEF += -DUSE_SLURM
-install_slurm: install

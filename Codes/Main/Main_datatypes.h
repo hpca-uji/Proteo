@@ -28,7 +28,8 @@ typedef struct {
 
 typedef struct
 {
-  int pt; // Procedure type
+  int pt; // Procedure type to execute
+  int id; // Stage identifier
   // Wether the stage completes after "operations" iterations (0)
   // or after "t_stage" time has passed (1).
   int t_capped; 
@@ -41,6 +42,9 @@ typedef struct
   // Arrays to communicate data;
   char* array, *full_array;
   double* double_array;
+  int req_count;
+  MPI_Request *reqs;
+
   // Arrays to indicate how many bytes are received from each rank
   struct Counts counts;
 
@@ -49,7 +53,9 @@ typedef struct
 typedef struct
 {
   int iters, procs;
-  int sm, ss, phy_dist, rm, rs;
+  int sm, phy_dist, rm;
+  int *ss, *rs;
+  size_t ss_len, rs_len;
   float factor;
 } group_config_t;
 
@@ -57,11 +63,11 @@ typedef struct
 {
     size_t n_groups, n_resizes, n_stages; // n_groups==n_resizes+1
     size_t actual_group, actual_stage;
-    int rigid_times;
+    int rigid_times, capture_method;
     int granularity;
     size_t sdr, adr;
 
-    MPI_Datatype config_type, group_type, iter_stage_type;
+    MPI_Datatype config_type, group_type, group_strats_type, iter_stage_type;
     iter_stage_t *stages;
     group_config_t *groups;
 } configuration;

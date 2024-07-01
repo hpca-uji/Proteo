@@ -1,5 +1,5 @@
-#ifndef mall_block_distribution
-#define mall_block_distribution
+#ifndef MAM_BLOCK_DISTRIBUTION_H
+#define MAM_BLOCK_DISTRIBUTION_H
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-dir="/home/martini/malleability_benchmark"
 partition="P1"
 exclude="c00,c01,c02"
 
@@ -9,11 +8,13 @@ exclude="c00,c01,c02"
 # Parameter 1: Configuration file name for the emulation.
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
-# Parameter 4(Optional): Use Extrae(1) or not(0).
+# Parameter 4(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
 # Parameter 5(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
 # Parameter 6(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
+scriptDir="$(dirname "$0")"
+source $scriptDir/../Codes/build/config.txt
 codeDir="/Codes/build"
 execDir="/Exec"
 ResultsDir="/Results"
@@ -29,14 +30,14 @@ fi
 #$1 == configFile
 #$2 == outFileIndex
 #$3 == Qty of repetitions
-#$4 == Use extrae NO(0) YES(1)
+#$4 == Use external NO(0) Valgrind(1), Extrae(2)
 #$5 == Max time per execution(s)
 #$6 == Output path
 
 config_file=$1
 outFileIndex=0
 qty=1
-use_extrae=0
+use_external=0
 
 if [ $# -ge 2 ]
 then
@@ -48,7 +49,7 @@ then
 fi
 if [ $# -ge 4 ]
 then
-  use_extrae=$4
+  use_external=$4
 fi
 limit_time=$((0))
 if [ $# -ge 5 ] #Max time per execution in seconds
@@ -63,7 +64,7 @@ fi
 #Obtain amount of nodes neeeded
 node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
 #Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_extrae $outFileIndex $qty
+sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then
@@ -71,10 +72,13 @@ then
   echo "Moving data to $output\nMoved files:"
   ls R${outFileIndex}_G*
   mv R${outFileIndex}_G* $output
-  if [ "$use_extrae" -eq 1 ]
+  if [ "$use_external" -eq 2 ] # Extrae additional output
   then
     mv a.out.* $output
     mv TRACE* $output
     mv set-0/ $output
+  elif [ "$use_external" -eq 1 ] # Valgrind additional output
+  then
+    mv vg.* $output
   fi
 fi

@@ -9,13 +9,17 @@
 #include "../malleability/distribution_methods/block_distribution.h"
 
 double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
+double init_emulation_icomm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
 
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
+
+double init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_iptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
 double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_wait_pt(configuration *config_file, iter_stage_t *stage);
 
 /*
  * Calcula el tiempo por operacion o total de bytes a enviar
@@ -36,7 +40,7 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
  */
 double init_stage(configuration *config_file, int stage_i, group_data group, MPI_Comm comm, int compute) {
   double result = 0;
-  int qty = 20000;
+  int qty = 5000;
 
   iter_stage_t *stage = &(config_file->stages[stage_i]);
   stage->operations = qty;
@@ -52,7 +56,10 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
 
     //Comunicación
     case COMP_POINT:
-      init_comm_ptop_pt(group, config_file, stage, comm);
+      result = init_comm_ptop_pt(group, config_file, stage, comm, compute);
+      break;
+    case COMP_IPOINT:
+      result = init_comm_iptop_pt(group, config_file, stage, comm, compute);
       break;
     case COMP_BCAST:
       result = init_comm_bcast_pt(group, config_file, stage, comm, compute);
@@ -63,6 +70,9 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
     case COMP_REDUCE:
     case COMP_ALLREDUCE:
       result = init_comm_reduce_pt(group, config_file, stage, comm, compute);
+      break;
+    case COMP_WAIT:
+      result = init_comm_wait_pt(config_file, stage);
       break;
   }
   return result;
@@ -93,7 +103,22 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
       break;
     //Comunicaciones
     case COMP_POINT:
-      point_to_point(group.myId, group.numP, ROOT, comm, stage.array, stage.real_bytes);
+      if(stage.t_capped) {
+        while(t_total < stage.t_stage) {
+          point_to_point_inter(group.myId, group.numP, comm, stage.array, stage.full_array, stage.real_bytes);
+	  t_total = MPI_Wtime() - t_start;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
+      } else {
+        for(i=0; i < stage.operations; i++) {
+          point_to_point_inter(group.myId, group.numP, comm, stage.array, stage.full_array, stage.real_bytes);
+	}
+      }
+      break;
+    case COMP_IPOINT:
+      for(i=0; i < stage.operations; i++) {
+        point_to_point_asynch_inter(group.myId, group.numP, comm, stage.array, stage.full_array, stage.real_bytes, &(stage.reqs[i*2])); //FIXME Magical number
+      }
       break;
       
     case COMP_BCAST:
@@ -148,6 +173,33 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
 	}
       }
       break;
+    case COMP_WAIT:
+      if(stage.t_capped) { //FIXME Right now, COMP_WAIT with t_capped only works for P2P comms
+	int remaining;
+  	i = 0;
+
+	// Wait until t_stage time has passed
+        while(t_total < stage.t_stage) {
+          MPI_Waitall(2, &(stage.reqs[i*2]), MPI_STATUSES_IGNORE); //FIXME Magical number
+	  t_total = MPI_Wtime() - t_start;
+	  i++;
+          MPI_Bcast(&t_total, 1, MPI_DOUBLE, ROOT, comm);
+	}
+        remaining = stage.operations - i;
+
+        // If there are operations remaning, terminate them
+	if (remaining) {
+  	  for(; i < stage.operations; i++) {
+            MPI_Cancel(&(stage.reqs[i*2])); //FIXME Magical number
+            MPI_Cancel(&(stage.reqs[i*2+1])); //FIXME Magical number
+  	  }
+          MPI_Waitall(remaining*2, &(stage.reqs[(stage.operations-remaining)*2]), MPI_STATUSES_IGNORE); //FIXME Magical number
+	}
+      } else {
+        MPI_Waitall(stage.req_count, stage.reqs, MPI_STATUSES_IGNORE);
+      }
+      break;
+
   }
   return result;
 }
@@ -175,6 +227,32 @@ double init_emulation_comm_time(group_data group, configuration *config_file, it
 
   return time;
 }
+
+double init_emulation_icomm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+  double start_time, end_time, time = 0;
+  double t_stage;
+  iter_stage_t wait_stage;
+  wait_stage.pt = COMP_WAIT;
+  wait_stage.id = stage->id;
+  wait_stage.operations = stage->operations;
+  wait_stage.req_count = stage->req_count;
+  wait_stage.reqs = stage->reqs;
+
+  MPI_Barrier(comm);
+  start_time = MPI_Wtime();
+  process_stage(*config_file, *stage, group, comm);
+  process_stage(*config_file, wait_stage, group, comm);
+  MPI_Barrier(comm);
+  end_time = MPI_Wtime();
+
+  stage->t_op = (end_time - start_time) / stage->operations; //Tiempo de una operacion
+  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
+  stage->operations = ceil(t_stage / stage->t_op);
+  MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
+
+  return time;
+}
+
 
 double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
   double result, t_stage, start_time;
@@ -218,19 +296,56 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
   return result;
 }
 
-void init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
-  int aux_bytes = stage->bytes;
-
+double init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+  double time = 0;
   if(stage->array != NULL)
     free(stage->array);
-  if(aux_bytes == 0) {
-    MPI_Barrier(comm);
-    //aux_bytes = (stage->t_stage - config_file->latency_m) * config_file->bw_m;
-    init_emulation_comm_time(group, config_file, stage, comm);
+  if(stage->full_array != NULL)
+    free(stage->full_array);
+
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->array = calloc(stage->real_bytes, sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
+
+  if(compute && !stage->bytes && !stage->t_capped) {
+    time = init_emulation_comm_time(group, config_file, stage, comm);
+  } else {
+    stage->operations = 1;
   }
-  stage->real_bytes = aux_bytes;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
+  return time;
 }
+
+double init_comm_iptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+  int i;
+  double time = 0;
+  if(stage->array != NULL)
+    free(stage->array);
+  if(stage->full_array != NULL)
+    free(stage->full_array);
+  if(stage->reqs != NULL) //FIXME May be erroneous if request are active...
+    free(stage->reqs);
+
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->array = calloc(stage->real_bytes, sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
+
+  if(compute && !stage->bytes) { // t_capped is not considered in this case
+    stage->req_count = 2 * stage->operations; //FIXME Magical number
+    stage->reqs = (MPI_Request *) malloc(stage->req_count * sizeof(MPI_Request));
+    time = init_emulation_icomm_time(group, config_file, stage, comm);
+    free(stage->reqs);
+  } else {
+    stage->operations = 1;
+  }
+  stage->req_count = 2 * stage->operations; //FIXME Magical number
+  stage->reqs = (MPI_Request *) malloc(stage->req_count * sizeof(MPI_Request));
+  for(i=0; i < stage->req_count; i++) {
+    stage->reqs[i] = MPI_REQUEST_NULL;
+  }
+
+  return time;
+}
+
 
 // TODO Compute should be always 1 if the number of processes is different
 double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
@@ -239,7 +354,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
     free(stage->array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char)); //FIXME Valgrind indica unitialised
+  stage->array = calloc(stage->real_bytes, sizeof(char)); //FIXME Valgrind indica unitialised
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
@@ -268,8 +383,8 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
   stage->my_bytes = dist_data.tamBl;
 
-  stage->array = malloc(stage->my_bytes * sizeof(char));
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->my_bytes, sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
@@ -289,15 +404,41 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
     free(stage->full_array);
 
   stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
-  stage->array = malloc(stage->real_bytes * sizeof(char));
+  stage->array = calloc(stage->real_bytes, sizeof(char));
   //Full array para el reduce necesita el mismo tamanyo
-  stage->full_array = malloc(stage->real_bytes * sizeof(char));
+  stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
     time = init_emulation_comm_time(group, config_file, stage, comm);
   } else {
     stage->operations = 1;
   }
+
+  return time;
+}
+
+double init_comm_wait_pt(configuration *config_file, iter_stage_t *stage) {
+  size_t i;
+  double time = 0;
+  iter_stage_t aux_stage;
+
+  if(stage->id < 0) {
+    printf("Error when initializing wait stage. Id is negative\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    return -1;
+  }
+  for(i=0; i<config_file->n_stages; i++) {
+    aux_stage = config_file->stages[i];
+    if(aux_stage.id == stage->id) { break; }
+  }
+  if(i == config_file->n_stages) {
+    printf("Error when initializing wait stage. Not found a corresponding id\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    return -1;
+  }
+
+  stage->req_count = aux_stage.req_count;
+  stage->reqs = aux_stage.reqs;
 
   return time;
 }
