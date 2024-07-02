@@ -1,12 +1,8 @@
 #!/bin/bash
 
-# Runs in a given current directory all .ini files
+# Gets the first nodelist that will be used during the emulation
 # Parameter 1(Optional) - Amount of executions per file. Must be a positive number
 #====== Do not modify these values =======
-
-codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
 
 numP=$1
 cores=$2

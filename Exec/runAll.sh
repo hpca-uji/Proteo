@@ -10,10 +10,7 @@ exclude="c00,c01,c02"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
-cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
+cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 use_extrae=0
 
 qty=1
@@ -33,7 +30,7 @@ internalIndex=$(echo $files | tr -cd ' ' | wc -c)
 index=$((0))
 for config_file in $files
 do
-  node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
+  node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 
   outFileIndex=$(echo $config_file | sed s/[^0-9]//g)
   if [[ $outFileIndex ]]; then 
@@ -45,6 +42,6 @@ do
 
   #Execute test
   echo "Execute job $index with Nodes=$node_qty and config_file=$config_file"
-  sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_extrae $index $qty
+  sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_extrae $index $qty
 done
 echo "End"

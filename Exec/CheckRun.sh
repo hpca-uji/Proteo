@@ -19,10 +19,7 @@ partition="P1"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="/Codes/"
-execDir="/Exec/"
-ResultsDir="/Results/"
-cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
+cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 if [ "$#" -lt "6" ]
 then
@@ -195,10 +192,10 @@ do
 
     #2 - Obtain number of nodes needed
     config_file="$common_name$run.ini"
-    node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
+    node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $dir$execDir./generalRun.sh $dir $cores $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir./generalRun.sh $cores $config_file $use_extrae $run $diff
   fi
 done
 

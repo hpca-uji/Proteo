@@ -13,9 +13,6 @@ cores=20
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
 
 if [ $# -lt 1 ]
 then
@@ -52,7 +49,7 @@ then
   output=$5
 fi
 
-bash $dir$execDir/generalRunCostum.sh $dir $cores $config_file $use_external $outFileIndex $qty
+bash $PROTEO_HOME$execDir/generalRunCostum.sh $cores $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

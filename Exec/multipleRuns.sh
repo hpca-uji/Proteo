@@ -8,14 +8,10 @@
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="/Codes"
-execDir="/Exec"
-ResultsDir="/Results"
 
 complex_file=$1
 output_name=$2
 
-python3 $dir$execDir/PythonCodes/read_multiple.py $complex_file $output_name
+python3 $PROTEO_HOME$execDir/PythonCodes/read_multiple.py $complex_file $output_name
 
-echo "END TEST"
-
+echo "END GENERATION"

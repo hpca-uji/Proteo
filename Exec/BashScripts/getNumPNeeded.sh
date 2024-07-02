@@ -3,11 +3,6 @@
 # Runs in a given current directory all .ini files
 # Parameter 1(Optional) - Amount of executions per file. Must be a positive number
 #====== Do not modify these values =======
-
-codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
-
 config_file=$1
 group_index=$2
 

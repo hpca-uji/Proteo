@@ -15,10 +15,7 @@ exclude="c00,c01,c02"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-codeDir="/Codes/build"
-execDir="/Exec"
-ResultsDir="/Results"
-cores=$(bash $dir$execDir/BashScripts/getCores.sh $partition)
+cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 if [ $# -lt 1 ]
 then
@@ -62,9 +59,9 @@ then
 fi
 
 #Obtain amount of nodes neeeded
-node_qty=$(bash $dir$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $dir $cores)
+node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 #Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $dir$execDir/generalRun.sh $dir $cores $config_file $use_external $outFileIndex $qty
+sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then
