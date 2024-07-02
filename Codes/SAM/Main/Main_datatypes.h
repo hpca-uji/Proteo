@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
-#include "../malleability/distribution_methods/block_distribution.h"
+#include "../MaM/distribution_methods/block_distribution.h"
 
 
 #define ROOT 0

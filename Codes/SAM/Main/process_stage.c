@@ -6,7 +6,7 @@
 #include "comunication_func.h"
 #include "Main_datatypes.h"
 #include "process_stage.h"
-#include "../malleability/distribution_methods/block_distribution.h"
+#include "../MaM/distribution_methods/block_distribution.h"
 
 double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
 double init_emulation_icomm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);

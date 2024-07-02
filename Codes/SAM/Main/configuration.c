@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
 #include "configuration.h"
-#include "../malleability/distribution_methods/block_distribution.h"
+#include "../MaM/distribution_methods/block_distribution.h"
 
 void malloc_config_resizes(configuration *user_config);
 void malloc_config_stages(configuration *user_config);
