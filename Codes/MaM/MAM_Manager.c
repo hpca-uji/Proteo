@@ -431,8 +431,8 @@ void MAM_Data_get_pointer(void **data, size_t index, size_t *total_qty, MPI_Data
   }
 
   *data = data_struct->arrays[index];
-  *total_qty = data_struct->qty[index];
-  *type = data_struct->types[index];
+  if(total_qty != NULL) *total_qty = data_struct->qty[index];
+  if(type != NULL) *type = data_struct->types[index];
   //get_block_dist(qty, mall->myId, mall->numP, &dist_data); //FIXME Asegurar que numP es correcto
 }
 
