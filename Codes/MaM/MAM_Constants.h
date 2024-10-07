@@ -37,4 +37,8 @@ enum mam_key_values{MAM_SPAWN_METHOD=0, MAM_SPAWN_STRATEGIES, MAM_PHYSICAL_DISTR
 #define MAM_DATA_VARIABLE 0
 #define MAM_DATA_CONSTANT 1
 
+// Tags for messages in spawn strategies
+#define MAM_MPITAG_STRAT_SINGLE 130
+#define MAM_MPITAG_STRAT_MULTIPLE 131
+
 #endif
