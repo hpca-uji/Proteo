@@ -250,6 +250,15 @@ void MAM_Check_configuration() {
       MAM_I_set_red_strat(MAM_STRAT_RED_WAIT_TARGETS, &mall_conf->red_strategies);
     }
   }
+
+  #if MAM_DEBUG >= 2
+    if(mall->myId == mall->root) {
+      DEBUG_FUNC("MaM configuration", mall->myId, mall->numP); 
+      printf("Spawn M=%d S=%d D=%d Redist M=%d S=%d\n", 
+            mall_conf->spawn_method, mall_conf->spawn_strategies, mall_conf->spawn_dist, mall_conf->red_method, mall_conf->red_strategies);
+      fflush(stdout);
+    }
+  #endif
 }
 
 //======================================================||
