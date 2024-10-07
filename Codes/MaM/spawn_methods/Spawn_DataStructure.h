@@ -12,6 +12,12 @@ typedef struct {
 } Spawn_set;
 
 typedef struct {
+  int opened_port;
+  char *port_name, *service_name;
+  char *remote_port, *remote_service;
+} Spawn_ports;
+
+typedef struct {
   int spawn_qty, initial_qty, target_qty;
   int already_created;
   int total_spawns;
