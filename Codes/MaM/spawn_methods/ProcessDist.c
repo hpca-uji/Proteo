@@ -9,6 +9,15 @@
 #include "../MAM_Constants.h"
 #include "../MAM_DataStructures.h"
 
+//--------------PRIVATE CONSTANTS------------------//
+#define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (15)
+#define MAM_HOSTFILE_NAME2 "_S"  // Constant size name (2)
+#define MAM_HOSTFILE_NAME3 ".tmp"  // Constant size name (4)
+#define MAM_HOSTFILE_SIZE1 15 // 11 Chars + 4 Digits 
+#define MAM_HOSTFILE_SIZE2 8 // 4 Chars + 3 Digits + \0
+#define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //23 = 15 Chars + 7 Digits + \0
+#define MAM_HOSTFILE_LINE_SIZE 32
+
 //--------------PRIVATE DECLARATIONS---------------//
 
 void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns);
@@ -19,24 +28,22 @@ void set_spawn_cmd(Spawn_data *spawn_data);
 void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 
-void set_mapping_host(int qty, char *host, size_t index, Spawn_data *spawn_data);
+void set_mapping_host(int qty, char *info_type, char *host, size_t index, Spawn_data *spawn_data);
 void fill_str_hosts(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str);
 int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_name);
+int write_hostfile_node(int file, int qty, char *node_name, char **line, size_t *len_og);
 //--------------------------------SLURM USAGE-------------------------------------//
 #if MAM_USE_SLURM
 #include <slurm/slurm.h>
 void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **hostlist_str);
-//@deprecated functions
-void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, Spawn_data *spawn_data); 
-void fill_hostfile_slurm(char *nodelist, int ptr, int *qty, int used_nodes);
+
+void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data);
+void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_t *hostlist);
+size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostlist, char **line, size_t *len_line);
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
-
-//@deprecated functions
-int create_hostfile(char **file_name);
-int write_hostfile_node(int ptr, int qty, char *node_name);
 
 //--------------PUBLIC FUNCTIONS---------------//
 
@@ -62,7 +69,7 @@ void processes_dist(Spawn_data *spawn_data) {
         generate_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       }
       break;
-    case MAM_PHY_TYPE_HOSTFILE: // FIXME Does not consider multiple spawn strat
+    case MAM_PHY_TYPE_HOSTFILE:
       generate_info_hostfile_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       break;
   }
@@ -98,7 +105,7 @@ void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spa
 
   /* GET NEW DISTRIBUTION  */
   switch(mall_conf->spawn_dist) {
-    case MAM_PHY_DIST_SPREAD: // DIST NODES @deprecated
+    case MAM_PHY_DIST_SPREAD: // DIST NODES
       spread_dist(spawn_data, used_nodes, procs);
       break;
     case MAM_PHY_DIST_COMPACT: // DIST CPUs
@@ -236,7 +243,7 @@ void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_
 
   fill_str_hosts(nodelist, procs_array, nodes, &host_str);
   // SET MAPPING
-  set_mapping_host(spawn_data->spawn_qty, host_str, 0, spawn_data);
+  set_mapping_host(spawn_data->spawn_qty, "hosts", host_str, 0, spawn_data);
   free(host_str);
 }
 
@@ -258,7 +265,7 @@ void generate_multiple_info_string(char *nodelist, int *procs_array, size_t node
     host = strdup(token);
     if (procs_array[i] != 0) {
       write_str_node(&hostlist_str, len, procs_array[i], host);
-      set_mapping_host(procs_array[i], hostlist_str, j, spawn_data);
+      set_mapping_host(procs_array[i], "hosts", hostlist_str, j, spawn_data);
       free(hostlist_str); hostlist_str = NULL;
       j++;
     }
@@ -280,13 +287,13 @@ void generate_multiple_info_string(char *nodelist, int *procs_array, size_t node
  * distribucion fisica a utilizar con un par 
  * host/mapping y el total de procesos.
  */
-void set_mapping_host(int qty, char *host, size_t index, Spawn_data *spawn_data) {
+void set_mapping_host(int qty, char *info_type, char *host, size_t index, Spawn_data *spawn_data) {
   MPI_Info *info;
 
   spawn_data->sets[index].spawn_qty = qty;
   info = &(spawn_data->sets[index].mapping);
   MPI_Info_create(info);
-  MPI_Info_set(*info, "hosts", host);
+  MPI_Info_set(*info, info_type, host);
 }
 
 /*
@@ -350,6 +357,42 @@ int write_str_node(char **hostlist_str, size_t len_og, size_t qty, char *node_na
   return len+len_og;
 }
 
+/*
+ * Escribe en el fichero hostfile indicado por ptr una nueva linea.
+ *
+ * Esta linea indica el nombre de un nodo y la cantidad de procesos a
+ * alojar en ese nodo.
+ */
+int write_hostfile_node(int file, int qty, char *node_name, char **line, size_t *len_og) {
+  int err;
+  size_t len, len_node, len_int;
+
+  if(*line == NULL) {
+    *len_og = MAM_HOSTFILE_LINE_SIZE;
+    *line = (char *) malloc(*len_og * sizeof(char));
+  }
+
+  len_node = strlen(node_name);
+  err = snprintf(NULL, 0, "%d", qty);
+  if(err < 0) return -1;
+  len_int = err;
+
+  len = len_node + len_int + 3;
+  if(*len_og < len) {
+    *len_og = len+MAM_HOSTFILE_LINE_SIZE;
+    *line = (char *) realloc(*line, *len_og * sizeof(char));
+  }
+
+  err = snprintf(*line, len, "%s:%d\n", node_name, qty);
+  err = write(file, *line, len-1);
+  if(err < 0) {
+    perror("Error writing to the host file");
+    close(file);
+    exit(EXIT_FAILURE);
+  }
+  return 0;
+}
+
 //--------------------------------SLURM USAGE-------------------------------------//
 #if MAM_USE_SLURM
 /*
@@ -363,7 +406,7 @@ void generate_info_string_slurm(char *nodelist, int *procs_array, size_t nodes, 
 
   // CREATE AND SET STRING HOSTS
   fill_str_hosts_slurm(nodelist, procs_array, nodes, &hoststring);
-  set_mapping_host(spawn_data->spawn_qty, hoststring, 0, spawn_data);
+  set_mapping_host(spawn_data->spawn_qty, "hosts", hoststring, 0, spawn_data);
   free(hoststring);
 }
 
@@ -383,7 +426,7 @@ void generate_multiple_info_string_slurm(char *nodelist, int *qty, size_t used_n
   while ( (host = slurm_hostlist_shift(hostlist)) && i < used_nodes) {
     if(qty[i] != 0) {
       write_str_node(&hostlist_str, len, qty[i], host);
-      set_mapping_host(qty[i], hostlist_str, j, spawn_data);
+      set_mapping_host(qty[i], "hosts", hostlist_str, j, spawn_data);
       free(hostlist_str); hostlist_str = NULL;
       j++;
     }
@@ -415,111 +458,85 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
   slurm_hostlist_destroy(hostlist);
 }
 
-//====================================================
-//====================================================
-//============DEPRECATED FUNCTIONS====================
-//====================================================
-//====================================================
-
-/* FIXME Por revisar
- * @deprecated
- * Genera un fichero hostfile y lo anyade a un objeto
- * MPI_Info para ser utilizado.
- */
-void generate_info_hostfile_slurm(char *nodelist, int *procs_array, int nodes, Spawn_data *spawn_data){
-    char *hostfile;
-    int ptr;
-    MPI_Info *info;
-
-    spawn_data->sets[0].spawn_qty = spawn_data->spawn_qty;
-    info = &(spawn_data->sets[0].mapping);
-
-    // CREATE/UPDATE HOSTFILE 
-    ptr = create_hostfile(&hostfile);
-    MPI_Info_create(info);
-    MPI_Info_set(*info, "hostfile", hostfile);
-    free(hostfile);
-
-    // SET NEW DISTRIBUTION 
-    fill_hostfile_slurm(nodelist, ptr, procs_array, nodes);
-    close(ptr);
-}
-
-/*
- * @deprecated
- * Crea un fichero que se utilizara como hostfile
- * para un nuevo grupo de procesos. 
- *
- * El nombre es devuelto en el argumento "file_name",
- * que tiene que ser un puntero vacio.
- *
- * Ademas se devuelve un descriptor de fichero para 
- * modificar el fichero.
- */
-int create_hostfile(char **file_name) {
-  int ptr, err;
-  size_t len = 11; //FIXME Numero mágico
-
-  *file_name = NULL;
-  *file_name = malloc(len * sizeof(char));
-  if(*file_name == NULL) return -1; // No ha sido posible alojar la memoria
-  err = snprintf(*file_name, len, "hostfile.o");
-  if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
-
-  ptr = open(*file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if(ptr < 0) return -3; // No ha sido posible crear el fichero
-
-  return ptr; // Devolver puntero a fichero
-}
-
-/*
- * @deprecated
- * Rellena un fichero hostfile indicado por ptr con los nombres
- * de los nodos a utilizar indicados por "job_record" y la cantidad 
- * de procesos que alojara cada nodo indicado por "qty".
- */
-void fill_hostfile_slurm(char *nodelist, int ptr, int *qty, int nodes) {
-  int i=0;
-  char *host;
+void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data){
+  int index = 0, jid;
+  size_t qty_index = 0, len_line = 0;
+  char *hostfile_name, *line;
   hostlist_t hostlist;
-  
+
+  char *tmp = getenv("SLURM_JOB_ID");
+  jid = tmp != NULL ? atoi(tmp) : 0;
+
+  line = NULL;
   hostlist = slurm_hostlist_create(nodelist);
-  while ((host = slurm_hostlist_shift(hostlist)) && i < nodes) {
-    write_hostfile_node(ptr, qty[i], host);
-    i++;
-    free(host);
+  hostfile_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
+  snprintf(hostfile_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+
+  if(spawn_data->spawn_is_multiple) { // MULTIPLE
+    for(; index<spawn_data->total_spawns; index++) {
+      // This strat creates 1 hostfile per spawn
+      qty_index = fill_multiple_hostfile_slurm(hostfile_name, qty+qty_index, &hostlist, &line, &len_line);
+      set_mapping_host(qty[qty_index-1], "hostfile", hostfile_name, index, spawn_data); 
+      snprintf(hostfile_name+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+    }
+    free(line);
+
+  } else { // NOT MULTIPLE
+    fill_hostfile_slurm(hostfile_name, used_nodes, qty, &hostlist);
+    set_mapping_host(spawn_data->spawn_qty, "hostfile", hostfile_name, index, spawn_data);
   }
+
+  free(hostfile_name);
   slurm_hostlist_destroy(hostlist);
 }
 
-/*
- * @deprecated
- * Escribe en el fichero hostfile indicado por ptr una nueva linea.
- *
- * Esta linea indica el nombre de un nodo y la cantidad de procesos a
- * alojar en ese nodo.
- */
-int write_hostfile_node(int ptr, int qty, char *node_name) {
-  int err;
-  char *line;
-  size_t len, len_node, len_int;
+// Function to generate the configuration file
+void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_t *hostlist) {
+  char *host, *line;
+  size_t i=0, len_line=0;
 
-  len_node = strlen(node_name);
-  err = snprintf(NULL, 0, "%d", qty);
-  if(err < 0) return -1;
-  len_int = err;
+  line = NULL;
+  int file = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (file < 0) {
+    perror("Error opening the host file");
+    exit(EXIT_FAILURE);
+  }
 
-  len = len_node + len_int + 3;
-  line = malloc(len * sizeof(char));
-  if(line == NULL) return -2; // No ha sido posible alojar la memoria
-  err = snprintf(line, len, "%s:%d\n", node_name, qty);
+  while ( (host = slurm_hostlist_shift(*hostlist)) && i < used_nodes) {
+    if(qty[i] != 0) {
+      write_hostfile_node(file, qty[i], host, &line, &len_line);
+    }
+    i++;
+    free(host);
+  }
 
-  if(err < 0) return -3; // No ha sido posible escribir en el fichero
-
-  write(ptr, line, len-1);
+  close(file);
   free(line);
+}
 
-  return 0;
+size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostlist, char **line, size_t *len_line) {
+  char *host;
+  size_t i=0;
+
+  int file = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (file < 0) {
+    perror("Error opening the host file");
+    exit(EXIT_FAILURE);
+  }
+
+  while( (host = slurm_hostlist_shift(*hostlist)) ) {
+    if(qty[i] != 0) {
+      write_hostfile_node(file, qty[i], host, line, len_line);
+      i++;
+      break;
+    }
+    i++;
+    free(host); host = NULL;
+  }
+
+  if(host != NULL) free(host);
+  close(file);
+  return i;
 }
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
