@@ -63,6 +63,7 @@ void open_port(Spawn_ports *spawn_port, int open_port, int open_service)
     }
   } else {
     spawn_port->port_name = malloc(1);
+    spawn_port->port_name[0] = '\0';
   }
 }
 
@@ -122,6 +123,7 @@ void discover_remote_port(int id_group, Spawn_ports *spawn_port) {
 
   if(spawn_port->remote_port == NULL) { 
     spawn_port->remote_port = (char*) malloc(MPI_MAX_PORT_NAME * sizeof(char));
+    if(id_group == MAM_SERVICE_UNNEEDED) { spawn_port->remote_port[0] = '\0'; }
   }
   if(id_group == MAM_SERVICE_UNNEEDED) { return; }
 
