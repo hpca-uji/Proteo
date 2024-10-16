@@ -6,6 +6,7 @@
 #include <string.h>
 #include <mpi.h>
 #include "ProcessDist.h"
+#include "SpawnUtils.h"
 #include "../MAM_Constants.h"
 #include "../MAM_DataStructures.h"
 
@@ -23,7 +24,6 @@
 void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns);
 void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
 void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
-void set_spawn_cmd(Spawn_data *spawn_data);
 
 void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
@@ -63,7 +63,7 @@ void processes_dist(Spawn_data *spawn_data) {
 #if MAM_USE_SLURM
   switch(spawn_data->mapping_fill_method) {
     case MAM_PHY_TYPE_STRING:
-      if(spawn_data->spawn_is_multiple) {
+      if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) {
         generate_multiple_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
       } else {
         generate_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
@@ -74,14 +74,53 @@ void processes_dist(Spawn_data *spawn_data) {
       break;
   }
 #else
-  if(spawn_data->spawn_is_multiple) {
+  if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) {
     generate_multiple_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
   } else {
     generate_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
   }
 #endif
-  set_spawn_cmd(spawn_data);
+  char *aux_cmd = get_spawn_cmd();
+  for(int index = 0; index<spawn_data->total_spawns; index++) {
+    spawn_data->sets[index].cmd = aux_cmd;
+  }
   free(procs_array);
+}
+
+void set_hostfile_name(char **file_name, int *n, int jid, int index) {
+  if(*file_name == NULL) {
+    *file_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
+  }
+
+  if(*n == 0) {
+    jid = jid % 1000;
+    snprintf(*file_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  } else {
+    snprintf((*file_name)+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index, MAM_HOSTFILE_NAME3);
+  }
+  *n=1;
+}
+
+int read_hostfile_procs(char *file_name, int *qty) {
+  char *line = NULL, *ptr;
+  FILE *file = NULL;
+
+  file = fopen(file_name, "r");
+  if(file == NULL) {
+    perror("Could not open hostfile to read");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+  }
+
+  *qty = 0;
+  line = (char *) malloc(MAM_HOSTFILE_LINE_SIZE * sizeof(char));
+  while (fgets(line, MAM_HOSTFILE_LINE_SIZE, file) != NULL) {
+    size_t len = strlen(line);
+    ptr = line + len - 1;
+    // Search delimiter
+    while (ptr != line && *ptr != ':') { ptr--; }
+    if (*ptr == ':') { *qty  += atoi(ptr + 1); }
+  }
+  return 0;
 }
 
 
@@ -117,7 +156,7 @@ void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spa
   *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
 
 //  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
-  if(spawn_data.spawn_is_multiple) {
+  if(spawn_data.spawn_is_multiple || spawn_data.spawn_is_parallel) {
     for(i=0; i< *used_nodes; i++) {
       (*qty)[i] = procs[i];
       if(procs[i]) (*total_spawns)++;
@@ -197,35 +236,6 @@ void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
     (*used_nodes)++;
   }
   if(*used_nodes > mall->num_nodes) *used_nodes = mall->num_nodes;  //FIXME Si ocurre esto no es un error?
-}
-
-//--------------PRIVATE FUNCTIONS---------------//
-//-------------------CMD SET--------------------//
-
-/*
- * Comprueba que comando hay que llamar al realizar
- * el spawn. Todos los sets tienen que hacer el mismo
- * comando.
- *
- */
-void set_spawn_cmd(Spawn_data *spawn_data) {
-  int index = 0;
-  char *cmd_aux;
-  switch(mall_conf->external_usage) {
-    case MAM_USE_VALGRIND:
-      cmd_aux = MAM_VALGRIND_SCRIPT;
-      break;
-    case MAM_USE_EXTRAE: 
-      cmd_aux = MAM_EXTRAE_SCRIPT;
-      break;
-    default:
-      cmd_aux = mall->name_exec;
-      break;
-  }
-
-  for(; index<spawn_data->total_spawns; index++) {
-    spawn_data->sets[index].cmd = cmd_aux;
-  }
 }
 
 //--------------PRIVATE FUNCTIONS---------------//
@@ -465,14 +475,14 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
   hostlist_t hostlist;
 
   char *tmp = getenv("SLURM_JOB_ID");
-  jid = tmp != NULL ? atoi(tmp) : 0;
+  jid = tmp != NULL ? (atoi(tmp)%1000) : 0;
 
   line = NULL;
   hostlist = slurm_hostlist_create(nodelist);
   hostfile_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
   snprintf(hostfile_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
 
-  if(spawn_data->spawn_is_multiple) { // MULTIPLE
+  if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) { // MULTIPLE
     for(; index<spawn_data->total_spawns; index++) {
       // This strat creates 1 hostfile per spawn
       qty_index = fill_multiple_hostfile_slurm(hostfile_name, qty+qty_index, &hostlist, &line, &len_line);

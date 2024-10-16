@@ -46,17 +46,15 @@ void open_port(Spawn_ports *spawn_port, int open_port, int open_service)
     if (spawn_port->port_name != NULL)
         return;
 
-    if (open_port)
-    {
+    if (open_port) {
         spawn_port->opened_port = 1;
         spawn_port->port_name = (char *)malloc(MPI_MAX_PORT_NAME * sizeof(char));
         MPI_Open_port(MPI_INFO_NULL, spawn_port->port_name);
-        if (open_service != MAM_SERVICE_UNNEEDED)
-        {
+        if (open_service != MAM_SERVICE_UNNEEDED) {
             spawn_port->service_name = (char *)malloc((MAM_SERVICE_NAME_SIZE) * sizeof(char));
 #if MAM_USE_SLURM
       char *tmp = getenv("SLURM_JOB_ID");
-      if(tmp != NULL) { job_id = atoi(tmp); }
+      if(tmp != NULL) { job_id = atoi(tmp)%1000; }
 #endif
       snprintf(spawn_port->service_name, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, open_service);
       MPI_Publish_name(spawn_port->service_name, MPI_INFO_NULL, spawn_port->port_name);
@@ -131,7 +129,7 @@ void discover_remote_port(int id_group, Spawn_ports *spawn_port) {
     spawn_port->remote_service = (char*) malloc(MAM_SERVICE_NAME_SIZE * sizeof(char));
 #if MAM_USE_SLURM
     char *tmp = getenv("SLURM_JOB_ID");
-    if(tmp != NULL) { job_id = atoi(tmp); }
+    if(tmp != NULL) { job_id = atoi(tmp)%1000; }
 #endif
     snprintf(spawn_port->remote_service, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, id_group);
   } else { // For subsequent lookups, only update the variable part (group ID) of the service name.
