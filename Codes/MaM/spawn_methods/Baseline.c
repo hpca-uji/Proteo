@@ -4,13 +4,15 @@
 #include "../MAM_Constants.h"
 #include "../MAM_DataStructures.h"
 #include "Baseline.h"
+#include "SpawnUtils.h"
 #include "Strategy_Single.h"
 #include "Strategy_Multiple.h"
+#include "Strategy_Parallel.h"
 #include "PortService.h"
 
 //--------------PRIVATE DECLARATIONS---------------//
-int baseline_spawn(Spawn_set spawn_set, MPI_Comm comm, MPI_Comm *child);
 void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *child);
+void baseline_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents);
 
 //--------------PUBLIC FUNCTIONS---------------//
 /*
@@ -26,8 +28,7 @@ int baseline(Spawn_data spawn_data, MPI_Comm *child) { //TODO Tratamiento de err
   if (intercomm == MPI_COMM_NULL) { // Parents path
     baseline_parents(spawn_data, &spawn_port, child);
   } else { // Children path
-    if(spawn_data.spawn_is_multiple) { multiple_strat_children(child, &spawn_port); }
-    if(spawn_data.spawn_is_single) { single_strat_children(child, &spawn_port); }
+    baseline_children(spawn_data, &spawn_port, child);
   }
 
   free_ports(&spawn_port);
@@ -45,6 +46,17 @@ void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *
   int i;
   MPI_Comm comm, *intercomms;
 
+  #if MAM_DEBUG >= 3
+    DEBUG_FUNC("Starting spawning of processes", mall->myId, mall->numP); fflush(stdout);
+  #endif
+
+  if (spawn_data.spawn_is_parallel) {
+    // This spawn is quite different from the rest, as so
+    // it takes care of everything related to spawning.
+    parallel_strat_parents(spawn_data, spawn_port, child);
+    return;
+  }
+
   if (spawn_data.spawn_is_single && mall->myId != mall->root) {
     single_strat_parents(spawn_data, child);
     return;
@@ -57,11 +69,8 @@ void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *
     spawn_data.sets = (Spawn_set *) malloc(spawn_data.total_spawns * sizeof(Spawn_set));
   }
 
-  #if MAM_DEBUG >= 3
-    DEBUG_FUNC("Starting spawning of processes", mall->myId, mall->numP); fflush(stdout);
-  #endif
   for(i=0; i<spawn_data.total_spawns; i++) {
-    baseline_spawn(spawn_data.sets[i], comm, &intercomms[i]);
+    mam_spawn(spawn_data.sets[i], comm, &intercomms[i]);
   }
   #if MAM_DEBUG >= 3
     DEBUG_FUNC("Sources have created the new processes. Performing additional actions if required.", mall->myId, mall->numP); fflush(stdout);
@@ -77,22 +86,15 @@ void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *
   if(mall->myId != mall->root) { free(spawn_data.sets); }
 }
 
-/*
- * Funcion basica encargada de la creacion de procesos.
- * Crea un set de procesos segun la configuracion obtenida
- * en ProcessDist.c
- * Devuelve en "child" el intercomunicador que se conecta a los hijos.
- */
-int baseline_spawn(Spawn_set spawn_set, MPI_Comm comm, MPI_Comm *child) {
-  int rootBcast = MPI_PROC_NULL;
-  if(mall->myId == mall->root) rootBcast = MPI_ROOT;
 
-  int spawn_err = MPI_Comm_spawn(spawn_set.cmd, MPI_ARGV_NULL, spawn_set.spawn_qty, spawn_set.mapping, mall->root, comm, child, MPI_ERRCODES_IGNORE); 
-
-  if(spawn_err != MPI_SUCCESS) {
-    printf("Error creating new set of %d procs.\n", spawn_set.spawn_qty);
+void baseline_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents) {
+  if(spawn_data.spawn_is_parallel) {
+    // This spawn is quite different from the rest, as so
+    // it takes care of everything related to spawning.
+    parallel_strat_children(spawn_data, spawn_port, parents);
+    return;
   }
-  MAM_Comm_main_structures(*child, rootBcast);
 
-  return spawn_err;
+  if(spawn_data.spawn_is_multiple) { multiple_strat_children(parents, spawn_port); }
+  if(spawn_data.spawn_is_single) { single_strat_children(parents, spawn_port); }
 }

@@ -701,7 +701,8 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   }
   mall->root_collectives = mall->root_parents;
 
-  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)) {
+  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
+    || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL)) {
     mall->internode_group = 0;
   } else {
     mall->internode_group = MAM_Is_internode_group();

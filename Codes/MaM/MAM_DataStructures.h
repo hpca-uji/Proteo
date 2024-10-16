@@ -52,7 +52,7 @@ typedef struct {
 typedef struct { 
   int myId, numP, numC, zombie;
   int root, root_collectives;
-  int num_parents, root_parents;
+  int num_parents, root_parents, gid;
   pthread_t async_thread;
   MPI_Comm comm, thread_comm, original_comm;
   MPI_Comm intercomm, tmp_comm;

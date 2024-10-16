@@ -34,7 +34,7 @@ mam_config_setting_t configSettings[] = {
     {NULL, 1, INT_MAX, {.set_config_complex = MAM_I_set_target_number }, MAM_NUM_TARGETS_ENV}
 };
 
-unsigned int masks_spawn[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_SPAWN_SINGLE, MAM_MASK_SPAWN_INTERCOMM, MAM_MASK_SPAWN_MULTIPLE};
+unsigned int masks_spawn[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_SPAWN_SINGLE, MAM_MASK_SPAWN_INTERCOMM, MAM_MASK_SPAWN_MULTIPLE, MAM_MASK_SPAWN_PARALLEL};
 unsigned int masks_red[] = {MAM_STRAT_CLEAR_VALUE, MAM_MASK_PTHREAD, MAM_MASK_RED_WAIT_SOURCES, MAM_MASK_RED_WAIT_TARGETS};
 
 /**
@@ -92,7 +92,7 @@ void MAM_Set_key_configuration(int key, int required, int *provided) {
   if(required < 0 || state > MAM_I_NOT_STARTED) return;
 
   mam_config_setting_t *config = NULL;
-  for (i = 0; i < MAM_KEY_COUNT; i++) {
+  for (i = 0; i < MAM_KEY_COUNT; i++) { //FIXME A for is not needed -- Check if key < MAM_KEY_COUNT and then just use key as index
     if (key == i) {
       config = &configSettings[i];
       break;
@@ -228,8 +228,9 @@ void MAM_Check_configuration() {
   }
 
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
-  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
-	&& global_internodes) { // Remove internode MPI_COMM_WORLDs
+  if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
+  || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL) )
+  && global_internodes) { // Remove internode MPI_COMM_WORLDs
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
   }
 
@@ -237,6 +238,7 @@ void MAM_Check_configuration() {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM);
     }
+    // FIXME This should not be required to be removed for that case...
     if(mall->numP > mall->numC && MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_SINGLE)) {
       MAM_I_remove_strat(&mall_conf->spawn_strategies, MAM_MASK_SPAWN_SINGLE);
     }
@@ -301,6 +303,7 @@ int MAM_I_set_method(unsigned int new_method, unsigned int *method) {
   return *method;
 }
 
+//TODO Se podría hacer un par de arrays o dict para obtener la mascara sin un switch
 int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies) {
   int result = 0;
   int strat_removed = 0;
@@ -315,12 +318,25 @@ int MAM_I_set_spawn_strat(unsigned int strategy, unsigned int *strategies) {
       break;
     case MAM_STRAT_SPAWN_SINGLE:
       result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_SINGLE);
+      if(result == MAM_STRATS_ADDED) {
+        strat_removed += MAM_I_remove_strat(strategies, MAM_MASK_SPAWN_PARALLEL);
+      }
       break;
     case MAM_STRAT_SPAWN_INTERCOMM:
       result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_INTERCOMM);
       break;
     case MAM_STRAT_SPAWN_MULTIPLE:
       result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_MULTIPLE);
+      if(result == MAM_STRATS_ADDED) {
+        strat_removed += MAM_I_remove_strat(strategies, MAM_MASK_SPAWN_PARALLEL);
+      }
+      break;
+    case MAM_STRAT_SPAWN_PARALLEL:
+      result = MAM_I_add_strat(strategies, MAM_MASK_SPAWN_PARALLEL);
+      if(result == MAM_STRATS_ADDED) {
+        strat_removed += MAM_I_remove_strat(strategies, MAM_MASK_SPAWN_MULTIPLE);
+        strat_removed += MAM_I_remove_strat(strategies, MAM_MASK_SPAWN_SINGLE);
+      }
       break;
     default:
       //Unkown strategy

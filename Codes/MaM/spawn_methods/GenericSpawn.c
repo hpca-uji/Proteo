@@ -139,7 +139,6 @@ void unset_spawn_postpone_flag(int outside_state) {
  */
 void malleability_connect_children(MPI_Comm *parents) {
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
-
   MAM_Comm_main_structures(*parents, MAM_ROOT); //FIXME What if root is another id different to 0? Send from spawn to root id?
   spawn_data->initial_qty = mall->num_parents;
   spawn_data->target_qty = mall->numC;
@@ -147,6 +146,7 @@ void malleability_connect_children(MPI_Comm *parents) {
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, &(spawn_data->spawn_is_parallel));
 
   switch(mall_conf->spawn_method) {
     case MAM_SPAWN_BASELINE:
@@ -179,8 +179,9 @@ void set_spawn_configuration(MPI_Comm comm) {
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, &(spawn_data->spawn_is_intercomm));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, &(spawn_data->spawn_is_multiple));
+  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, &(spawn_data->spawn_is_parallel));
   spawn_data->comm = comm;
-  spawn_data->mapping_fill_method = MAM_PHY_TYPE_STRING;
+  spawn_data->mapping_fill_method = MAM_PHY_TYPE_HOSTFILE;
   spawn_data->sets = NULL;
 
   switch(mall_conf->spawn_method) {

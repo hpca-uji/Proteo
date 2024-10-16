@@ -8,6 +8,11 @@
 #include "Strategy_Multiple.h"
 
 
+/*=====================DEBUG ALGORITHM=====================*/
+//The following algorithm is a basic implementation, was created
+//to test if the idea could work within Slurm+DMR.
+//Im keeping it for cases when I want to debug codes related to
+//this strategy.
 void multiple_strat_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm comm, MPI_Comm *intercomms, MPI_Comm *child) {
   int i, rootBcast;
   int buffer[2];

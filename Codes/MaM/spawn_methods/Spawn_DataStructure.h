@@ -21,7 +21,7 @@ typedef struct {
   int spawn_qty, initial_qty, target_qty;
   int already_created;
   int total_spawns;
-  int spawn_is_single, spawn_is_async, spawn_is_intercomm, spawn_is_multiple;
+  int spawn_is_single, spawn_is_async, spawn_is_intercomm, spawn_is_multiple, spawn_is_parallel;
 //  MPI_Info mapping;
   int mapping_fill_method;
 
