@@ -88,3 +88,4 @@ else
 fi
 
 echo "END TEST"
+rm MAM_HF_ID*
