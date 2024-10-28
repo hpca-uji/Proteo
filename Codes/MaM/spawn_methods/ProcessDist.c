@@ -11,9 +11,9 @@
 #include "../MAM_DataStructures.h"
 
 //--------------PRIVATE CONSTANTS------------------//
-#define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (15)
-#define MAM_HOSTFILE_NAME2 "_S"  // Constant size name (2)
-#define MAM_HOSTFILE_NAME3 ".tmp"  // Constant size name (4)
+#define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (9) -- Part of SIZE1
+#define MAM_HOSTFILE_NAME2 "_S"  // Constant size name (2) -- Part of SIZE1
+#define MAM_HOSTFILE_NAME3 ".tmp"  // Constant size name (4) -- Part of SIZE2
 #define MAM_HOSTFILE_SIZE1 15 // 11 Chars + 4 Digits 
 #define MAM_HOSTFILE_SIZE2 8 // 4 Chars + 3 Digits + \0
 #define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //23 = 15 Chars + 7 Digits + \0

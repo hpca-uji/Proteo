@@ -24,6 +24,9 @@ void MAM_check_hosts() {
   #if MAM_USE_SLURM
     not_filled = MAM_I_slurm_getjob_hosts_info();
     if(not_filled) {
+      #if MAM_DEBUG >= 2
+        DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
+      #endif
       if(mall->nodelist != NULL) {
         free(mall->nodelist);
 	mall->nodelist = NULL;
@@ -276,7 +279,7 @@ int MAM_I_slurm_getjob_hosts_info() {
   if(tmp == NULL) return 1;
   jobId = atoi(tmp);
 
-  err = slurm_load_job(&j_info, jobId, 1);
+  err = slurm_load_job(&j_info, jobId, 1); // FIXME Valgrind Not freed
   if(err) return err;
   last_record = j_info->job_array[j_info->record_count - 1];
 

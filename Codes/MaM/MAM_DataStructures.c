@@ -57,8 +57,8 @@ void MAM_Comm_main_structures(MPI_Comm comm, int rootBcast) {
   MPI_Bcast(MPI_BOTTOM, 1, mall->struct_type, rootBcast, comm);
 
   if(mall->nodelist == NULL) {
-    mall->nodelist = calloc(mall->nodelist_len+1, sizeof(char));
-    mall->nodelist[mall->nodelist_len] = '\0';
+    mall->nodelist = malloc((mall->nodelist_len) * sizeof(char));
+    mall->nodelist[mall->nodelist_len-1] = '\0';
   }
   MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, comm);
 }

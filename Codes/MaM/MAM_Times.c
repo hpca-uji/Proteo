@@ -4,7 +4,7 @@
 void def_malleability_times(MPI_Datatype *new_type);
 
 void init_malleability_times() {
-  #if MAM_DEBUG
+  #if MAM_DEBUG >= 4
     DEBUG_FUNC("Initializing recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
   #endif
 
@@ -17,7 +17,7 @@ void init_malleability_times() {
   reset_malleability_times();
   def_malleability_times(&mall_conf->times->times_type);
 
-  #if MAM_DEBUG
+  #if MAM_DEBUG >= 4
     DEBUG_FUNC("Initialized recording structure", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
   #endif
 }
@@ -31,7 +31,7 @@ void reset_malleability_times() {
 }
 
 void free_malleability_times() {
-  #if MAM_DEBUG
+  #if MAM_DEBUG >= 4
     DEBUG_FUNC("Freeing recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
   if(mall_conf->times != NULL) {
@@ -41,7 +41,7 @@ void free_malleability_times() {
     }
     free(mall_conf->times);
   }
-  #if MAM_DEBUG
+  #if MAM_DEBUG >= 4
     DEBUG_FUNC("Freed recording structure", mall->myId, mall->numP); fflush(stdout);
   #endif
 }
@@ -51,6 +51,8 @@ void free_malleability_times() {
  *
  * This function is intended to be called when a reconfiguration has ended. 
  * It is designed to provide the necessary information for the user to perform data redistribution.
+ * 
+ * Null values can be passed if there is no interest in retreiving particular times
  *
  * Parameters:
  *  - double *sp_time:   A pointer where the spawn time will be saved.
@@ -61,11 +63,11 @@ void free_malleability_times() {
  */
 void MAM_Retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time) {
   malleability_times_t *times = mall_conf->times;
-  *sp_time = times->spawn_time;
-  *sy_time = times->sync_end - times->sync_start;
-  *asy_time = times->async_end - times->async_start;
-  *user_time = times->user_end - times->user_start;
-  *mall_time = times->malleability_end - times->malleability_start;
+  if(sp_time != NULL)   *sp_time = times->spawn_time;
+  if(sy_time != NULL)   *sy_time = times->sync_end - times->sync_start;
+  if(asy_time != NULL)  *asy_time = times->async_end - times->async_start;
+  if(user_time != NULL) *user_time = times->user_end - times->user_start;
+  if(mall_time != NULL) *mall_time = times->malleability_end - times->malleability_start;
 }
 
 void malleability_times_broadcast(int root) {
