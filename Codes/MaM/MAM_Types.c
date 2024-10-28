@@ -91,9 +91,9 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   def_malleability_entries(data_struct_dist, data_struct_rep, &entries_type);
   MPI_Bcast(MPI_BOTTOM, 1, entries_type, mall->root_collectives, mall->intercomm);
 
-  if(is_children_group && ( data_struct_rep->entries != 0 || data_struct_dist->entries != 0 )) {
-    init_malleability_data_struct(data_struct_rep, data_struct_rep->entries);
-    init_malleability_data_struct(data_struct_dist, data_struct_dist->entries);
+  if(is_children_group) {
+    if(data_struct_rep->entries != 0) { init_malleability_data_struct(data_struct_rep, data_struct_rep->entries); }
+    if(data_struct_dist->entries != 0) { init_malleability_data_struct(data_struct_dist, data_struct_dist->entries); } //FIXME Valgrind not freed
   }
 
   def_malleability_qty_type(data_struct_dist, data_struct_rep, &struct_type);
@@ -102,17 +102,21 @@ void comm_data_info(malleability_data_t *data_struct_rep, malleability_data_t *d
   if(is_children_group) {
     for(i=0; i < data_struct_rep->entries; i++) {
       MPI_Type_size(data_struct_rep->types[i], &type_size);
-      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * type_size); //FIXME This memory is not freed -- How should be done?
-      data_struct_rep->requests[i] = (MPI_Request *) malloc(data_struct_rep->request_qty[i] * sizeof(MPI_Request));
-      for(j=0; j < data_struct_rep->request_qty[i]; j++) {
-        data_struct_rep->requests[i][j] = MPI_REQUEST_NULL;
+      data_struct_rep->arrays[i] = (void *) malloc(data_struct_rep->qty[i] * (size_t) type_size); //FIXME This memory is not freed -- How should be done?
+      if(data_struct_rep->request_qty[i]) {
+        data_struct_rep->requests[i] = (MPI_Request *) malloc(data_struct_rep->request_qty[i] * sizeof(MPI_Request));
+        for(j=0; j < data_struct_rep->request_qty[i]; j++) {
+          data_struct_rep->requests[i][j] = MPI_REQUEST_NULL;
+        }
       }
     }
     for(i=0; i < data_struct_dist->entries; i++) {
       data_struct_dist->arrays[i] = (void *) NULL; // TODO Se podria inicializar aqui?
-      data_struct_dist->requests[i] = (MPI_Request *) malloc(data_struct_dist->request_qty[i] * sizeof(MPI_Request));
-      for(j=0; j < data_struct_dist->request_qty[i]; j++) {
-        data_struct_dist->requests[i][j] = MPI_REQUEST_NULL;
+      if(data_struct_dist->request_qty[i]) {
+        data_struct_dist->requests[i] = (MPI_Request *) malloc(data_struct_dist->request_qty[i] * sizeof(MPI_Request));
+        for(j=0; j < data_struct_dist->request_qty[i]; j++) {
+          data_struct_dist->requests[i][j] = MPI_REQUEST_NULL;
+        }
       }
     }
   }
