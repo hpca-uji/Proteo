@@ -69,35 +69,35 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  *
  */
 void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm) {
-    struct Counts s_counts, r_counts;
-    struct Dist_data dist_data;
+  struct Counts s_counts, r_counts;
+  struct Dist_data dist_data;
 
-    /* PREPARE COMMUNICATION */
-    prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts);
+  /* PREPARE COMMUNICATION */
+  prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts);
 
-    /* PERFORM COMMUNICATION */
-    switch(mall_conf->red_method) {
-      case MAM_RED_RMA_LOCKALL:
-      case MAM_RED_RMA_LOCK:
-        if(is_children_group) {
-	  dist_data.tamBl = 0;
-	} else {
-          get_block_dist(qty, mall->myId, numO, &dist_data);
-	}
-        sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm);
-	break;
-
-      case MAM_RED_POINT:
-        sync_point2point(send, *recv, datatype, s_counts, r_counts, comm);
-	break;
-      case MAM_RED_BASELINE:
-      default:
-        MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm);
-	break;
+  /* PERFORM COMMUNICATION */
+  switch (mall_conf->red_method) {
+  case MAM_RED_RMA_LOCKALL:
+  case MAM_RED_RMA_LOCK:
+    if (is_children_group) {
+      dist_data.tamBl = 0;
+    } else {
+      get_block_dist(qty, mall->myId, numO, &dist_data);
     }
+    sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm);
+    break;
 
-    freeCounts(&s_counts);
-    freeCounts(&r_counts);
+  case MAM_RED_POINT:
+    sync_point2point(send, *recv, datatype, s_counts, r_counts, comm);
+    break;
+  case MAM_RED_BASELINE:
+  default:
+    MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm);
+    break;
+  }
+
+  freeCounts(&s_counts);
+  freeCounts(&r_counts);
 }
 
 /*
@@ -524,12 +524,13 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
   int array_size = numO;
   int offset_ids = 0;
   int datasize;
+  size_t total_bytes;
   struct Dist_data dist_data;
 
   if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     offset_ids =  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL) ? 
 	    0 : numP;
-  } else {
+  } else { // Merge method
     array_size = numP > numO ? numP : numO;
   }
 
@@ -543,7 +544,8 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
     
     // Obtener distribución para este hijo
     get_block_dist(qty, mall->myId, numP, &dist_data);
-    *recv = malloc(dist_data.tamBl * datasize);
+    total_bytes = ((size_t) dist_data.tamBl) * ((size_t) datasize);
+    *recv = malloc(total_bytes);
 
     #if MAM_DEBUG >= 4
       get_block_dist(qty, mall->myId, numP, &dist_data);
@@ -559,7 +561,8 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
       prepare_comm_alltoall(mall->myId, numO, numP, qty, offset_ids, r_counts);
       // Obtener distribución para este hijo y reservar vector de recibo
       get_block_dist(qty, mall->myId, numO, &dist_data);
-      *recv = malloc(dist_data.tamBl * datasize);
+      total_bytes = ((size_t) dist_data.tamBl) * ((size_t) datasize);
+      *recv = malloc(total_bytes);
       #if MAM_DEBUG >= 4
         print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
       #endif
