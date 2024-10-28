@@ -88,4 +88,5 @@ else
 fi
 
 echo "END TEST"
-rm MAM_HF_ID*
+MAM_ID=$(($SLURM_JOB_ID % 1000))
+rm MAM_HF_ID*$MAM_ID*.tmp

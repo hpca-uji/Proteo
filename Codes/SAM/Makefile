@@ -7,6 +7,10 @@ LD_FLAGS = -lm -pthread -lmam
 MAM_HOME = ../MaM
 MAM_FLAGS = -I$(MAM_HOME) -L$(MAM_HOME)/build
 
+ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
+    C_FLAGS += -g
+endif
+
 # Final binary
 BIN = a.out
 # Put all auto generated stuff to this build dir.

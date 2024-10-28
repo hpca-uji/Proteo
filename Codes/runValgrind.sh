@@ -28,3 +28,5 @@ mpirun -hosts $initial_nodelist -np $numP valgrind --leak-check=full --show-leak
 echo "END RUN"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
 sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
+MAM_ID=$(($SLURM_JOB_ID % 1000))
+rm MAM_HF_ID0$MAM_ID*.tmp

@@ -31,7 +31,7 @@ mam:
 
 sam: mam
 	@echo "Compiling SAM"
-	$(MAKE) -C SAM
+	$(MAKE) -C SAM MAM_DEBUG=$(MAM_DEBUG)
 
 install: mam sam $(CONFIG)
 	echo "Done"

@@ -90,12 +90,12 @@ int main(int argc, char *argv[]) {
       if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
         MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
 			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
-	for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
-	  MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
-	}
-	for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
-	  MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
-	}
+	      for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
+	        MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
+	      }
+	      for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
+	        MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
+	      }
         MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
 
         if(group->grp != 0) {
@@ -362,7 +362,7 @@ int print_final_results() {
  * Inicializa la estructura group
  */
 void init_group_struct(char *argv[], int argc, int myId, int numP) {
-  group = malloc(sizeof(group_data));
+  group = malloc(sizeof(group_data)); // Valgrind not freed
   group->myId        = myId;
   group->numP        = numP;
   group->grp         = 0;
@@ -396,15 +396,15 @@ void init_application() {
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   if(config_file->sdr) {
     group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
-    group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int));
-    group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *));
+    group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int)); // FIXME Valgrind not freed
+    group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *)); // Valgrind not freed
     last_index = group->sync_data_groups-1; 
     for(i=0; i<last_index; i++) {
       group->sync_qty[i] = DR_MAX_SIZE;
       malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], group->myId, group->numP);
     }
     group->sync_qty[last_index] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], group->myId, group->numP);
+    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], group->myId, group->numP); // Valgrind not freed
   }
 
   if(config_file->adr) {
@@ -538,8 +538,8 @@ void init_originals() {
 
   if(config_file->n_groups > 1) {
     MAM_Data_add(&(group->grp), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
     MAM_Data_add(&(group->iter_start), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
 
     if(config_file->sdr) {
       for(i=0; i<group->sync_data_groups; i++) {
@@ -555,7 +555,7 @@ void init_originals() {
 }
 
 void init_targets() {
-  size_t i, entries, total_qty;
+  size_t total_qty;
   void *value = NULL;
   MPI_Datatype type;
 
@@ -563,27 +563,10 @@ void init_targets() {
   group->grp = *((int *)value);
   group->grp = group->grp + 1;
 
-
   recv_config_file(ROOT, new_comm, &config_file);
   results = malloc(sizeof(results_data));
   init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
-
-  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-  run_id = *((int *)value);
-      
-  if(config_file->adr) {
-    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
-    group->async_qty = (int *) malloc(entries * sizeof(int));
-    group->async_array = (char **) malloc(entries * sizeof(char *));
-    for(i=0; i<entries; i++) {
-      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
-      group->async_array[i] = (char *)value;
-      group->async_qty[i] = DR_MAX_SIZE;
-    }
-    group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
-    group->async_data_groups = entries;
-  }
 }
 
 void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
@@ -593,6 +576,9 @@ void update_targets() { //FIXME Should not be needed after redist -- Declarar an
 
   MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
   group->iter_start = *((int *)value);
+
+  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+  run_id = *((int *)value);
 
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
@@ -605,6 +591,19 @@ void update_targets() { //FIXME Should not be needed after redist -- Declarar an
     }
     group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
     group->sync_data_groups = entries;
+  }
+
+  if(config_file->adr) {
+    MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
+    group->async_qty = (int *) malloc(entries * sizeof(int));
+    group->async_array = (char **) malloc(entries * sizeof(char *));
+    for(i=0; i<entries; i++) {
+      MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+      group->async_array[i] = (char *)value;
+      group->async_qty[i] = DR_MAX_SIZE;
+    }
+    group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->async_data_groups = entries;
   }
 }
 
