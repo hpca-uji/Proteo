@@ -1,0 +1,84 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <mpi.h>
+#include "../MAM_Constants.h"
+#include "../MAM_DataStructures.h"
+#include "Merge.h"
+#include "Baseline.h"
+
+//--------------PRIVATE DECLARATIONS---------------//
+void merge_adapt_expand(MPI_Comm *child, int is_children_group);
+void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId);
+
+//--------------PUBLIC FUNCTIONS---------------//
+int merge(Spawn_data spawn_data, MPI_Comm *child, int data_state) {
+  MPI_Comm intercomm;
+  int local_state;
+  int is_children_group = 1;
+
+  if(spawn_data.initial_qty > spawn_data.target_qty) { //Shrink
+    if(data_state == MAM_I_DIST_COMPLETED) {
+      merge_adapt_shrink(spawn_data.target_qty, child, spawn_data.comm, mall->myId);
+      local_state = MAM_I_SPAWN_ADAPTED;
+    } else {
+      local_state = MAM_I_SPAWN_ADAPT_POSTPONE;
+    }
+  } else { //Expand
+    MPI_Comm_get_parent(&intercomm);
+    is_children_group = intercomm == MPI_COMM_NULL ? 0:1;
+
+
+    baseline(spawn_data, child);
+    merge_adapt_expand(child, is_children_group);
+    local_state = MAM_I_SPAWN_COMPLETED;
+  }
+
+  return local_state;
+}
+
+int intracomm_strategy(int is_children_group, MPI_Comm *child) {
+  merge_adapt_expand(child, is_children_group);
+  return MAM_I_SPAWN_COMPLETED;
+}
+
+//--------------PRIVATE MERGE TYPE FUNCTIONS---------------//
+
+/*
+ * Se encarga de que el grupo de procesos resultante se 
+ * encuentren todos en un intra comunicador, uniendo a
+ * padres e hijos en un solo comunicador.
+ *
+ * Se llama antes de la redistribución de datos.
+ *
+ * TODO REFACTOR
+ */
+void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
+  MPI_Comm new_comm = MPI_COMM_NULL;
+
+  MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
+
+  //char test;
+  //MPI_Bcast(&test, 1, MPI_CHAR, 0, new_comm);
+  //MPI_Barrier(*child);
+
+  MPI_Comm_disconnect(child);
+  *child = new_comm;
+}
+
+
+/*
+ * Se encarga de que el grupo de procesos resultante se
+ * eliminen aquellos procesos que ya no son necesarios.
+ * Los procesos eliminados se quedaran como zombies.
+ *
+ * Se llama una vez ha terminado la redistribución de datos.
+ */
+void merge_adapt_shrink(int numC, MPI_Comm *child, MPI_Comm comm, int myId) {
+  int color = MPI_UNDEFINED;
+
+  if(*child != MPI_COMM_NULL && *child != MPI_COMM_WORLD) MPI_Comm_disconnect(child);
+  if(myId < numC) {
+      color = 1;  
+  }
+  MPI_Comm_split(comm, color, myId, child);
+}

@@ -1,0 +1,10 @@
+#Ignore ini files
+*.ini
+
+#Ignore build files
+/Codes/build/
+/Codes/MaM/build
+/Codes/SAM/build
+
+#Ignore Results files
+/Results/*
