@@ -65,8 +65,7 @@ void parallel_strat_parents_hypercube(Spawn_data spawn_data, Spawn_ports *spawn_
   qty_comms = 0;
   init_nodes = mall->numP / mall->num_cpus; //FIXME does not consider heterogenous machines
   groups = spawn_data.total_spawns + init_nodes;
-  //group_id = -((mall->myId / mall->num_cpus) + 1);
-  group_id = -init_nodes; //FIXME (((mall->numP-1) / mall->num_cpus) + 1); <-- Prev line
+  group_id = -init_nodes;
 
   opening = mall->myId == mall->root ? 1 : 0;
   open_port(spawn_port, opening, groups);
@@ -94,11 +93,11 @@ void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn
   group_id = mall->gid;
   init_nodes = spawn_data.initial_qty / mall->num_cpus;
   groups = spawn_data.spawn_qty / mall->num_cpus + init_nodes;
-  opening = (mall->myId == MAM_ROOT && group_id < groups/2) ? 1 : 0;
+  opening = (mall->myId == MAM_ROOT && group_id < (groups-init_nodes)/2) ? 1 : 0;
   open_port(spawn_port, opening, group_id);
 
   // Spawn more processes if required
-  if((groups-init_nodes) > spawn_data.initial_qty) { 
+  if(groups - init_nodes > spawn_data.initial_qty) { 
     actual_step = log((group_id + init_nodes) / init_nodes) / log(1 + mall->numP);
     actual_step = floor(actual_step) + 1;
     hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms); 
@@ -109,7 +108,7 @@ void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn
   MPI_Comm_disconnect(parents);
 
   // Connect groups and ensure expected rank order
-  binary_tree_connection(groups-init_nodes, group_id, spawn_port, &newintracomm);
+  binary_tree_connection(groups - init_nodes, group_id, spawn_port, &newintracomm);
   binary_tree_reorder(&newintracomm, group_id);
   
   // Create intercomm between sources and children
@@ -128,7 +127,8 @@ void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn
 // This function does not allow the same process to have multiple threads executing it
 void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step, 
                   MPI_Comm **spawn_comm, int *qty_comms) {
-  int i, next_group_id, aux_sum, actual_step, actual_nodes;
+  int i,  aux_sum, actual_step;
+  int next_group_id, actual_nodes;
   int jid=0, n=0;
   char *file_name = NULL;
   Spawn_set set;
@@ -180,7 +180,8 @@ void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_
   for(i=0; i<qty_comms; i++) {
     MPI_Irecv(&aux, 1, MPI_CHAR, root_other, 130, spawn_comm[i], &requests[i]);
   }
-  MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE);
+  if(qty_comms) { MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE); }
+  if(intercomm != MPI_COMM_NULL) { MPI_Barrier(mall->comm); }
   if(intercomm != MPI_COMM_NULL && mall->myId == root) { MPI_Send(&aux, 1, MPI_CHAR, root_other, 130, intercomm); }
 
   // Sources synchronization
@@ -189,10 +190,11 @@ void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_
 
   // Downside synchronization
   if(intercomm != MPI_COMM_NULL && mall->myId == root) { MPI_Recv(&aux, 1, MPI_CHAR, root_other, 130, intercomm, MPI_STATUS_IGNORE); }   
+  MPI_Barrier(mall->comm); // FIXME This barrier should not be required
   for(i=0; i<qty_comms; i++) {
     MPI_Isend(&aux, 1, MPI_CHAR, root_other, 130, spawn_comm[i], &requests[i]);
   }
-  MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE);
+  if(qty_comms) { MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE); }
   
   if(requests != NULL) { free(requests); }
 }
@@ -252,6 +254,8 @@ void binary_tree_reorder(MPI_Comm *newintracomm, int group_id) {
   MPI_Group merge_group, aux_group;
   MPI_Comm aux_comm;
 
+  index_reorder = NULL;
+  reorder = NULL;
   // FIXME Expects all groups having the same size
   expected_rank = mall->numP * group_id + mall->myId;
 
@@ -273,6 +277,8 @@ void binary_tree_reorder(MPI_Comm *newintracomm, int group_id) {
   //printf("Grupo %d -- Merge rank = %d - New rank = %d\n", group_id, merge_rank, new_rank);
 
   if(*newintracomm != MPI_COMM_WORLD && *newintracomm != MPI_COMM_NULL) MPI_Comm_disconnect(newintracomm);
+  MPI_Group_free(&merge_group);
+  MPI_Group_free(&aux_group);
   *newintracomm = aux_comm;
   free(index_reorder);
   free(reorder);

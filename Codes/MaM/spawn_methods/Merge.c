@@ -57,6 +57,10 @@ void merge_adapt_expand(MPI_Comm *child, int is_children_group) {
 
   MPI_Intercomm_merge(*child, is_children_group, &new_comm); //El que pone 0 va primero
 
+  //char test;
+  //MPI_Bcast(&test, 1, MPI_CHAR, 0, new_comm);
+  //MPI_Barrier(*child);
+
   MPI_Comm_disconnect(child);
   *child = new_comm;
 }
