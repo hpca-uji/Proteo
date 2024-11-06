@@ -15,7 +15,7 @@ configFile=$1
 outIndex=0
 if [ $# -ge 2 ]
 then
-  outIndex=$2
+  outIndex=$2 
 fi
 
 echo "MPICH provider=$FI_PROVIDER"
