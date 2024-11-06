@@ -1,7 +1,7 @@
-# Proteo - Dev branch
+# Proteo - Master branch
 
 ## Overview
-This branch contains the codebase used for Proteo developing branch. 
+This branch contains the codebase used for Proteo. 
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
@@ -32,7 +32,6 @@ The following requisites are optional and only needed to process and analyse the
     ```bash
     $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
     $ cd malleability_benchmark
-    $ git checkout JournalSupercomputing23/24
     ```
 
 2. Compile the code using the `make` command:
