@@ -1,26 +1,23 @@
 #!/bin/bash
 
-partition="P1"
-exclude="c00,c01,c02"
+cores=20
 
-# Executes a given configuration file with the aid of
-# the RMS Slurm.
+# Executes a given configuration file. This script can be called with Slurm commands to 
+#   choose the desired user configuration.
 # Parameter 1: Configuration file name for the emulation.
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
 # Parameter 4(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
-# Parameter 5(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
-# Parameter 6(Optional): Path where the output files should be saved. 
+# Parameter 5(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 if [ $# -lt 1 ]
 then
   echo "Not enough arguments. Usage:"
-  echo "bash singleRun.sh config.ini [outFileIndex] [Qty] [Use extrae] [Output path]"
+  echo "singleRunCostum.sh config.ini [outFileIndex] [Qty] [Use Extrae] [Output path]"
   exit 1
 fi
 
@@ -28,8 +25,7 @@ fi
 #$2 == outFileIndex
 #$3 == Qty of repetitions
 #$4 == Use external NO(0) Valgrind(1), Extrae(2)
-#$5 == Max time per execution(s)
-#$6 == Output path
+#$5 == Output path
 
 config_file=$1
 outFileIndex=0
@@ -48,20 +44,12 @@ if [ $# -ge 4 ]
 then
   use_external=$4
 fi
-limit_time=$((0))
-if [ $# -ge 5 ] #Max time per execution in seconds
+if [ $# -ge 5 ]
 then
-  limit_time=$(($5 * $qty / 60 + 1))
-fi
-if [ $# -ge 6 ]
-then
-  output=$6
+  output=$5
 fi
 
-#Obtain amount of nodes neeeded
-node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
-#Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_external $outFileIndex $qty
+bash $PROTEO_HOME$execDir/generalRunCostum.sh $cores $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

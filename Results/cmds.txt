@@ -1,0 +1,5 @@
+grep - */R* | grep Tex > errores.txt
+grep == */slurm* > errores2.txt
+
+Para crear comprimido:
+tar -czf Datos.tar.gz 1N-06-14/
