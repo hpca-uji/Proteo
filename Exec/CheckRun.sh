@@ -195,7 +195,7 @@ do
     node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir./generalRun.sh $cores $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_extrae $run $diff
   fi
 done
 
