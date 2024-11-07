@@ -129,7 +129,7 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
                   MPI_Comm **spawn_comm, int *qty_comms) {
   int i,  aux_sum, actual_step;
   int next_group_id, actual_nodes;
-  int jid=0, n=0;
+  int n=0;
   char *file_name = NULL;
   Spawn_set set;
  
@@ -144,14 +144,10 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
   }
   //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
 
-#if MAM_USE_SLURM
-  char *tmp = getenv("SLURM_JOB_ID");
-  if(tmp != NULL) { jid = atoi(tmp); }
-#endif
   set.cmd = get_spawn_cmd();
   i = 0;
   while(next_group_id < groups - init_nodes) {
-    set_hostfile_name(&file_name, &n, jid, next_group_id);
+    set_hostfile_name(&file_name, &n, mall_conf->slurm_jid, next_group_id); //Modified for DMR
     //read_hostfile_procs(file_name, &set.spawn_qty);
     set.spawn_qty = mall->num_cpus;
     MPI_Info_create(&set.mapping);

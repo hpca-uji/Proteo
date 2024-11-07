@@ -21,6 +21,8 @@ void MAM_Resume_redistribution(int *mam_state);
 
 
 int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info);
+int MAM_DMR_Is_zombie(); //Added for DMR
+void MAM_DMR_Update_nodelist(char *nodelist, int num_nodes); //Added for DMR
 
 void MAM_Data_add(void *data, size_t *index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant);
 void MAM_Data_modify(void *data, size_t index, size_t total_qty, MPI_Datatype type, int is_replicated, int is_constant);

@@ -9,7 +9,7 @@ int state = MAM_I_UNRESERVED;
  * de MaM.
  */
 void MAM_Def_main_datatype() {
-  int i, counts = 12;
+  int i, counts = 13;
   int blocklengths[counts];
   MPI_Aint displs[counts];
   MPI_Datatype types[counts];
@@ -29,14 +29,15 @@ void MAM_Def_main_datatype() {
   MPI_Get_address(&(mall_conf->spawn_dist), &displs[2]);
   MPI_Get_address(&(mall_conf->red_method), &displs[3]);
   MPI_Get_address(&(mall_conf->red_strategies), &displs[4]);
+  MPI_Get_address(&(mall_conf->slurm_jid), &displs[5]); //DMR ADDITION - Which is the original Slurm JobId
 
-  MPI_Get_address(&(mall->root_parents), &displs[5]);
-  MPI_Get_address(&(mall->num_parents), &displs[6]); //TODO Add only when Single strat active?
-  MPI_Get_address(&(mall->numC), &displs[7]); //TODO Add only when MultipleSpawn strat active?
-  MPI_Get_address(&(mall->gid), &displs[8]); //TODO Add only when ParallelSpawn strat active?
-  MPI_Get_address(&(mall->num_cpus), &displs[9]);
-  MPI_Get_address(&(mall->num_nodes), &displs[10]);
-  MPI_Get_address(&(mall->nodelist_len), &displs[11]);
+  MPI_Get_address(&(mall->root_parents), &displs[6]);
+  MPI_Get_address(&(mall->num_parents), &displs[7]); //TODO Add only when Single strat active?
+  MPI_Get_address(&(mall->numC), &displs[8]); //TODO Add only when MultipleSpawn strat active?
+  MPI_Get_address(&(mall->gid), &displs[9]); //TODO Add only when ParallelSpawn strat active?
+  MPI_Get_address(&(mall->num_cpus), &displs[10]);
+  MPI_Get_address(&(mall->num_nodes), &displs[11]);
+  MPI_Get_address(&(mall->nodelist_len), &displs[12]);
 
   MPI_Type_create_struct(counts, blocklengths, displs, types, &mall->struct_type);
   MPI_Type_commit(&mall->struct_type);

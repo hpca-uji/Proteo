@@ -45,6 +45,7 @@ typedef struct {
   unsigned int red_strategies;
 
   int external_usage; // Whether a different application should be called by Spawn and which
+  int slurm_jid; //DMR ADDITION - Which is the original Slurm JobId
 
   malleability_times_t *times;
 } malleability_config_t;

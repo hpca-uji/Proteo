@@ -53,8 +53,7 @@ void open_port(Spawn_ports *spawn_port, int open_port, int open_service)
         if (open_service != MAM_SERVICE_UNNEEDED) {
             spawn_port->service_name = (char *)malloc((MAM_SERVICE_NAME_SIZE) * sizeof(char));
 #if MAM_USE_SLURM
-      char *tmp = getenv("SLURM_JOB_ID");
-      if(tmp != NULL) { job_id = atoi(tmp)%1000; }
+      job_id = mall_conf->slurm_jid%1000; //Modified for DMR
 #endif
       snprintf(spawn_port->service_name, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, open_service);
       MPI_Publish_name(spawn_port->service_name, MPI_INFO_NULL, spawn_port->port_name);
@@ -128,8 +127,7 @@ void discover_remote_port(int id_group, Spawn_ports *spawn_port) {
   if(spawn_port->remote_service == NULL) { //First discover
     spawn_port->remote_service = (char*) malloc(MAM_SERVICE_NAME_SIZE * sizeof(char));
 #if MAM_USE_SLURM
-    char *tmp = getenv("SLURM_JOB_ID");
-    if(tmp != NULL) { job_id = atoi(tmp)%1000; }
+    job_id = mall_conf->slurm_jid%1000; //Modified for DMR
 #endif
     snprintf(spawn_port->remote_service, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, id_group);
   } else { // For subsequent lookups, only update the variable part (group ID) of the service name.

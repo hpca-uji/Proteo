@@ -165,6 +165,7 @@ int MAM_I_get_hosts_info() {
     free(unique_hosts);
   }
 
+  mall_conf->slurm_jid = 0; //Added for DMR
   free(my_host);
   return 0;
 }
@@ -208,6 +209,10 @@ int MAM_I_slurm_getenv_hosts_info() {
   int cpus, count;
   //int i, *cpus_counts, *nodes_counts, *aux;
   
+  tmp = getenv("SLURM_JOB_ID");
+  if(tmp == NULL) return 1;
+  mall_conf->slurm_jid = atoi(tmp); //Modified for DMR
+
   tmp = getenv("SLURM_JOB_NUM_NODES");
   if(tmp == NULL) return 1;
   mall->num_nodes = atoi(tmp);
@@ -270,16 +275,16 @@ int MAM_I_slurm_getenv_hosts_info() {
  * FIXME Does not consider heterogenous machines
  */
 int MAM_I_slurm_getjob_hosts_info() {
-  int jobId, err;
+  int err;
   char *tmp = NULL;
   job_info_msg_t *j_info;
   slurm_job_info_t last_record;
 
   tmp = getenv("SLURM_JOB_ID");
   if(tmp == NULL) return 1;
-  jobId = atoi(tmp);
+  mall_conf->slurm_jid = atoi(tmp); //Modified for DMR
 
-  err = slurm_load_job(&j_info, jobId, 1); // FIXME Valgrind Not freed
+  err = slurm_load_job(&j_info, mall_conf->slurm_jid, 1); // FIXME Valgrind Not freed //Modified for DMR
   if(err) return err;
   last_record = j_info->job_array[j_info->record_count - 1];
 

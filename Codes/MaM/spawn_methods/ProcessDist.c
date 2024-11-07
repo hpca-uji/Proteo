@@ -474,8 +474,7 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
   char *hostfile_name, *line;
   hostlist_t hostlist;
 
-  char *tmp = getenv("SLURM_JOB_ID");
-  jid = tmp != NULL ? (atoi(tmp)%1000) : 0;
+  jid = mall_conf->slurm_jid%1000; //Modified for DMR
 
   line = NULL;
   hostlist = slurm_hostlist_create(nodelist);

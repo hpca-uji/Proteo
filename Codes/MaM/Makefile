@@ -4,10 +4,15 @@ MCC = mpicc
 C_FLAGS = -Wall -Wextra -Wshadow -Wfatal-errors
 LD_FLAGS = -lm -pthread
 
-MAM_USE_SLURM ?= 0
+MAM_USE_SLURM ?= 1
 MAM_USE_BARRIERS ?= 0
 MAM_DEBUG ?= 0
 DEF = -DMAM_USE_SLURM=$(MAM_USE_SLURM) -DMAM_USE_BARRIERS=$(MAM_USE_BARRIERS) -DMAM_DEBUG=$(MAM_DEBUG)
+
+ifdef DMR_PATH
+	MPIFLAGS = -I$(MPI_PATH)/include -L$(MPI_PATH)/lib
+	SLURMFLAGS = -I$(SLURM_ROOT)/include -L$(SLURM_ROOT)/lib
+endif
 
 ifeq ($(MAM_USE_SLURM),1)
     LD_FLAGS += -lslurm
@@ -52,7 +57,7 @@ $(LIB) : $(BUILD_DIR)/$(LIB)
 
 # Actual target of the binary - depends on all .o files.
 $(BUILD_DIR)/$(LIB) : $(OBJ)
-	$(MCC) $(C_FLAGS) $^ -shared -o $@ $(LD_FLAGS)
+	$(MCC) $(C_FLAGS) $(MPIFLAGS) $(SLURMFLAGS) $^ -shared -o $@ $(LD_FLAGS)
 
 # Include all .d files
 # .d files are used for knowing the dependencies of each source file
@@ -65,4 +70,4 @@ $(BUILD_DIR)/$(LIB) : $(OBJ)
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
 	@mkdir -p $(@D)
-	$(MCC) $(C_FLAGS) $(DEF) -fpic -MMD -c $< -o $@
+	$(MCC) $(C_FLAGS) $(MPIFLAGS) $(SLURMFLAGS) $(DEF) -fpic -MMD -c $< -o $@

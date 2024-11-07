@@ -248,11 +248,28 @@ void MAM_Resume_redistribution(int *mam_state) {
   if(mam_state != NULL) *mam_state = MAM_PENDING;
 }
 
+//BEGIN ADDED FOR DMR
+int MAM_DMR_Is_zombie() {
+  return mall->zombie;
+}
+
+void MAM_DMR_Update_nodelist(char *nodelist, int num_nodes) {
+  if(mall->nodelist!= NULL) {
+    free(mall->nodelist);
+    mall->nodelist = NULL;
+  }
+  mall->nodelist_len = strlen(nodelist)+1;
+  mall->nodelist = (char *) malloc(mall->nodelist_len * sizeof(char));
+  strcpy(mall->nodelist, nodelist);
+  mall->num_nodes = num_nodes;
+}
+//END ADDED FOR DMR
+
 /*
  * TODO
  */
 void MAM_Commit(int *mam_state) {
-  int request_abort;
+  //int request_abort; Removed for DMR
   #if MAM_DEBUG
     if(mall->myId == mall->root){ DEBUG_FUNC("Trying to commit", mall->myId, mall->numP); } fflush(stdout);
   #endif
@@ -273,10 +290,19 @@ void MAM_Commit(int *mam_state) {
     #if MAM_DEBUG >= 1
       DEBUG_FUNC("Is terminating as zombie", mall->myId, mall->numP); fflush(stdout);
     #endif
+    /* BEGIN REMOVED FOR DMR
     request_abort = MAM_Finalize();
     if(request_abort) { MPI_Abort(MPI_COMM_WORLD, -101); }
     MPI_Finalize();
     exit(0);
+    END REMOVED FOR DMR
+    */ 
+    //BEGIN ADDED FOR DMR
+    if(mall->intercomm != MPI_COMM_NULL && mall->intercomm != MPI_COMM_WORLD) { MPI_Comm_disconnect(&(mall->intercomm)); }
+    state = MAM_I_NOT_STARTED;
+    if(mam_state != NULL) *mam_state = MAM_COMPLETED;
+    return;
+    //END ADDED FOR DMR
   }
 
   // Reset/Free communicators

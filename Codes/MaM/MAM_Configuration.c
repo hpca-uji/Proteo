@@ -227,6 +227,21 @@ void MAM_Check_configuration() {
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
   }
 
+  // BEGIN ADDED FOR DMR
+  char *tmp = getenv(MAM_SPAWN_METHOD_ENV);
+  int tmp_value = mall_conf->spawn_method;
+  if(tmp != NULL) {
+    tmp_value = atoi(tmp);
+  }
+  if(mall_conf->spawn_method != (size_t) tmp_value) {
+    MAM_Set_key_configuration(MAM_SPAWN_METHOD, tmp_value, NULL);
+  }
+  if(!MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL)
+        &&  mall_conf->spawn_method == MAM_SPAWN_MERGE) {
+      MAM_I_set_spawn_strat(MAM_STRAT_SPAWN_PARALLEL, &mall_conf->spawn_strategies);
+  }
+  // END ADDED FOR DMR
+
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
   if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
   || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL) )
