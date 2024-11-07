@@ -1,4 +1,4 @@
-# Proteo - Dev branch
+# Proteo - DMR_Adaptation branch
 
 ## Overview
 This branch contains an adaptation of the MaM library so it can be used by [DMR](https://gitlab.bsc.es/siserte/dmr/-/tree/main?ref_type=heads) 
