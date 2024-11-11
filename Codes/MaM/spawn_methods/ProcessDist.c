@@ -41,7 +41,7 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
 
 void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data);
 void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_t *hostlist);
-size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostlist, char **line, size_t *len_line);
+void fill_multiple_hostfile_slurm(char* file_name, int *qty, size_t *index, hostlist_t *hostlist, char **line, size_t *len_line);
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
 
@@ -484,7 +484,7 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
   if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) { // MULTIPLE
     for(; index<spawn_data->total_spawns; index++) {
       // This strat creates 1 hostfile per spawn
-      qty_index = fill_multiple_hostfile_slurm(hostfile_name, qty+qty_index, &hostlist, &line, &len_line);
+      fill_multiple_hostfile_slurm(hostfile_name, qty, &qty_index, &hostlist, &line, &len_line);
       set_mapping_host(qty[qty_index-1], "hostfile", hostfile_name, index, spawn_data); 
       snprintf(hostfile_name+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
     }
@@ -523,9 +523,9 @@ void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_
   free(line);
 }
 
-size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostlist, char **line, size_t *len_line) {
+void fill_multiple_hostfile_slurm(char* file_name, int *qty, size_t *index, hostlist_t *hostlist, char **line, size_t *len_line) {
   char *host;
-  size_t i=0;
+  size_t i=*index;
 
   int file = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
   if (file < 0) {
@@ -533,6 +533,7 @@ size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostl
     exit(EXIT_FAILURE);
   }
 
+  // El valor de I tiene que continuar donde estaba
   while( (host = slurm_hostlist_shift(*hostlist)) ) {
     if(qty[i] != 0) {
       write_hostfile_node(file, qty[i], host, line, len_line);
@@ -545,7 +546,7 @@ size_t fill_multiple_hostfile_slurm(char* file_name, int *qty, hostlist_t *hostl
 
   if(host != NULL) free(host);
   close(file);
-  return i;
+  *index = i;
 }
 #endif
 //--------------------------------SLURM USAGE-------------------------------------//
