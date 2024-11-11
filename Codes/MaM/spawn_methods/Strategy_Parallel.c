@@ -165,35 +165,43 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
 }
 
 void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_Comm *spawn_comm) {
-  int i, root, root_other;
+  int i, color;
   char aux;
   MPI_Request *requests = NULL;
+  MPI_Comm involved_procs, aux_comm;
   
   requests = (MPI_Request *) malloc(qty_comms * sizeof(MPI_Request));
-  root = root_other = 0; //FIXME Magical Number
 
-  // Upside synchronization
+  aux_comm = intercomm == MPI_COMM_NULL ? spawn_data.comm : mall->comm;
+  color = qty_comms ? 1 : MPI_UNDEFINED;
+  MPI_Comm_split(aux_comm, color, mall->myId, &involved_procs);
+
+  // Upside synchronization starts
   for(i=0; i<qty_comms; i++) {
-    MPI_Irecv(&aux, 1, MPI_CHAR, root_other, 130, spawn_comm[i], &requests[i]);
+    MPI_Irecv(&aux, 1, MPI_CHAR, MAM_ROOT, 130, spawn_comm[i], &requests[i]);
   }
-  if(qty_comms) { MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE); }
-  if(intercomm != MPI_COMM_NULL) { MPI_Barrier(mall->comm); }
-  if(intercomm != MPI_COMM_NULL && mall->myId == root) { MPI_Send(&aux, 1, MPI_CHAR, root_other, 130, intercomm); }
+  if(qty_comms) { 
+    MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE);
+    MPI_Barrier(involved_procs);
+  }
+  // Sources are the only synchronized procs at this point
+  if(intercomm != MPI_COMM_NULL && mall->myId == MAM_ROOT) { 
+    MPI_Send(&aux, 1, MPI_CHAR, MAM_ROOT, 130, intercomm); 
+  // Upside synchronization ends
+  // Downside synchronization starts
+    MPI_Recv(&aux, 1, MPI_CHAR, MAM_ROOT, 130, intercomm, MPI_STATUS_IGNORE);
+  }
 
-  // Sources synchronization
-  // TODO Maybe could be used an split comm to reduce overhead of Barrier when not all sources spawn
-  if(intercomm == MPI_COMM_NULL) { MPI_Barrier(spawn_data.comm); }
-
-  // Downside synchronization
-  if(intercomm != MPI_COMM_NULL && mall->myId == root) { MPI_Recv(&aux, 1, MPI_CHAR, root_other, 130, intercomm, MPI_STATUS_IGNORE); }   
-  MPI_Barrier(mall->comm); // FIXME This barrier should not be required
+  if(intercomm != MPI_COMM_NULL && qty_comms) { MPI_Barrier(involved_procs); }
   for(i=0; i<qty_comms; i++) {
-    MPI_Isend(&aux, 1, MPI_CHAR, root_other, 130, spawn_comm[i], &requests[i]);
+    MPI_Isend(&aux, 1, MPI_CHAR, MAM_ROOT, 130, spawn_comm[i], &requests[i]);
   }
   if(qty_comms) { MPI_Waitall(qty_comms, requests, MPI_STATUSES_IGNORE); }
   
   if(requests != NULL) { free(requests); }
+  if(involved_procs != MPI_COMM_NULL) { MPI_Comm_disconnect(&involved_procs); }
 }
+
 
 
 void binary_tree_connection(int groups, int group_id, Spawn_ports *spawn_port, MPI_Comm *newintracomm) {
@@ -245,27 +253,12 @@ void binary_tree_connection(int groups, int group_id, Spawn_ports *spawn_port, M
 }
 
 void binary_tree_reorder(MPI_Comm *newintracomm, int group_id) {
-  int merge_size, *reorder, *index_reorder;
   int expected_rank;
-  MPI_Group merge_group, aux_group;
   MPI_Comm aux_comm;
 
-  index_reorder = NULL;
-  reorder = NULL;
   // FIXME Expects all groups having the same size
   expected_rank = mall->numP * group_id + mall->myId;
-
-  MPI_Comm_group(*newintracomm, &merge_group);
-  MPI_Comm_size(*newintracomm, &merge_size);
-  index_reorder = (int *) malloc(merge_size * sizeof(int));
-  reorder = (int *) malloc(merge_size * sizeof(int));
-  MPI_Allgather(&expected_rank, 1, MPI_INT, index_reorder, 1, MPI_INT, *newintracomm);
-  for(int i=0; i<merge_size; i++) {
-    reorder[index_reorder[i]] = i;
-  }
-
-  MPI_Group_incl(merge_group, merge_size, reorder, &aux_group);
-  MPI_Comm_create(*newintracomm, aux_group, &aux_comm);
+  MPI_Comm_split(*newintracomm, 0, expected_rank, &aux_comm);
 
   //int merge_rank, new_rank;
   //MPI_Comm_rank(*newintracomm, &merge_rank);
@@ -273,9 +266,5 @@ void binary_tree_reorder(MPI_Comm *newintracomm, int group_id) {
   //printf("Grupo %d -- Merge rank = %d - New rank = %d\n", group_id, merge_rank, new_rank);
 
   if(*newintracomm != MPI_COMM_WORLD && *newintracomm != MPI_COMM_NULL) MPI_Comm_disconnect(newintracomm);
-  MPI_Group_free(&merge_group);
-  MPI_Group_free(&aux_group);
   *newintracomm = aux_comm;
-  free(index_reorder);
-  free(reorder);
 }
