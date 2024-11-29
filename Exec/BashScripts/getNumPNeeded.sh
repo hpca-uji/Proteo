@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Runs in a given current directory all .ini files
+# Obtains for a given file the maximum amount of processes to allocate
 # Parameter 1(Optional) - Amount of executions per file. Must be a positive number
 #====== Do not modify these values =======
 config_file=$1

@@ -41,8 +41,8 @@ then
 fi
 
 limit_time=0
-exec_lines_basic=6
-iter_lines_basic=3
+exec_lines_basic=7 # 1 Config + 6 Times
+iter_lines_basic=3 # 1 Config + 1 Group + AsynchIters
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
 iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
 exec_remove=$(($exec_lines_basic+$total_stages+$total_groups-1))

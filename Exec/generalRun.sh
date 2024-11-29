@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#SBATCH --mem-per-cpu=6000
+#SBATCH --exclusive
 #SBATCH --exclude=c02,c01,c00
 #SBATCH -p P1
 
