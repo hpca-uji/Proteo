@@ -87,7 +87,6 @@ void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn
   int actual_step;
   int groups, init_nodes;
   MPI_Comm newintracomm, *spawn_comm = NULL;
-  // TODO Comprobar si entrar en spawn solo si groups < numSources
 
   qty_comms = 0;
   group_id = mall->gid;
