@@ -245,7 +245,9 @@ void MAM_Check_configuration() {
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
   if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
   || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL) )
-  && global_internodes) { // Remove internode MPI_COMM_WORLDs
+  && global_internodes
+  && mall->numC < mall->inter_numP) { //DMR ADDITION
+    // Remove internode MPI_COMM_WORLDs
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
   }
 

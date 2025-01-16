@@ -126,6 +126,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   //TODO Check potential improvement - If check_hosts does not use slurm, internode_group could be obtained there
   MAM_check_hosts();
   mall->internode_group = MAM_Is_internode_group();
+  mall->inter_numP = mall->internode_group ? mall->numP : 0;
   MAM_Set_initial_configuration();
 
   #if MAM_USE_BARRIERS && MAM_DEBUG
@@ -275,10 +276,7 @@ void MAM_Commit(int *mam_state) {
   #endif
 
   // Get times before commiting
-  if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
-    // This communication is only needed when the root process will become a zombie
-    malleability_times_broadcast(mall->root_collectives);
-  }
+  malleability_times_broadcast(mall->root_collectives);
 
   // Free unneded communicators
   if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->tmp_comm));

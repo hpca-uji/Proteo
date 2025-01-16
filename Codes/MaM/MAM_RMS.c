@@ -289,7 +289,8 @@ int MAM_I_slurm_getjob_hosts_info() {
   last_record = j_info->job_array[j_info->record_count - 1];
 
   mall->num_nodes = last_record.num_nodes;
-  mall->num_cpus = last_record.num_cpus / last_record.num_nodes;
+  //mall->num_cpus = last_record.num_cpus / last_record.num_nodes;
+  mall->num_cpus = 20; //FIXME Previous line considers logical cpus, not physical
 
   mall->nodelist_len = strlen(last_record.nodes)+1;
   mall->nodelist = (char *) malloc(mall->nodelist_len * sizeof(char));

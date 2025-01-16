@@ -67,6 +67,7 @@ typedef struct {
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;
   int internode_group;
+  int inter_numP; //DMR ADDITION - If first group is internode, how many processes are
 } malleability_t;
 
 /* --- VARIABLES --- */
