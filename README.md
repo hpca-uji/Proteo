@@ -1,7 +1,13 @@
 # Proteo - Paper Dynamic Spawning
 
 ## Overview
-This branch contains an improved codebase used for the paper "Dynamic spawning of MPI processes applied to malleability" and the results obtained for that paper. 
+This branch contains an improved codebase used for the paper in section "Paper Information" in the system Nasp and the results obtained for that paper. 
+
+## Paper Information
+- **Title:** Dynamic spawning of MPI processes applied to malleability
+- **Authors:** Iker Martín-Álvarez, José I. Aliaga, Maribel Castillo, Sergio Iserte, Rafael Mayo
+- **Journal:** The International Journal of High Performance Computing Applications
+- **Submission Date:** 03/05/2023
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
