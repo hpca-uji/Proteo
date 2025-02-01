@@ -7,7 +7,7 @@ This branch contains an improved codebase used for the paper in section "Paper I
 - **Title:** Dynamic spawning of MPI processes applied to malleability
 - **Authors:** Iker Martín-Álvarez, José I. Aliaga, Maribel Castillo, Sergio Iserte, Rafael Mayo
 - **Journal:** The International Journal of High Performance Computing Applications
-- **Submission Date:** 03/05/2023
+- **Submission Date:** 22/06/2022
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
