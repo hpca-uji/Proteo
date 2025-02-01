@@ -1,14 +1,14 @@
-# Proteo - Dev branch
+# Proteo - Paper Dynamic Spawning
 
 ## Overview
-This branch contains the codebase used for Proteo developing branch. 
+This branch contains an improved codebase used for the paper "Dynamic spawning of MPI processes applied to malleability" and the results obtained for that paper. 
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
 - **Analysis**: Contains the scripts and notebook to perform analysis of Proteo executions.
 - **Codes**: Contains all the codes used to compile Proteo.
 - **Exec**: Contains the scripts to execute Proteo in different ways and check if the runs have completed successfully.
-- **Results**: Contains the configuration files used to emulate the malleable emulation of the CG.
+- **Results**: Contains the preprocessed data and processed data used for the paper.
 
 ## Installation
 
