@@ -1,7 +1,8 @@
 # Proteo - DMR_Adaptation branch
 
 ## Overview
-This branch contains an adaptation of the MaM library so it can be used by [DMR](https://gitlab.bsc.es/siserte/dmr/-/tree/main?ref_type=heads) 
+This branch contains an adaptation of the MaM library so it can be used by [DMR](https://gitlab.bsc.es/siserte/dmr/-/tree/main?ref_type=heads).
+This adaptation requires DMR and only uses the MaM component.
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
@@ -26,7 +27,7 @@ Before installing, ensure you have the following prerequisites:
     ```bash
     $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
     $ cd malleability_benchmark
-    $ git checkout DMR_Adaptation
+    $ git checkout PPAM24-JournalSpecialIssue
     ```
 
 2. Compile the code using the `make` command:
