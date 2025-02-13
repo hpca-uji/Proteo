@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# FIXME: Does not work for shared/heterogenous systems
 # Obtains for a given configuration file how many nodes will be needed
 # Parameter 1 - Configuration file name for the emulation.
 # Parameter 2 - Number of cores in the machines. The machines must be homogenous. Must be a positive number.

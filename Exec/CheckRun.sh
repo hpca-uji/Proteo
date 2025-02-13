@@ -1,7 +1,5 @@
 #!/bin/bash
 
-partition="P1"
-
 # Checks if all the runs in the current working directory performed under a 
 # Slurm manager have been performed correctly and if some runs can be corrected 
 # they are launched again
@@ -19,7 +17,6 @@ partition="P1"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 if [ "$#" -lt "6" ]
 then
@@ -192,10 +189,28 @@ do
 
     #2 - Obtain number of nodes needed
     config_file="$common_name$run.ini"
+    slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
+
+    #2.1 - Get partition name, default otherwise
+    partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+    if [ -z "$partition" ];
+    then
+      partition='P1'
+      echo "Partition not found in file $slurm_file. Falling to P1 partition."
+    fi
+    res=$(scontrol show partition $partition)
+    if [[ "$res" =~ "not found" ]]; 
+    then    
+      echo "Partition $partition does not exist. Falling to P1 partition."
+      partition='P1'
+    fi
+
+    #2.2 - Get nodes
+    cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
     node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
   fi
 done
 

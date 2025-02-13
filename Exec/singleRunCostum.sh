@@ -1,7 +1,5 @@
 #!/bin/bash
 
-cores=20
-
 # Executes a given configuration file. This script can be called with Slurm commands to 
 #   choose the desired user configuration.
 # Parameter 1: Configuration file name for the emulation.
@@ -49,7 +47,7 @@ then
   output=$5
 fi
 
-bash $PROTEO_HOME$execDir/generalRunCostum.sh $cores $config_file $use_external $outFileIndex $qty
+bash $PROTEO_HOME$execDir/generalRunCostum.sh $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

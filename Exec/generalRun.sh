@@ -7,53 +7,49 @@
 
 # !!!!This script should only be called by others scripts, do not call it directly!!!
 # Runs a given configuration file with the indicated parameters with the aid of the RMS Slurm.
-# Parameter 1 - Number of cores in a single machine
-# Parameter 2 - Configuration file name for the emulation.
-# Parameter 3 - Use Valgrind(1), Extrae(2) or nothing(0).
-# Parameter 4 - Index to use for the output files. Must be a positive integer.
-# Parameter 5 - Amount of executions per file. Must be a positive number.
+# Parameter 1 - Configuration file name for the emulation.
+# Parameter 2 - Use Valgrind(1), Extrae(2) or nothing(0).
+# Parameter 3 - Index to use for the output files. Must be a positive integer.
+# Parameter 4 - Amount of executions per file. Must be a positive number.
 #====== Do not modify these values =======
 
 execDir="/Exec"
 
-echo "START TEST"
+echo "START TEST P=$SLURM_JOB_PARTITION"
 
-#$1 == cores
-#$2 == configFile
-#$3 == use_external
-#$4 == outFileIndex
-#$5 == qty
+#$1 == configFile
+#$2 == use_external
+#$3 == outFileIndex
+#$4 == qty
 
 echo $@
-if [ $# -lt 3 ]
+if [ $# -lt 2 ]
 then
   echo "Internal ERROR generalRun.sh - Not enough arguments were given"
   exit -1
 fi
 
 #READ PARAMETERS AND ENSURE CORRECTNESS
-cores=$1
-configFile=$2
-use_external=$3
-outFileIndex=$4
+configFile=$1
+use_external=$2
+outFileIndex=$3
 qty=1
-if [ $# -ge 4 ]
+if [ $# -ge 3 ]
 then
-  qty=$5
+  qty=$4
 fi
 
-nodelist=$SLURM_JOB_NODELIST
-if [ -z "$nodelist" ];
+if [ -z "$SLURM_JOB_NODELIST" ];
 then
   echo "Internal ERROR in generalRun.sh - Nodelist not provided"
   exit -1
 fi
 
 numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
-initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
+initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 
 #EXECUTE RUN
-echo "Nodes=$nodelist"
+echo "Nodes=$SLURM_JOB_NODELIST"
 if [ $use_external -eq 0 ] #NORMAL
 then
   for ((i=0; i<qty; i++))
