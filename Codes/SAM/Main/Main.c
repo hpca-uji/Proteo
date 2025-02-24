@@ -160,6 +160,7 @@ int work() {
     iterate(state);
   }
 
+  group->iter_start = 0;
   if(config_file->n_groups != group->grp + 1)
     MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
 
@@ -537,10 +538,6 @@ void init_originals() {
   size_t i;
 
   if(config_file->n_groups > 1) {
-    MAM_Data_add(&(group->grp), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-    MAM_Data_add(&(group->iter_start), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-
     if(config_file->sdr) {
       for(i=0; i<group->sync_data_groups; i++) {
         MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
@@ -555,12 +552,10 @@ void init_originals() {
 }
 
 void init_targets() {
-  size_t total_qty;
-  void *value = NULL;
-  MPI_Datatype type;
 
-  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-  group->grp = *((int *)value);
+  MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&group->iter_start, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
   group->grp = group->grp + 1;
 
   recv_config_file(ROOT, new_comm, &config_file);
@@ -573,12 +568,6 @@ void update_targets() { //FIXME Should not be needed after redist -- Declarar an
   size_t i, entries, total_qty;
   void *value = NULL;
   MPI_Datatype type;
-
-  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-  group->iter_start = *((int *)value);
-
-  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-  run_id = *((int *)value);
 
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
@@ -616,6 +605,9 @@ void user_redistribution(void *args) {
   if(user_reconf.rank_state == MAM_PROC_NEW_RANK) {
     init_targets();
   } else {
+    MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&group->iter_start, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
