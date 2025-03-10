@@ -146,6 +146,7 @@ void init_malleability_data_struct(malleability_data_t *data_struct, size_t size
   data_struct->requests = (MPI_Request **) malloc(size * sizeof(MPI_Request *));
   data_struct->windows = (MPI_Win *) malloc(size * sizeof(MPI_Win));
   data_struct->arrays = (void **) malloc(size * sizeof(void *));
+  data_struct->idS = NULL;
 
   for(i=0; i<size; i++) { //calloc and memset does not ensure a NULL value
     data_struct->requests[i] = NULL;

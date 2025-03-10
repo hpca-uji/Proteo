@@ -27,7 +27,7 @@ class G_enum(Enum):
     T_ITER = 19
     T_STAGES = 20
     T_SPAWN = 21
-    T_SPAWN_REAL = 22
+    T_USER = 22
     T_SR = 23
     T_AR = 24
     T_MALLEABILITY = 25
@@ -41,7 +41,7 @@ class G_enum(Enum):
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
 #            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
+#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_US", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
 
 columnsL = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Is_Dynamic", "FactorS", "Dist", "Stage_Types", "Stage_Times", \

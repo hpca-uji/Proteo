@@ -27,7 +27,7 @@ class G_enum(Enum):
     T_ITER = 19
     T_STAGES = 20
     T_SPAWN = 21
-    T_SPAWN_REAL = 22
+    T_US = 22
     T_SR = 23
     T_AR = 24
     T_MALLEABILITY = 25
@@ -41,19 +41,19 @@ class G_enum(Enum):
 
 #columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
 #            "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
+#            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_US", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
 
 columnsM = ["NP", "NC", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "FactorS", "Dist", "Stage_Type", "Stage_Time", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability"] #25
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_US", "T_SR", "T_AR", "T_Malleability"] #25
 
 def copy_resize(row, dataM_it, resize):
   basic_indexes = [G_enum.TOTAL_STAGES.value, G_enum.GRANULARITY.value, G_enum.SDR.value, \
           G_enum.ADR.value, G_enum.DR.value]
   basic_group = [G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   array_actual_group = [G_enum.FACTOR_S.value, G_enum.ITERS.value, G_enum.ASYNCH_ITERS.value, \
-          G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
-          G_enum.T_AR.value, G_enum.T_MALLEABILITY.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
+          G_enum.T_SPAWN.value, G_enum.T_US.value, G_enum.T_SR.value, G_enum.T_AR.value, \
+          G_enum.T_MALLEABILITY.value, G_enum.T_ITER.value, G_enum.T_STAGES.value]
   array_next_group = [G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, \
           G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value]
 
