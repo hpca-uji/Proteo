@@ -5,10 +5,7 @@
 #SBATCH --mem-per-cpu=6000
 #SBATCH --exclusive
 
-partition='P1'
-
 source build/config.txt
-nodes=$SLURM_JOB_NUM_NODES
 configFile=$1
 
 outIndex=0
@@ -17,6 +14,7 @@ then
   outIndex=$2 
 fi
 
+module list
 echo "MPICH provider=$FI_PROVIDER"
 mpirun --version
 numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)

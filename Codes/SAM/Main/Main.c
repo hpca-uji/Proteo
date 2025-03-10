@@ -564,7 +564,7 @@ void init_targets() {
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
 }
 
-void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
+void update_targets() { //FIXME Should also be called by the surviving processes
   size_t i, entries, total_qty;
   void *value = NULL;
   MPI_Datatype type;
