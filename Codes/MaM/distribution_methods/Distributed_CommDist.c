@@ -8,13 +8,24 @@
 #include "../MAM_Configuration.h"
 #include "../MAM_DataStructures.h"
 
-void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts);
+void prepare_redistribution(int qty, int prev_qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts, int *win_size);
 void check_requests(struct Counts s_counts, struct Counts r_counts, MPI_Request **requests, size_t *request_qty);
 
+void sync_communication(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, int win_size, MPI_Comm comm, MPI_Win *win);
+void sync_communication_unlock(MPI_Win win, int* r_counts);
+void sync_communication_end(MPI_Win *win);
+void send_sync_data(int numP_children, malleability_data_t *data_struct); 
+void send_async_data(int numP_children, malleability_data_t *data_struct);
+void recv_sync_data(int numP_parents, malleability_data_t *data_struct);
+void recv_async_data(int numP_parents, malleability_data_t *data_struct);
+
 void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm);
-void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm);
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Win *win);
 void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
 void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts, MPI_Win win);
+
+
+void async_communication_start(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, int win_size, MPI_Comm comm, MPI_Request *requests, MPI_Win *win);
 
 void async_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm, MPI_Request *requests);
 void async_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Request *requests, MPI_Win *win);
@@ -47,6 +58,166 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
 
 //================================================================================
 //================================================================================
+//========================PUBLIC BASIC FUNCTIONS==================================
+//================================================================================
+//================================================================================
+
+/*
+ * Funcion generalizada para enviar datos desde los hijos.
+ * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
+ * de forma bloqueante o no. El padre puede tener varios hilos.
+ */
+void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
+  if(is_asynchronous) {
+    send_async_data(numP_children, data_struct);
+  } else {
+    send_sync_data(numP_children, data_struct);
+  }
+}
+
+/*
+ * Funcion generalizada para recibir datos desde los hijos.
+ * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
+ * de forma bloqueante o no. El padre puede tener varios hilos.
+ */
+void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
+  if(is_asynchronous) {
+    recv_async_data(numP_parents, data_struct);
+  } else {
+    recv_sync_data(numP_parents, data_struct);
+  }
+}
+
+//================================================================================
+//================================================================================
+//========================PRIVATE BASIC FUNCTIONS=================================
+//============================ SEND FUNCTIONS ====================================
+//================================================================================
+//================================================================================
+
+void send_sync_data(int numP_children, malleability_data_t *data_struct) {
+  int qty_prev = -1, win_size;
+  size_t i;
+  void *aux_send, *aux_recv;
+  struct Counts s_counts, r_counts;
+  data_struct->idS = (int *) malloc(data_struct->entries * 2 * sizeof(int));
+
+  for(i=0; i < data_struct->entries; i++) {
+    aux_send = data_struct->arrays[i];
+    aux_recv = NULL;
+
+    /* PREPARE COMMUNICATION */
+    prepare_redistribution(data_struct->qty[i], qty_prev, data_struct->types[i], mall->numP, numP_children, MAM_SOURCES, &aux_recv, &s_counts, &r_counts, &win_size);
+    qty_prev = data_struct->qty[i];
+    data_struct->idS[i*2] = r_counts.idI;
+    data_struct->idS[i*2 + 1] = r_counts.idE;
+
+    /* COMMUNICATION */
+    sync_communication(aux_send, aux_recv, data_struct->types[i], s_counts, r_counts, win_size, mall->intercomm, &data_struct->windows[i]);
+    if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
+  }
+
+  // RMA Specific operations
+  for(i=0; i < data_struct->entries; i++) { sync_communication_unlock(data_struct->windows[i], &data_struct->idS[i*2]); }
+  for(i=0; i < data_struct->entries; i++) { sync_communication_end(&data_struct->windows[i]); }
+  free(data_struct->idS);
+
+  freeCounts(&s_counts);
+  freeCounts(&r_counts);
+}
+
+void send_async_data(int numP_children, malleability_data_t *data_struct) {
+  int qty_prev = -1, win_size;
+  size_t i;
+  void *aux_send, *aux_recv;
+  struct Counts s_counts, r_counts;
+  data_struct->idS = (int *) malloc(data_struct->entries * 2 * sizeof(int));
+
+  for(i=0; i < data_struct->entries; i++) {
+    aux_send = data_struct->arrays[i];
+    aux_recv = NULL;
+
+    /* PREPARE COMMUNICATION */
+    prepare_redistribution(data_struct->qty[i], qty_prev, data_struct->types[i], mall->numP, numP_children, MAM_SOURCES, &aux_recv, &s_counts, &r_counts, &win_size);
+    check_requests(s_counts, r_counts, &data_struct->requests[i], &data_struct->request_qty[i]); //FIXME Error related to second reconf if Merge Shrink + P2P -->Invalid requests
+    qty_prev = data_struct->qty[i];
+    data_struct->idS[i*2] = r_counts.idI;
+    data_struct->idS[i*2 + 1] = r_counts.idE;
+
+    /* COMMUNICATION */
+    async_communication_start(aux_send, aux_recv, data_struct->types[i], s_counts, r_counts, win_size, mall->intercomm, data_struct->requests[i], &data_struct->windows[i]);
+    if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
+  }
+
+  freeCounts(&s_counts);
+  freeCounts(&r_counts);
+}
+
+//================================================================================
+//================================================================================
+//========================PRIVATE BASIC FUNCTIONS=================================
+//============================ RECV FUNCTIONS ====================================
+//================================================================================
+//================================================================================
+
+void recv_sync_data(int numP_parents, malleability_data_t *data_struct) {
+  int qty_prev = -1, win_size;
+  size_t i;
+  void *aux_recv, *aux_send = NULL;
+  struct Counts s_counts, r_counts;
+  data_struct->idS = (int *) malloc(data_struct->entries * 2 * sizeof(int));
+
+  for(i=0; i < data_struct->entries; i++) {
+    aux_recv = data_struct->arrays[i];
+
+    /* PREPARE COMMUNICATION */
+    prepare_redistribution(data_struct->qty[i], qty_prev, data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS, &aux_recv, &s_counts, &r_counts, &win_size);
+    qty_prev = data_struct->qty[i];
+    data_struct->idS[i*2] = r_counts.idI;
+    data_struct->idS[i*2 + 1] = r_counts.idE;
+
+    /* COMMUNICATION */
+    sync_communication(aux_send, aux_recv, data_struct->types[i], s_counts, r_counts, win_size, mall->intercomm, &data_struct->windows[i]);
+    data_struct->arrays[i] = aux_recv;
+  }
+
+  // RMA Specific operations
+  for(i=0; i < data_struct->entries; i++) { sync_communication_unlock(data_struct->windows[i], &data_struct->idS[i*2]); }
+  for(i=0; i < data_struct->entries; i++) { sync_communication_end(&data_struct->windows[i]); }
+  free(data_struct->idS);
+
+  freeCounts(&s_counts);
+  freeCounts(&r_counts);
+}
+
+void recv_async_data(int numP_parents, malleability_data_t *data_struct) {
+  int qty_prev = -1, win_size;
+  size_t i;
+  void *aux_recv, *aux_send = NULL;
+  struct Counts s_counts, r_counts;
+  data_struct->idS = (int *) malloc(data_struct->entries * 2 * sizeof(int));
+
+  for(i=0; i < data_struct->entries; i++) {
+    aux_recv = data_struct->arrays[i];
+
+    /* PREPARE COMMUNICATION */
+    prepare_redistribution(data_struct->qty[i], qty_prev, data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS, &aux_recv, &s_counts, &r_counts, &win_size);
+    check_requests(s_counts, r_counts, &data_struct->requests[i], &data_struct->request_qty[i]); //FIXME Error related to second reconf if Merge Shrink + P2P -->Invalid requests
+    qty_prev = data_struct->qty[i];
+    data_struct->idS[i*2] = r_counts.idI;
+    data_struct->idS[i*2 + 1] = r_counts.idE;
+
+    /* COMMUNICATION */
+    async_communication_start(aux_send, aux_recv, data_struct->types[i], s_counts, r_counts, win_size, mall->intercomm, data_struct->requests[i], &data_struct->windows[i]);
+    data_struct->arrays[i] = aux_recv;
+  }
+
+  freeCounts(&s_counts);
+  freeCounts(&r_counts);
+}
+
+//================================================================================
+//================================================================================
 //========================SYNCHRONOUS FUNCTIONS===================================
 //================================================================================
 //================================================================================
@@ -59,45 +230,31 @@ void malloc_comm_array(char **array, int qty, int myId, int numP) {
  * - send (IN):  Array with the data to send. This data can not be null for parents.
  * - recv (OUT): Array where data will be written. A NULL value is allowed if the process is not going to receive data.
  *               If the process receives data and is NULL, the behaviour is undefined.
- * - qty  (IN):  Sum of elements shared by all processes that will send data.
- * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
- *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
- * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
- *               resize, while for the children is the amount of parents.
- * - is_children_group (IN): Indicates wether this MPI rank is a children(TRUE) or a parent(FALSE).
+ * - datatype: ??
+ * - s_counts: ??
+ * - r_counts: ??
+ * - win_size (IN): Amount of elements in the window if any.
  * - comm (IN):  Communicator to use to perform the redistribution.
+ * - win: ??
  *
  */
-void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm) {
-  struct Counts s_counts, r_counts;
-  struct Dist_data dist_data;
-
-  /* PREPARE COMMUNICATION */
-  prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts);
+void sync_communication(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, int win_size, MPI_Comm comm, MPI_Win *win) {
 
   /* PERFORM COMMUNICATION */
   switch (mall_conf->red_method) {
   case MAM_RED_RMA_LOCKALL:
   case MAM_RED_RMA_LOCK:
-    if (is_children_group) {
-      dist_data.tamBl = 0;
-    } else {
-      get_block_dist(qty, mall->myId, numO, &dist_data);
-    }
-    sync_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm);
+    sync_rma(send, recv, datatype, r_counts, win_size, comm, win);
     break;
 
   case MAM_RED_POINT:
-    sync_point2point(send, *recv, datatype, s_counts, r_counts, comm);
+    sync_point2point(send, recv, datatype, s_counts, r_counts, comm);
     break;
   case MAM_RED_BASELINE:
   default:
-    MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm);
+    MPI_Alltoallv(send, s_counts.counts, s_counts.displs, datatype, recv, r_counts.counts, r_counts.displs, datatype, comm);
     break;
   }
-
-  freeCounts(&s_counts);
-  freeCounts(&r_counts);
 }
 
 /*
@@ -172,6 +329,7 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
  *               displacements.
  * - tamBl (IN): How many elements are stored in the parameter "send".
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
+ * - win (OUT):  Window to allocate for the operations. It is returned to be freed later on.
  *
  * FIXME: In libfabric one of these macros defines the maximum amount of BYTES that can be communicated in a SINGLE MPI_Get
  * A window can have more bytes than the amount shown in those macros, therefore, if you want to read more than that amount
@@ -180,30 +338,26 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
  * prov/psm3/psm3/ptl_am/am_config.h:62:#define PSMI_MQ_RV_THRESH_CMA      16000
  * prov/psm3/psm3/ptl_am/am_config.h:65:#define PSMI_MQ_RV_THRESH_NO_KASSIST 16000
  */
-void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm) {
+void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Win *win) {
   int datasize;
-  MPI_Win win;
   MPI_Type_size(datatype, &datasize);
-  MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, &win);
+  MPI_Win_create(send, (MPI_Aint)tamBl * datasize, datasize, MPI_INFO_NULL, comm, win);
 
   #if MAM_DEBUG >= 3
     DEBUG_FUNC("Created Window for synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
   switch(mall_conf->red_method) {
     case MAM_RED_RMA_LOCKALL:
-      sync_rma_lockall(recv, datatype, r_counts, win);
+      sync_rma_lockall(recv, datatype, r_counts, *win);
       break;
     case MAM_RED_RMA_LOCK:
-      sync_rma_lock(recv, datatype, r_counts, win);
+      sync_rma_lock(recv, datatype, r_counts, *win);
       break;
   }
   #if MAM_DEBUG >= 3
     DEBUG_FUNC("Completed synchronous RMA communication", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(comm);
   #endif
-  MPI_Win_free(&win);
 }
-
-
 
 /*
  * Performs a passive MPI-RMA data redistribution for a single array using the passive epochs Lock/Unlock.
@@ -225,7 +379,6 @@ void sync_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, MP
     offset = r_counts.displs[i] * datasize;
     MPI_Win_lock(MPI_LOCK_SHARED, i, MPI_MODE_NOCHECK, win);
     MPI_Get(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win);
-    MPI_Win_unlock(i, win);
     target_displs=0;
   }
 }
@@ -252,7 +405,29 @@ void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts,
     MPI_Get(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win);
     target_displs=0;
   }
-  MPI_Win_unlock_all(win);
+}
+
+/*
+ * TODO:
+ */
+void sync_communication_unlock(MPI_Win win, int *idS) {
+  if(win == MPI_WIN_NULL) { return; }
+
+  if(mall_conf->red_method == MAM_RED_RMA_LOCKALL) { 
+    MPI_Win_unlock_all(win);
+  } else if(mall_conf->red_method == MAM_RED_RMA_LOCK) {
+    for(int i=idS[0]; i<idS[1]; i++) {
+      MPI_Win_unlock(i, win);
+    }
+  }
+}
+
+/*
+ * TODO:
+ */
+void sync_communication_end(MPI_Win *win) {
+  if((mall_conf->red_method == MAM_RED_RMA_LOCK || mall_conf->red_method == MAM_RED_RMA_LOCKALL) 
+  && *win != MPI_WIN_NULL) { MPI_Win_free(win); }
 }
 
 //================================================================================
@@ -282,37 +457,22 @@ void sync_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts,
  *               modified to the expected value.
  *
  */
-void async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win) {
-    struct Counts s_counts, r_counts;
-    struct Dist_data dist_data;
+void async_communication_start(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, int win_size, MPI_Comm comm, MPI_Request *requests, MPI_Win *win) {
+  /* PERFORM COMMUNICATION */
+  switch(mall_conf->red_method) {
 
-    /* PREPARE COMMUNICATION */
-    prepare_redistribution(qty, datatype, numP, numO, is_children_group, recv, &s_counts, &r_counts); 
-    check_requests(s_counts, r_counts, requests, request_qty); //FIXME Error related to second reconf if Merge Shrink + P2P -->Invalid requests
-
-    /* PERFORM COMMUNICATION */
-    switch(mall_conf->red_method) {
-
-      case MAM_RED_RMA_LOCKALL:
-      case MAM_RED_RMA_LOCK:
-        if(is_children_group) {
-	  dist_data.tamBl = 0;
-	} else {
-          get_block_dist(qty, mall->myId, numO, &dist_data);
-	}
-        async_rma(send, *recv, datatype, r_counts, dist_data.tamBl, comm, *requests, win);
-	break;
-      case MAM_RED_POINT:
-        async_point2point(send, *recv, datatype, s_counts, r_counts, comm, *requests);
-	break;
-      case MAM_RED_BASELINE:
-      default:
-        MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, *recv, r_counts.counts, r_counts.displs, datatype, comm, &((*requests)[0]));
-	break;
-    }
-
-    freeCounts(&s_counts);
-    freeCounts(&r_counts);
+    case MAM_RED_RMA_LOCKALL:
+    case MAM_RED_RMA_LOCK:
+      async_rma(send, recv, datatype, r_counts, win_size, comm, requests, win);
+	    break;
+    case MAM_RED_POINT:
+      async_point2point(send, recv, datatype, s_counts, r_counts, comm, requests);
+	    break;
+    case MAM_RED_BASELINE:
+    default:
+      MPI_Ialltoallv(send, s_counts.counts, s_counts.displs, datatype, recv, r_counts.counts, r_counts.displs, datatype, comm, &requests[0]);
+	    break;
+  }
 }
 
 /*
@@ -370,14 +530,22 @@ void async_communication_wait(MPI_Request *requests, size_t request_qty) {
  * - request_qty (IN): Quantity of requests in "requests".
  * - win (IN): Window to free.
  */
-void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win) {
+void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win, int *idS) {
 
   //Para la desconexión de ambos grupos de procesos es necesario indicar a MPI que esta comm
   //ha terminado, aunque solo se pueda llegar a este punto cuando ha terminado
   if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) { MPI_Waitall(request_qty, requests, MPI_STATUSES_IGNORE); }
 
-  if((mall_conf->red_method == MAM_RED_RMA_LOCKALL || mall_conf->red_method == MAM_RED_RMA_LOCK) 
-		  && *win != MPI_WIN_NULL) { MPI_Win_free(win); }
+  if(*win != MPI_WIN_NULL) {
+    if(mall_conf->red_method == MAM_RED_RMA_LOCKALL) { 
+      MPI_Win_unlock_all(*win);  
+    } else if(mall_conf->red_method == MAM_RED_RMA_LOCK) {
+      for(int i=idS[0]; i<idS[1]; i++) {
+        MPI_Win_unlock(i, *win);
+      }
+    }
+    MPI_Win_free(win);
+  }
 }
 
 /*
@@ -464,7 +632,6 @@ void async_rma_lock(void *recv, MPI_Datatype datatype, struct Counts r_counts, M
     offset = r_counts.displs[i] * datasize;
     MPI_Win_lock(MPI_LOCK_SHARED, i, MPI_MODE_NOCHECK, win);
     MPI_Rget(recv+offset, r_counts.counts[i], datatype, i, target_displs, r_counts.counts[i], datatype, win, &(requests[j]));
-    MPI_Win_unlock(i, win);
     target_displs=0;
     j++;
   }
@@ -493,7 +660,6 @@ void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts
     target_displs=0;
     j++;
   }
-  MPI_Win_unlock_all(win);
 }
 
 /*
@@ -509,6 +675,8 @@ void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts
  * how many elements sends/receives to other processes for the new group.
  *
  * - qty  (IN):  Sum of elements shared by all processes that will send data.
+ * - prev_qty  (IN):  Sum of elements in the previous call. In case they are equal does not do the same work again. 
+ *                    Value -1 represents never used before.
  * - numP (IN):  Size of the local group. If it is a children group, this parameter must correspond to using
  *               "MPI_Comm_size(comm)". For the parents is not always the size obtained from "comm".
  * - numO (IN):  Amount of processes in the remote group. For the parents is the target quantity of processes after the 
@@ -520,12 +688,32 @@ void async_rma_lockall(void *recv, MPI_Datatype datatype, struct Counts r_counts
  * - r_counts (OUT): Struct where is indicated how many elements receives this process from other processes in the previous group.
  *
  */
-void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts) {
+void prepare_redistribution(int qty, int prev_qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, void **recv, struct Counts *s_counts, struct Counts *r_counts, int *win_size) {
   int array_size = numO;
   int offset_ids = 0;
   int datasize;
   size_t total_bytes;
   struct Dist_data dist_data;
+
+  MPI_Type_size(datatype, &datasize);
+
+  if(prev_qty == qty && prev_qty != -1) {
+    if(is_children_group) {
+      get_block_dist(qty, mall->myId, numP, &dist_data);
+      total_bytes = ((size_t) dist_data.tamBl) * ((size_t) datasize);
+      *recv = malloc(total_bytes);
+    } else if(mall_conf->spawn_method == MAM_SPAWN_MERGE && mall->myId < numO) {
+      get_block_dist(qty, mall->myId, numO, &dist_data);
+      total_bytes = ((size_t) dist_data.tamBl) * ((size_t) datasize);
+      *recv = malloc(total_bytes);
+    }
+    return;
+  }
+
+  if(prev_qty != -1) {
+    freeCounts(s_counts);
+    freeCounts(r_counts);
+  }
 
   if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     offset_ids =  MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL) ? 
@@ -536,7 +724,6 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
 
   mallocCounts(s_counts, array_size+offset_ids);
   mallocCounts(r_counts, array_size+offset_ids);
-  MPI_Type_size(datatype, &datasize); //FIXME Right now derived datatypes are not ensured to work
 
   if(is_children_group) {
     offset_ids = 0;
@@ -546,6 +733,7 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
     get_block_dist(qty, mall->myId, numP, &dist_data);
     total_bytes = ((size_t) dist_data.tamBl) * ((size_t) datasize);
     *recv = malloc(total_bytes);
+    *win_size = 0;
 
     #if MAM_DEBUG >= 4
       get_block_dist(qty, mall->myId, numP, &dist_data);
@@ -567,6 +755,14 @@ void prepare_redistribution(int qty, MPI_Datatype datatype, int numP, int numO, 
         print_counts(dist_data, r_counts->counts, r_counts->displs, array_size, 0, "Sources&Targets Recv");
       #endif
     }
+    switch (mall_conf->red_method) {
+      case MAM_RED_RMA_LOCKALL:
+      case MAM_RED_RMA_LOCK:
+        get_block_dist(qty, mall->myId, numO, &dist_data);
+        *win_size = dist_data.tamBl;
+        break;
+    }
+
     #if MAM_DEBUG >= 4
       print_counts(dist_data, s_counts->counts, s_counts->displs, numO+offset_ids, 0, "Sources Send");
     #endif

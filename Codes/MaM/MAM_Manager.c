@@ -99,6 +99,7 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   mall->original_comm = original_comm;
   mall->user_comm = comm; 
   mall->tmp_comm = MPI_COMM_NULL;
+  mall->intercomm = MPI_COMM_NULL;
 
   mall->name_exec = name_exec;
   mall->nodelist = NULL;
@@ -458,65 +459,6 @@ int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
 
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
-//================DATA COMMUNICATION====================||
-//======================================================||
-//======================================================||
-
-/*
- * Funcion generalizada para enviar datos desde los hijos.
- * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
- * de forma bloqueante o no. El padre puede tener varios hilos.
- */
-void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
-  size_t i;
-  void *aux_send, *aux_recv;
-
-  if(is_asynchronous) {
-    for(i=0; i < data_struct->entries; i++) {
-      aux_send = data_struct->arrays[i];
-      aux_recv = NULL;
-      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES,  
-		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
-    }
-  } else {
-    for(i=0; i < data_struct->entries; i++) {
-      aux_send = data_struct->arrays[i];
-      aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES, mall->intercomm);
-      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
-    }
-  }
-}
-
-/*
- * Funcion generalizada para recibir datos desde los hijos.
- * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
- * de forma bloqueante o no. El padre puede tener varios hilos.
- */
-void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
-  size_t i;
-  void *aux, *aux_s = NULL;
-
-  if(is_asynchronous) {
-    for(i=0; i < data_struct->entries; i++) {
-      aux = data_struct->arrays[i];
-      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS,
-		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      data_struct->arrays[i] = aux;
-    }
-  } else {
-    for(i=0; i < data_struct->entries; i++) {
-      aux = data_struct->arrays[i];
-      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS, mall->intercomm);
-      data_struct->arrays[i] = aux;
-    }
-  }
-}
-
-
-//======================================================||
-//================PRIVATE FUNCTIONS=====================||
 //====================MAM STAGES========================||
 //======================================================||
 //======================================================||
@@ -752,10 +694,11 @@ void Children_init(void (*user_function)(void *), void *user_args) {
         DEBUG_FUNC("Spawned waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
+        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]), &dist_a_data->idS[i*2]);
       }
+      free(dist_a_data->idS); dist_a_data->idS = NULL;
       for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]));
+        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]), &rep_a_data->idS[i*2]);
       }
     }
 
@@ -883,7 +826,7 @@ int start_redistribution() {
       if(mall->zombie && MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
         MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
         mall->wait_targets_posted = 1;
-      }
+      } 
       return MAM_I_DIST_PENDING; 
     }
   } 
@@ -971,13 +914,14 @@ int check_redistribution(int wait_completed) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
     window = dist_a_data->windows[i];
-    async_communication_end(req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window, &dist_a_data->idS[i*2]);
   }
+  free(dist_a_data->idS); dist_a_data->idS = NULL;
   for(i=0; i<rep_a_data->entries; i++) {
     req_completed = rep_a_data->requests[i];
     req_qty = rep_a_data->request_qty[i];
     window = rep_a_data->windows[i];
-    async_communication_end(req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window, &rep_a_data->idS[i*2]);
   }
 
   #if MAM_USE_BARRIERS
