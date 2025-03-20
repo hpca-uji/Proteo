@@ -1,7 +1,14 @@
 # Proteo - Dev branch
 
 ## Overview
-This branch contains the codebase used for Proteo developing branch. 
+This branch contains the codebase used for Proteo experiments and results presented for the paper in section "Paper Information" in the system Nasp. The code represents the state of the project at the time of submission and is tagged accordingly.
+
+## Paper Information
+- **Title:** Redimensionamiento Dinámico de Aplicaciones Maleables mediante RMA
+- **Authors:** Iker Martín-Álvarez, José I. Aliaga, Maribel Castillo
+- **Journal:** XXXV Jornadas de Paralelismo
+- **Submission Date:** XX/03/2025
+
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
@@ -32,7 +39,7 @@ The following requisites are optional and only needed to process and analyse the
     ```bash
     $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
     $ cd malleability_benchmark
-    $ git checkout JournalSupercomputing23/24
+    $ git checkout Sarteco25
     ```
 
 2. Compile the code using the `make` command:
@@ -42,7 +49,7 @@ The following requisites are optional and only needed to process and analyse the
     $ make
     ```
 
-    This command compiles the code using the MPI (MPICH) library.
+    This command compiles the code using the MPI (MPICH) library. If Slurm if being used add "MAM_USE_SLURM=1" to the make command
 
 3. Test the installation:
     ```bash
@@ -71,3 +78,56 @@ To clean the installation and remove compiled binaries, use:
 ```bash
 $ make clean
 ```
+
+## Reproducing Experiments
+All the needed files to emulate the CG in Nasp are already in this branch. Keep in mind these only work properly in the system Nasp, as they have been modelled for that system.
+To reproduce the experiments performed with Proteo the following steps have to be performed:
+
+1. From the main directory of this branch execute:
+    ```bash
+    $ cd Results/Sarteco25/resizeS
+    $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
+    $ cd ../resizeALL
+    $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
+    $ cd ../resizeRMA
+    $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
+    ```
+
+    The script runAll.sh will create a job for each configuration file in the directory. Each configuration file will be run 20 times, and each run will have a Slurm limited time of 100s. The execution of both scripts create 120 Slurm jobs.
+
+2. After all the jobs have finished, some error checking must be performed:
+    ```bash
+    $ cd Results/Sarteco25/resizeS
+    $ bash ../../../Exec/CheckRun.sh config 36 20 4 2 4 100 >> Checkrun.txt
+    $ cat Checkrun.txt | tail -1
+    $ cd ../resizeALL
+    $ bash ../../../Exec/CheckRun.sh config 36 20 4 2 4 100 >> Checkrun.txt
+    $ cat Checkrun.txt | tail -1
+    $ cd ../resizeRMA
+    $ bash ../../../Exec/CheckRun.sh config 48 20 4 2 4 100 >> Checkrun.txt
+    $ cat Checkrun.txt | tail -1
+    ```
+
+    The Checkrun.txt last line indicates the runs state for each directory. The values are: 
+- SUCCESS: the directory runs have been completed. 
+- FAILURE: a major error appeared, it is recommended to contact the code mantainer. 
+- REPEATING: some configuration files had an error related to monitoring times and are being repeated. The Checkrun.sh script must be executed again for that directory when the new jobs finish.
+
+When all Checkrun.txt return a SUCCESS state, the experiments have been completed and the raw data can be used. It is recommended to process it before analysing the results.
+
+3. (Optional) When the experiments end, you can process the data. To perform this task the optional installation requisites must be meet. To process the data:
+    ```bash
+    $ cd Analysis/
+    $ python3 MallTimes.py R ../Results/Sarteco25/resizeS datapre1
+    $ python3 MallTimes.py R ../Results/Sarteco25/resizeALL datapre2
+    $ python3 MallTimes.py R ../Results/Sarteco25/resizeRMA datapre3
+    $ python3 joinDf.py datapre1.pkl datapre2.pkl dataG
+    $ python3 joinDf.py dataG.pkl datapre3.pkl dataG
+    $ rm datapre1.pkl datapre2.pkl datapre3.pkl
+    $ python3 CreateResizeDataframe.py dataG.pkl dataM
+    $ python3 CreateIterDataframe.py dataG.pkl dataL
+    ```
+    After these commands, you will have multiple files called dataG.pkl, dataM.pkl and dataL*.pkl. These files can be opened in Pandas as dataframes to analyse the data.
+
+<!-- Terminar con paso 4 -->
+
