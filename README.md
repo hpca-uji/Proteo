@@ -83,7 +83,24 @@ $ make clean
 All the needed files to emulate the CG in Nasp are already in this branch. Keep in mind these only work properly in the system Nasp, as they have been modelled for that system.
 To reproduce the experiments performed with Proteo the following steps have to be performed:
 
-1. From the main directory of this branch execute:
+1. Preparing the configuration files:
+    ```bash
+    $ cd Results/Sarteco25
+    $ mkdir resizeS resizeALL resizeRMA
+    $ bash ../../../Exec/multipleRuns.sh complex_config_resizeS.ini config
+    $ mv Desglosed*/* resizeS/
+    $ rmdir Desglosed*
+    $ bash ../../../Exec/multipleRuns.sh complex_config_resizeA_ALL.ini config
+    $ mv Desglosed*/* resizeALL/
+    $ rmdir Desglosed*
+    $ bash ../../../Exec/multipleRuns.sh complex_config_resizeA_RMA.ini config
+    $ mv Desglosed*/* resizeRMA/
+    $ rmdir Desglosed*
+    ```
+
+    The script multipleRuns.sh creates multiple configuration file from a compact configuration file which describes different possible configurations. The resulting configuration files are the ones that will be used by the jobs.
+
+2. Launching the jobs:
     ```bash
     $ cd Results/Sarteco25/resizeS
     $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
@@ -95,7 +112,7 @@ To reproduce the experiments performed with Proteo the following steps have to b
 
     The script runAll.sh will create a job for each configuration file in the directory. Each configuration file will be run 20 times, and each run will have a Slurm limited time of 100s. The execution of both scripts create 120 Slurm jobs.
 
-2. After all the jobs have finished, some error checking must be performed:
+3. After all the jobs have finished, some error checking must be performed:
     ```bash
     $ cd Results/Sarteco25/resizeS
     $ bash ../../../Exec/CheckRun.sh config 36 20 4 2 4 100 >> Checkrun.txt
@@ -115,7 +132,7 @@ To reproduce the experiments performed with Proteo the following steps have to b
 
 When all Checkrun.txt return a SUCCESS state, the experiments have been completed and the raw data can be used. It is recommended to process it before analysing the results.
 
-3. (Optional) When the experiments end, you can process the data. To perform this task the optional installation requisites must be meet. To process the data:
+4. (Optional) When the experiments end, you can process the data. To perform this task the optional installation requisites must be meet. To process the data:
     ```bash
     $ cd Analysis/
     $ python3 MallTimes.py R ../Results/Sarteco25/resizeS datapre1
@@ -129,5 +146,5 @@ When all Checkrun.txt return a SUCCESS state, the experiments have been complete
     ```
     After these commands, you will have multiple files called dataG.pkl, dataM.pkl and dataL*.pkl. These files can be opened in Pandas as dataframes to analyse the data.
 
-<!-- Terminar con paso 4 -->
+<!-- Terminar con paso 5 -->
 
