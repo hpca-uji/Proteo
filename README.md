@@ -1,4 +1,4 @@
-# Proteo - Dev branch
+# Proteo - Sarteco25 Workshop branch
 
 ## Overview
 This branch contains the codebase used for Proteo experiments and results presented for the paper in section "Paper Information" in the system Nasp. The code represents the state of the project at the time of submission and is tagged accordingly.
