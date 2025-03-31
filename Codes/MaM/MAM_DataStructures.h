@@ -65,6 +65,7 @@ typedef struct {
   
   char *name_exec, *nodelist;
   int num_cpus, num_nodes, nodelist_len;
+  int *max_cpus, *assigned_cpus, *spawned_cpus;
   int internode_group;
 } malleability_t;
 

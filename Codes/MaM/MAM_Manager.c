@@ -103,6 +103,9 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
 
   mall->name_exec = name_exec;
   mall->nodelist = NULL;
+  mall->max_cpus = NULL;
+  mall->assigned_cpus = NULL;
+  mall->spawned_cpus = NULL;
   mall->nodelist_len = 0;
 
   rep_s_data->entries = 0;
@@ -158,6 +161,9 @@ int MAM_Finalize() {
   free(dist_s_data);
   free(dist_a_data);
   if(mall->nodelist != NULL) free(mall->nodelist);
+  if(NULL != mall->max_cpus) { free(mall->max_cpus); }
+  if(NULL != mall->assigned_cpus) { free(mall->assigned_cpus); }
+  if(NULL != mall->spawned_cpus) { free(mall->spawned_cpus); }
 
   MAM_Free_main_datatype();
   request_abort = MAM_Zombies_service_free();
@@ -294,7 +300,7 @@ void MAM_Commit(int *mam_state) {
   // Set new communicator
   MPI_Comm_dup(mall->comm, mall->user_comm);
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout); }
   #endif
 
   #if MAM_USE_BARRIERS
@@ -551,7 +557,7 @@ int MAM_St_user_start(int *mam_state) {
 
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout); }
   #endif
   if(user_function != NULL) {
     MAM_I_create_user_struct(MAM_SOURCES);
@@ -568,7 +574,7 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
     #if MAM_DEBUG
-      if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
+      if(mall->myId == mall->root) { DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout); }
     #endif
     return 1;
   }
