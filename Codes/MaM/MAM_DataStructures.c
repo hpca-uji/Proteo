@@ -59,12 +59,14 @@ void MAM_Comm_main_structures(MPI_Comm comm, int rootBcast) {
   if(mall->nodelist == NULL) {
     mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
     mall->assigned_cpus = malloc(mall->num_nodes * sizeof *mall->assigned_cpus);
+    mall->spawned_cpus = malloc(mall->num_nodes * sizeof *mall->spawned_cpus);
     mall->nodelist = malloc((mall->nodelist_len) * sizeof(char));
     mall->nodelist[mall->nodelist_len-1] = '\0';
   }
   MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, comm);
   MPI_Bcast(mall->max_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
   MPI_Bcast(mall->assigned_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
+  MPI_Bcast(mall->spawned_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
 }
 
 /*

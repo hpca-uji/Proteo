@@ -268,6 +268,19 @@ void MAM_Commit(int *mam_state) {
   if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     // This communication is only needed when the root process will become a zombie
     malleability_times_broadcast(mall->root_collectives);
+    // Change assigned_cpus to spawned_cpus
+    free(mall->assigned_cpus); mall->assigned_cpus = NULL;
+    mall->assigned_cpus = mall->spawned_cpus;
+    mall->spawned_cpus = calloc(mall->num_nodes, sizeof *mall->spawned_cpus);
+
+    for(int i; i < mall->num_nodes; i++) {
+      mall->spawned_cpus[i] = 0;
+    }
+  } else {
+    for(int i=0; i < mall->num_nodes; i++) {
+      mall->assigned_cpus[i] += mall->spawned_cpus[i];
+      mall->spawned_cpus[i] = 0;
+    }
   }
 
   // Free unneded communicators
