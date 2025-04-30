@@ -332,10 +332,10 @@ int MAM_I_slurm_getenv_hosts_info() {
  * TODO
  */
 int MAM_I_slurm_getjob_hosts_info() {
-  int jobId, err, i, j, t;
+  int jobId, err;
+  size_t i, j, t;
   char *tmp = NULL;
   job_info_msg_t *j_info;
-  slurm_job_info_t last_record;
   resource_allocation_response_msg_t *alloc_msg;
 
   tmp = getenv("SLURM_JOB_ID");
@@ -346,8 +346,6 @@ int MAM_I_slurm_getjob_hosts_info() {
   if(err) return err;
   err = slurm_allocation_lookup(jobId, &alloc_msg);
   if(err) { return err; }
-
-  last_record = j_info->job_array[j_info->record_count - 1];
 
   mall->num_nodes = alloc_msg->node_cnt;
   if(NULL != mall->max_cpus) { free(mall->max_cpus); }
@@ -377,9 +375,9 @@ int MAM_I_slurm_getjob_hosts_info() {
  */
 void MAM_I_slurm_get_assigned_cpus() {
   int host_len, hash, *hashes, *procs_hashes;
-  size_t i, j;
+  int i, j;
   char *my_host, *host;
-  hostlist_t *hostlist;
+  hostlist_t hostlist;
 
   if(NULL != mall->assigned_cpus) { free(mall->assigned_cpus); }
   mall->assigned_cpus = calloc(mall->num_nodes, sizeof *mall->assigned_cpus);
@@ -398,7 +396,7 @@ void MAM_I_slurm_get_assigned_cpus() {
     hashes = malloc(mall->num_nodes * sizeof *hashes);
     hostlist = slurm_hostlist_create(mall->nodelist);
     i = 0;
-    while( (host = slurm_hostlist_shift(*hostlist)) ) {
+    while( (host = slurm_hostlist_shift(hostlist)) ) {
       hashes[i] = hash64(host, strlen(host), MAM_HASH_KEY);
       i++;
       free(host); host = NULL;

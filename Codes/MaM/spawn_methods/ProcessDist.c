@@ -582,7 +582,7 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
 // Function to generate the configuration file
 void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_t *hostlist) {
   char *host, *line;
-  size_t i=0, len_line=0;
+  size_t i=0, i_used=0, len_line=0;
 
   line = NULL;
   int file = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -591,9 +591,10 @@ void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_
     exit(EXIT_FAILURE);
   }
 
-  while ( (host = slurm_hostlist_shift(*hostlist)) && i < used_nodes) {
+  while ( (host = slurm_hostlist_shift(*hostlist)) && i_used < used_nodes) {
     if(qty[i] != 0) {
       write_hostfile_node(file, qty[i], host, &line, &len_line);
+      i_used++;
     }
     i++;
     free(host);
