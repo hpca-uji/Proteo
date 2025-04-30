@@ -94,6 +94,24 @@ void processes_dist(Spawn_data *spawn_data) {
   #endif
 }
 
+int check_homogenous_dist() {
+  int actual, last, i;
+
+  i = 0;
+  while(!mall->spawned_cpus[i]) { i++; }
+  if(i >= mall->num_nodes) { return 1; }
+
+  last = mall->spawned_cpus[i];
+  for(i++; i < mall->num_nodes; i++) {
+    actual = mall->spawned_cpus[i];
+    if(actual != 0) { 
+      if(last != actual) { return 0; }
+      last = actual; 
+    }
+  }
+  return 1;
+}
+
 void remove_dist(Spawn_data spawn_data) {
   if(spawn_data.initial_qty <= spawn_data.target_qty) return;
 
@@ -199,6 +217,7 @@ void node_dist(Spawn_data spawn_data, int *used_nodes, int *total_spawns) {
   }
 }
 
+#define OCCUPIED_CPUS(i) ((spawn_data.already_created) ? (mall->assigned_cpus[i] + mall->spawned_cpus[i]) : (mall->spawned_cpus[i]))
 /*
  * Distribucion basada en equilibrar el numero de procesos en cada nodo
  * para que todos los nodos tengan el mismo numero. Devuelve el total de
@@ -210,7 +229,7 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes) {
   not_full_nodes = 0;
   to_assig_cores = spawn_data.spawn_qty;
   for(i = 0; i<mall->num_nodes; i++) {
-    if(mall->max_cpus[i] > (mall->assigned_cpus[i] + mall->spawned_cpus[i])) {
+    if(mall->max_cpus[i] > OCCUPIED_CPUS(i)) {
       not_full_nodes++; 
     }
   }
@@ -218,7 +237,7 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes) {
   while(0 < to_assig_cores && to_assig_cores > not_full_nodes && not_full_nodes) {
     tam_bl = to_assig_cores / not_full_nodes;
     for(i = 0; i < mall->num_nodes; i++) {
-      diff = mall->max_cpus[i] - (mall->assigned_cpus[i] + mall->spawned_cpus[i]);
+      diff = mall->max_cpus[i] - OCCUPIED_CPUS(i);
       if(0 < (diff - tam_bl)) {
         mall->spawned_cpus[i] += tam_bl;
         to_assig_cores -= tam_bl;
@@ -239,7 +258,7 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes) {
   
   if(0 < to_assig_cores) {
     for(i = 0; i<mall->num_nodes && to_assig_cores; i++) {
-      if(mall->max_cpus[i] > (mall->assigned_cpus[i] + mall->spawned_cpus[i])) {
+      if(mall->max_cpus[i] > OCCUPIED_CPUS(i)) {
         mall->spawned_cpus[i] +=1;
         to_assig_cores--;
       }
@@ -248,7 +267,7 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes) {
   
   *used_nodes = 0;
   for(i=0; i<mall->num_nodes; i++) {
-    if(mall->assigned_cpus[i] + mall->spawned_cpus[i]) (*used_nodes)++;
+    if(mall->spawned_cpus[i]) (*used_nodes)++;
   }
 }
 

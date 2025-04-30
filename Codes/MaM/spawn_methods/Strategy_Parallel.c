@@ -10,13 +10,11 @@
 #include "SpawnUtils.h"
 #include <math.h>
 
-void parallel_strat_parents_hypercube(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *child);
-void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents);
-
 void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step, MPI_Comm **spawn_comm, int *qty_comms);
+void diffusive_iterative_spawn(int exp_id, int groups, int init_nodes, int init_procs, MPI_Comm **spawn_comm, int *qty_comms);
 void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_Comm *spawn_comm);
 void binary_tree_connection(int groups, int group_id, Spawn_ports *spawn_port, MPI_Comm *newintracomm);
-void binary_tree_reorder(MPI_Comm *newintracomm, int group_id);
+void binary_tree_reorder(MPI_Comm *newintracomm, int expected_rank);
 
 
 //--------PUBLIC FUNCTIONS----------//
@@ -24,20 +22,95 @@ void binary_tree_reorder(MPI_Comm *newintracomm, int group_id);
 //on the circumstances of the spawn.
 
 void parallel_strat_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *child) {
+  int opening, qty_comms;
+  int groups, init_nodes;
+  MPI_Comm *spawn_comm = NULL;
+
   #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Parallel PA started", mall->myId, mall->numP); fflush(stdout);
   #endif
-  parallel_strat_parents_hypercube(spawn_data, spawn_port, child);
-    #if MAM_DEBUG >= 4
+
+  MPI_Bcast(&spawn_data.total_spawns, 1, MPI_INT, mall->root, spawn_data.comm);
+  qty_comms = 0;
+  init_nodes = 0;
+  for(int i = 0; i < mall->num_nodes; i++) { if(mall->assigned_cpus[i]) { init_nodes++; } }
+  groups = spawn_data.total_spawns + init_nodes;
+
+  opening = mall->myId == mall->root ? 1 : 0;
+  open_port(spawn_port, opening, groups);
+
+  // Chose specific algorithm
+  if(check_homogenous_dist()) {
+    int group_id = -init_nodes;
+    int actual_step = 0;
+    hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms);
+  } else {
+    diffusive_iterative_spawn(mall->myId, groups, init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
+  }
+
+  common_synch(spawn_data, qty_comms, MPI_COMM_NULL, spawn_comm);
+
+  for(int i=0; i<qty_comms; i++) { MPI_Comm_disconnect(&spawn_comm[i]); }
+  if(spawn_comm != NULL) free(spawn_comm); 
+  MPI_Comm_accept(spawn_port->port_name, MPI_INFO_NULL, MAM_ROOT, spawn_data.comm, child);
+
+  #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Parallel PA completed", mall->myId, mall->numP); fflush(stdout);
   #endif
 }
 
 void parallel_strat_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents) {
+  int i, exp_id, group_id, opening, qty_comms;
+  int groups, init_nodes;
+  MPI_Comm newintracomm, *spawn_comm = NULL;
   #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Parallel CH started", mall->myId, mall->numP); fflush(stdout);
   #endif
-  parallel_strat_children_hypercube(spawn_data, spawn_port, parents);
+  
+  qty_comms = 0;
+  group_id = mall->gid;
+  init_nodes = 0;
+  groups = 0;
+  for(i = 0; i < mall->num_nodes; i++) { 
+    if(mall->assigned_cpus[i]) { init_nodes++; } 
+    if(mall->spawned_cpus[i]) { groups++; }
+  }
+
+  opening = (mall->myId == MAM_ROOT && group_id < (groups-init_nodes)/2) ? 1 : 0;
+  open_port(spawn_port, opening, group_id);
+
+  if(check_homogenous_dist()) {
+    if(groups - init_nodes > spawn_data.initial_qty) { 
+      int actual_step = log((group_id + init_nodes) / init_nodes) / log(1 + mall->numP);
+      actual_step = floor(actual_step) + 1;
+      hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms); 
+      exp_id = mall->numP * group_id + mall->myId;
+    }
+  } else {
+    exp_id = spawn_data.initial_qty + mall->myId;
+    for(i = 0; i < group_id; i++) { exp_id += mall->spawned_cpus[i]; }
+    diffusive_iterative_spawn(exp_id, groups, init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
+  }
+
+  common_synch(spawn_data, qty_comms, *parents, spawn_comm);
+  for(i=0; i<qty_comms; i++) { MPI_Comm_disconnect(&spawn_comm[i]); }
+  MPI_Comm_disconnect(parents);
+
+  // Connect groups and ensure expected rank order
+  binary_tree_connection(groups - init_nodes, group_id, spawn_port, &newintracomm);
+  binary_tree_reorder(&newintracomm, exp_id);
+
+  // Create intercomm between sources and children
+  opening = (mall->myId == mall->root && !group_id) ? groups : MAM_SERVICE_UNNEEDED;
+  discover_remote_port(opening, spawn_port);
+  MPI_Comm_connect(spawn_port->remote_port, MPI_INFO_NULL, MAM_ROOT, newintracomm, parents);
+
+  // New group obtained -- Adjust ranks and comms
+  MAM_comms_update(newintracomm);
+  MPI_Comm_rank(mall->comm, &mall->myId);
+  MPI_Comm_size(mall->comm, &mall->numP);
+  MPI_Comm_disconnect(&newintracomm);
+
   #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Parallel CH completed", mall->myId, mall->numP); fflush(stdout);
   #endif
@@ -53,91 +126,24 @@ void parallel_strat_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI
 //FIXME -- The amount of processes per spawned group must be homogenous among groups
 //       - There is an exception for the last node, which could have less procs
 //       - Yet, the first spawned group cannot have less procs than the rest
-
-void parallel_strat_parents_hypercube(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *child) {
-  int opening, qty_comms;
-  int groups, init_nodes, actual_step, group_id;
-  MPI_Comm *spawn_comm = NULL;
-
-  MPI_Bcast(&spawn_data.total_spawns, 1, MPI_INT, mall->root, spawn_data.comm);
-  
-  actual_step = 0;
-  qty_comms = 0;
-  init_nodes = mall->numP / mall->num_cpus; //FIXME does not consider heterogenous machines
-  groups = spawn_data.total_spawns + init_nodes;
-  group_id = -init_nodes;
-
-  opening = mall->myId == mall->root ? 1 : 0;
-  open_port(spawn_port, opening, groups);
-
-  hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms);
-  common_synch(spawn_data, qty_comms, MPI_COMM_NULL, spawn_comm);
-
-  for(int i=0; i<qty_comms; i++) { MPI_Comm_disconnect(&spawn_comm[i]); }
-  if(spawn_comm != NULL) free(spawn_comm); 
-
-  MPI_Comm_accept(spawn_port->port_name, MPI_INFO_NULL, MAM_ROOT, spawn_data.comm, child);
-}
-
-/*
-  - MPI_Comm *parents: Initially is the intercommunicator with its parent
-*/
-void parallel_strat_children_hypercube(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents) {
-  int group_id, opening, qty_comms;
-  int actual_step;
-  int groups, init_nodes;
-  MPI_Comm newintracomm, *spawn_comm = NULL;
-
-  qty_comms = 0;
-  group_id = mall->gid;
-  init_nodes = spawn_data.initial_qty / mall->num_cpus;
-  groups = spawn_data.spawn_qty / mall->num_cpus + init_nodes;
-  opening = (mall->myId == MAM_ROOT && group_id < (groups-init_nodes)/2) ? 1 : 0;
-  open_port(spawn_port, opening, group_id);
-
-  // Spawn more processes if required
-  if(groups - init_nodes > spawn_data.initial_qty) { 
-    actual_step = log((group_id + init_nodes) / init_nodes) / log(1 + mall->numP);
-    actual_step = floor(actual_step) + 1;
-    hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms); 
-  }
-
-  common_synch(spawn_data, qty_comms, *parents, spawn_comm);
-  for(int i=0; i<qty_comms; i++) { MPI_Comm_disconnect(&spawn_comm[i]); }
-  MPI_Comm_disconnect(parents);
-
-  // Connect groups and ensure expected rank order
-  binary_tree_connection(groups - init_nodes, group_id, spawn_port, &newintracomm);
-  binary_tree_reorder(&newintracomm, group_id);
-  
-  // Create intercomm between sources and children
-  opening = (mall->myId == mall->root && !group_id) ? groups : MAM_SERVICE_UNNEEDED;
-  discover_remote_port(opening, spawn_port);
-  MPI_Comm_connect(spawn_port->remote_port, MPI_INFO_NULL, MAM_ROOT, newintracomm, parents);
-
-  // New group obtained -- Adjust ranks and comms
-  MAM_comms_update(newintracomm);
-  MPI_Comm_rank(mall->comm, &mall->myId);
-  MPI_Comm_size(mall->comm, &mall->numP);
-  MPI_Comm_disconnect(&newintracomm);
-}
-
-
-// This function does not allow the same process to have multiple threads executing it
+// This function does not allow the same process to have multiple threads executing it.
+// This function only works when array spawned_cpus has the same values 
+// for all indexes(ignoring 0 values) and the spawn follows a strict order.
 void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step, 
                   MPI_Comm **spawn_comm, int *qty_comms) {
-  int i,  aux_sum, actual_step;
+  int i,  aux_sum, actual_step, num_cpus;
   int next_group_id, actual_nodes;
   int jid=0, n=0;
   char *file_name = NULL;
   Spawn_set set;
  
+  num_cpus = mall->max_cpus[0];
   actual_step = init_step;
-  actual_nodes = pow(1+mall->num_cpus, actual_step)*init_nodes - init_nodes;
-  aux_sum = mall->num_cpus*(init_nodes + group_id) + mall->myId; //Constant sum for next line
+  actual_nodes = pow(1+num_cpus, actual_step)*init_nodes - init_nodes;
+  aux_sum = num_cpus*(init_nodes + group_id) + mall->myId; //Constant sum for next line
   next_group_id = actual_nodes + aux_sum;
   if(next_group_id < groups - init_nodes) { //FIXME qty_comms no se calcula bien para procesos del mismo group_id en los ultimos pasos
-    int max_steps = ceil(log(groups / init_nodes) / log(1 + mall->num_cpus));
+    int max_steps = ceil(log(groups / init_nodes) / log(1 + num_cpus));
     *qty_comms = max_steps - actual_step;
     *spawn_comm = (MPI_Comm *) malloc(*qty_comms * sizeof(MPI_Comm));
   }
@@ -151,8 +157,7 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
   i = 0;
   while(next_group_id < groups - init_nodes) {
     set_hostfile_name(&file_name, &n, jid, next_group_id);
-    //read_hostfile_procs(file_name, &set.spawn_qty);
-    set.spawn_qty = mall->num_cpus;
+    set.spawn_qty = num_cpus;
     MPI_Info_create(&set.mapping);
 	  MPI_Info_set(set.mapping, "hostfile", file_name);
     mall->gid = next_group_id; // Used to pass the group id to the spawned process // Not thread safe
@@ -160,12 +165,69 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
     MPI_Info_free(&set.mapping);
 
     actual_step++; i++;
-    actual_nodes = pow(1+mall->num_cpus, actual_step)*init_nodes - init_nodes;
+    actual_nodes = pow(1+num_cpus, actual_step)*init_nodes - init_nodes;
     next_group_id = actual_nodes + aux_sum;
   }
   *qty_comms = i;
   if(file_name != NULL) free(file_name); 
 }
+
+/*=====================Iterative Diffusive ALGORITHM=====================*/
+//The following algorithm divides the spawning task across all available ranks.
+//It starts with just the sources, and then all spawned processes help with further
+//spawns until all the required processes have been created.
+//The main difference against the Hypercube is that it allows to have differents amount
+//of ranks in each spawned group.
+void diffusive_iterative_spawn(int exp_id, int groups, int init_nodes, int init_procs, 
+  MPI_Comm **spawn_comm, int *qty_comms) {
+  int i = 0, i_comm = 0;
+  int jid=0, n=0;
+  char *file_name = NULL;
+  Spawn_set set;
+
+  int actual_procs, new_procs, spawned_nodes;
+  actual_procs = new_procs = init_procs;
+  spawned_nodes = 0;
+  set.cmd = get_spawn_cmd();
+#if MAM_USE_SLURM
+  char *tmp = getenv("SLURM_JOB_ID");
+  if(tmp != NULL) { jid = atoi(tmp); }
+#endif
+
+  if(exp_id <= (groups-init_nodes)/2) {  // Overexpect the worst case for this array
+    *qty_comms = (groups-init_nodes)/2;
+    *spawn_comm = (MPI_Comm *) malloc(*qty_comms * sizeof(MPI_Comm));
+  }
+  //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
+
+  while(i < groups) {
+    for(int j = 0; j < actual_procs && i < groups; j++) {
+
+      // Ignore nodes that do not need to spawn anything
+      while(i < groups && !mall->spawned_cpus[i]) {i++;}
+      if(i >= groups) { break; }
+
+      if(exp_id == j) {
+        set_hostfile_name(&file_name, &n, jid, spawned_nodes);
+        set.spawn_qty = mall->spawned_cpus[i]; 
+        MPI_Info_create(&set.mapping);
+        MPI_Info_set(set.mapping, "hostfile", file_name);
+        mall->gid = spawned_nodes; // Used to pass the group id to the spawned process // Not thread safe
+        mam_spawn(set, MPI_COMM_SELF, &(*spawn_comm)[i_comm]);
+        MPI_Info_free(&set.mapping);
+        i_comm++;
+      }
+      new_procs += mall->spawned_cpus[i];
+      i++; spawned_nodes++;
+    }
+    actual_procs = new_procs;
+  }
+
+  *qty_comms = i_comm;
+  if(file_name != NULL) free(file_name); 
+}
+
+/*=====================Parallel private functions=====================*/
 
 void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_Comm *spawn_comm) {
   int i, color;
@@ -255,18 +317,15 @@ void binary_tree_connection(int groups, int group_id, Spawn_ports *spawn_port, M
   *newintracomm =  merge_comm;
 }
 
-void binary_tree_reorder(MPI_Comm *newintracomm, int group_id) {
-  int expected_rank;
+void binary_tree_reorder(MPI_Comm *newintracomm, int expected_rank) {
   MPI_Comm aux_comm;
 
-  // FIXME Expects all groups having the same size
-  expected_rank = mall->numP * group_id + mall->myId;
   MPI_Comm_split(*newintracomm, 0, expected_rank, &aux_comm);
 
   //int merge_rank, new_rank;
   //MPI_Comm_rank(*newintracomm, &merge_rank);
   //MPI_Comm_rank(aux_comm, &new_rank);
-  //printf("Grupo %d -- Merge rank = %d - New rank = %d\n", group_id, merge_rank, new_rank);
+  //printf("Merge rank = %d - New rank = %d\n", merge_rank, new_rank);
 
   if(*newintracomm != MPI_COMM_WORLD && *newintracomm != MPI_COMM_NULL) MPI_Comm_disconnect(newintracomm);
   *newintracomm = aux_comm;

@@ -57,7 +57,7 @@ void MAM_check_hosts() {
   #if MAM_DEBUG >= 2
     if(mall->myId == mall->root) {
       DEBUG_FUNC("Obtained Nodelist", mall->myId, mall->numP); 
-      printf("NODELIST: %s\nNODE_COUNT: %d NUM_CPUS_PER_NODE: %d\n", mall->nodelist, mall->num_nodes, mall->num_cpus);
+      printf("NODELIST: %s\nNODE_COUNT: %d\n", mall->nodelist, mall->num_nodes);
       printf("MAX_CPUS:       [");
       for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
         printf("%d ", mall->max_cpus[i_debug]);
@@ -123,7 +123,6 @@ int MAM_Is_internode_group() {
 
 /*
  * TODO
- * FIXME Does not consider heterogenous machines for num_cpus
  * FIXME Always returns 0... -- Perform error checking?
  */
 int MAM_I_get_hosts_info() {
@@ -166,7 +165,6 @@ int MAM_I_get_hosts_info() {
     }
 
     mall->num_nodes = unique_count;
-    mall->num_cpus = GetCPUCount();
     mall->nodelist_len = unique_count*max_name_len;
     mall->nodelist = (char *) malloc(mall->nodelist_len * sizeof(char));
     procs_cpus = malloc(mall->numP * sizeof *procs_cpus);
@@ -307,7 +305,6 @@ int MAM_I_slurm_getenv_hosts_info() {
   mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
   i = 0;
   count = 1;
-  mall->num_cpus = 0;
 
   while (token != NULL) {
     // If actual token contains only one node, the second portion
@@ -316,7 +313,6 @@ int MAM_I_slurm_getenv_hosts_info() {
     // Second portion -> "(x%d)"
     count = 1;
     if (sscanf(token, "%d(x%d)", &cpus, &count) >= 1) {
-      mall->num_cpus = cpus; // num_cpus stores the amount of cores per cpu
       for(j = 0; j < count; j++) {
         mall->max_cpus[i] = cpus;
         i++;
@@ -356,7 +352,6 @@ int MAM_I_slurm_getjob_hosts_info() {
   mall->num_nodes = alloc_msg->node_cnt;
   if(NULL != mall->max_cpus) { free(mall->max_cpus); }
   mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
-  mall->num_cpus = last_record.num_cpus / alloc_msg->node_cnt;
 
   t = 0;
   for(i = 0; i < alloc_msg->num_cpu_groups; i++) {
