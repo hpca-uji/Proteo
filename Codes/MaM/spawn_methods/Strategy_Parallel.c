@@ -11,7 +11,7 @@
 #include <math.h>
 
 void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step, MPI_Comm **spawn_comm, int *qty_comms);
-void diffusive_iterative_spawn(int exp_id, int groups, int init_nodes, int init_procs, MPI_Comm **spawn_comm, int *qty_comms);
+void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm **spawn_comm, int *qty_comms);
 void common_synch(Spawn_data spawn_data, int qty_comms, MPI_Comm intercomm, MPI_Comm *spawn_comm);
 void binary_tree_connection(int groups, int group_id, Spawn_ports *spawn_port, MPI_Comm *newintracomm);
 void binary_tree_reorder(MPI_Comm *newintracomm, int expected_rank);
@@ -41,11 +41,17 @@ void parallel_strat_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_
 
   // Chose specific algorithm
   if(check_homogenous_dist()) {
+    #if MAM_DEBUG >= 4
+      DEBUG_FUNC("Additional spawn action - Parallel PA uses Hypercube", mall->myId, mall->numP); fflush(stdout);
+    #endif
     int group_id = -init_nodes;
     int actual_step = 0;
     hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms);
   } else {
-    diffusive_iterative_spawn(mall->myId, groups, init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
+    #if MAM_DEBUG >= 4
+      DEBUG_FUNC("Additional spawn action - Parallel PA uses Diffusive Iterative", mall->myId, mall->numP); fflush(stdout);
+    #endif
+    diffusive_iterative_spawn(mall->myId, groups-init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
   }
 
   common_synch(spawn_data, qty_comms, MPI_COMM_NULL, spawn_comm);
@@ -75,21 +81,28 @@ void parallel_strat_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI
     if(mall->assigned_cpus[i]) { init_nodes++; } 
     if(mall->spawned_cpus[i]) { groups++; }
   }
+  groups += init_nodes;
 
   opening = (mall->myId == MAM_ROOT && group_id < (groups-init_nodes)/2) ? 1 : 0;
   open_port(spawn_port, opening, group_id);
 
   if(check_homogenous_dist()) {
+    #if MAM_DEBUG >= 4
+      DEBUG_FUNC("Additional spawn action - Parallel CH uses Hypercube", mall->myId, mall->numP); fflush(stdout);
+    #endif
     if(groups - init_nodes > spawn_data.initial_qty) { 
       int actual_step = log((group_id + init_nodes) / init_nodes) / log(1 + mall->numP);
       actual_step = floor(actual_step) + 1;
       hypercube_spawn(group_id, groups, init_nodes, actual_step, &spawn_comm, &qty_comms); 
-      exp_id = mall->numP * group_id + mall->myId;
     }
+    exp_id = mall->numP * group_id + mall->myId;
   } else {
+    #if MAM_DEBUG >= 4
+      DEBUG_FUNC("Additional spawn action - Parallel CH uses Diffusive Iterative", mall->myId, mall->numP); fflush(stdout);
+    #endif
     exp_id = spawn_data.initial_qty + mall->myId;
     for(i = 0; i < group_id; i++) { exp_id += mall->spawned_cpus[i]; }
-    diffusive_iterative_spawn(exp_id, groups, init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
+    diffusive_iterative_spawn(exp_id, groups-init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
   }
 
   common_synch(spawn_data, qty_comms, *parents, spawn_comm);
@@ -178,8 +191,7 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
 //spawns until all the required processes have been created.
 //The main difference against the Hypercube is that it allows to have differents amount
 //of ranks in each spawned group.
-void diffusive_iterative_spawn(int exp_id, int groups, int init_nodes, int init_procs, 
-  MPI_Comm **spawn_comm, int *qty_comms) {
+void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm **spawn_comm, int *qty_comms) {
   int i = 0, i_comm = 0;
   int jid=0, n=0;
   char *file_name = NULL;
@@ -194,18 +206,18 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_nodes, int init_
   if(tmp != NULL) { jid = atoi(tmp); }
 #endif
 
-  if(exp_id <= (groups-init_nodes)/2) {  // Overexpect the worst case for this array
-    *qty_comms = (groups-init_nodes)/2;
+  if(exp_id <= groups/2) {  // Overexpect the worst case for this array
+    *qty_comms = groups/2;
     *spawn_comm = (MPI_Comm *) malloc(*qty_comms * sizeof(MPI_Comm));
   }
   //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
 
-  while(i < groups) {
-    for(int j = 0; j < actual_procs && i < groups; j++) {
+  while(i < mall->num_nodes) {
+    for(int j = 0; j < actual_procs && i < mall->num_nodes; j++) {
 
       // Ignore nodes that do not need to spawn anything
-      while(i < groups && !mall->spawned_cpus[i]) {i++;}
-      if(i >= groups) { break; }
+      while(i < mall->num_nodes && !mall->spawned_cpus[i]) {i++;}
+      if(i >= mall->num_nodes) { break; }
 
       if(exp_id == j) {
         set_hostfile_name(&file_name, &n, jid, spawned_nodes);
