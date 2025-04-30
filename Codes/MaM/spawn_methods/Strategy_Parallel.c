@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include "../MAM_Constants.h"
 #include "../MAM_DataStructures.h"
 #include "PortService.h"
@@ -100,8 +99,14 @@ void parallel_strat_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI
     #if MAM_DEBUG >= 4
       DEBUG_FUNC("Additional spawn action - Parallel CH uses Diffusive Iterative", mall->myId, mall->numP); fflush(stdout);
     #endif
+    int i_real = 0;
     exp_id = spawn_data.initial_qty + mall->myId;
-    for(i = 0; i < group_id; i++) { exp_id += mall->spawned_cpus[i]; }
+    for(i = 0; i < group_id; i_real++) { 
+      if(mall->spawned_cpus[i_real]) { 
+        exp_id += mall->spawned_cpus[i_real]; 
+        i++; 
+      } 
+    }
     diffusive_iterative_spawn(exp_id, groups-init_nodes, spawn_data.initial_qty, &spawn_comm, &qty_comms);
   }
 
@@ -206,12 +211,12 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
   if(tmp != NULL) { jid = atoi(tmp); }
 #endif
 
-  if(exp_id <= groups/2) {  // Overexpect the worst case for this array
+  *spawn_comm = NULL;
+  if(exp_id < groups) {  // Overexpect the worst case for this array
     *qty_comms = groups/2;
     *spawn_comm = (MPI_Comm *) malloc(*qty_comms * sizeof(MPI_Comm));
   }
-  //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
-
+  
   while(i < mall->num_nodes) {
     for(int j = 0; j < actual_procs && i < mall->num_nodes; j++) {
 
@@ -220,6 +225,7 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
       if(i >= mall->num_nodes) { break; }
 
       if(exp_id == j) {
+        //printf("P%d is expanding to node %d\n", exp_id, spawned_nodes); fflush(stdout);
         set_hostfile_name(&file_name, &n, jid, spawned_nodes);
         set.spawn_qty = mall->spawned_cpus[i]; 
         MPI_Info_create(&set.mapping);
@@ -237,6 +243,7 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
 
   *qty_comms = i_comm;
   if(file_name != NULL) free(file_name); 
+  if(!i_comm && *spawn_comm != NULL) free(*spawn_comm);
 }
 
 /*=====================Parallel private functions=====================*/
