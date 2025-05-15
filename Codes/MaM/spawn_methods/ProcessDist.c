@@ -14,9 +14,9 @@
 #define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (9) -- Part of SIZE1
 #define MAM_HOSTFILE_NAME2 "_S"  // Constant size name (2) -- Part of SIZE1
 #define MAM_HOSTFILE_NAME3 ".tmp"  // Constant size name (4) -- Part of SIZE2
-#define MAM_HOSTFILE_SIZE1 15 // 11 Chars + 4 Digits 
+#define MAM_HOSTFILE_SIZE1 11 // 11 Chars (Does not count slurm job id)
 #define MAM_HOSTFILE_SIZE2 8 // 4 Chars + 3 Digits + \0
-#define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //23 = 15 Chars + 7 Digits + \0
+#define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //19 = 11 Chars + 3 Digits + \0
 #define MAM_HOSTFILE_LINE_SIZE 32
 
 //--------------PRIVATE DECLARATIONS---------------//
@@ -144,16 +144,20 @@ void remove_dist(Spawn_data spawn_data) {
 #endif
 }
 
-void set_hostfile_name(char **file_name, int *n, int jid, int index) {
+void set_hostfile_name(char **file_name, int *n, const char *jid, int index) {
+  int jid_count, count;
+
+  jid_count = snprintf(NULL, 0, "%s", jid);
+  count = MAM_HOSTFILE_SIZE + jid_count;
   if(*file_name == NULL) {
-    *file_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
+    *file_name = malloc(count * sizeof *file_name);
   }
 
   if(*n == 0) {
-    jid = jid % 1000;
-    snprintf(*file_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+    snprintf(*file_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
   } else {
-    snprintf((*file_name)+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index, MAM_HOSTFILE_NAME3);
+    count = MAM_HOSTFILE_SIZE1 + jid_count;
+    snprintf((*file_name)+count, MAM_HOSTFILE_SIZE2, "%03d%s", index, MAM_HOSTFILE_NAME3);
   }
   *n=1;
 }
@@ -548,25 +552,27 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
 }
 
 void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data){
-  int index = 0, jid;
+  int index = 0, jid, count;
   size_t qty_index = 0, len_line = 0;
   char *hostfile_name, *line;
   hostlist_t hostlist;
 
-  char *tmp = getenv("SLURM_JOB_ID");
-  jid = tmp != NULL ? (atoi(tmp)%1000) : 0;
+  char *tmp_job_id = getenv("SLURM_JOB_ID");
+  jid = snprintf(NULL, 0, "%s", tmp_job_id);
+  count = MAM_HOSTFILE_SIZE + jid;
 
   line = NULL;
   hostlist = slurm_hostlist_create(nodelist);
-  hostfile_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
-  snprintf(hostfile_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  hostfile_name = (char *) malloc(count * sizeof *hostfile_name);
+  snprintf(hostfile_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, tmp_job_id, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  count = MAM_HOSTFILE_SIZE1+jid;
 
   if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) { // MULTIPLE
     for(; index<spawn_data->total_spawns; index++) {
       // This strat creates 1 hostfile per spawn
       fill_multiple_hostfile_slurm(hostfile_name, qty, &qty_index, &hostlist, &line, &len_line);
       set_mapping_host(qty[qty_index-1], "hostfile", hostfile_name, index, spawn_data); 
-      snprintf(hostfile_name+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+      snprintf(hostfile_name+count, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
     }
     free(line);
 

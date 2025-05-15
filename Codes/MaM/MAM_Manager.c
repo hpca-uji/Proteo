@@ -749,6 +749,9 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   #endif
   mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
+  #if MAM_DEBUG >= 2
+      DEBUG_FUNC("Spawned start synchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     #if MAM_USE_BARRIERS
@@ -962,6 +965,9 @@ int end_redistribution() {
   size_t i;
   int local_state;
 
+  #if MAM_DEBUG
+    DEBUG_FUNC("Sources have started synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_SOURCES);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     #if MAM_USE_BARRIERS

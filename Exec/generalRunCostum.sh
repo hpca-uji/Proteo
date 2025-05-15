@@ -85,5 +85,4 @@ else
 fi
 
 echo "END TEST"
-MAM_ID=$(($SLURM_JOB_ID % 1000)) //FIXME: Operand ERROR
-rm MAM_HF_ID*$MAM_ID*.tmp
+rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp

@@ -151,11 +151,15 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
                   MPI_Comm **spawn_comm, int *qty_comms) {
   int i,  aux_sum, actual_step, num_cpus;
   int next_group_id, actual_nodes;
-  int jid=0, n=0;
+  int n=0;
   char *file_name = NULL;
+  char *tmp_job_id = NULL;
   Spawn_set set;
  
-  num_cpus = mall->max_cpus[0];
+  i=0;
+  while(!mall->spawned_cpus[i]) { i++; }
+  num_cpus = mall->spawned_cpus[i];
+  
   actual_step = init_step;
   actual_nodes = pow(1+num_cpus, actual_step)*init_nodes - init_nodes;
   aux_sum = num_cpus*(init_nodes + group_id) + mall->myId; //Constant sum for next line
@@ -168,13 +172,17 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
   //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
 
 #if MAM_USE_SLURM
-  char *tmp = getenv("SLURM_JOB_ID");
-  if(tmp != NULL) { jid = atoi(tmp); }
+  tmp_job_id = getenv("SLURM_JOB_ID");
 #endif
+  if(tmp_job_id == NULL) { 
+    tmp_job_id = malloc(2 * sizeof *tmp_job_id);
+    snprintf(tmp_job_id, 2, "0"); 
+  }
+
   set.cmd = get_spawn_cmd();
   i = 0;
   while(next_group_id < groups - init_nodes) {
-    set_hostfile_name(&file_name, &n, jid, next_group_id);
+    set_hostfile_name(&file_name, &n, tmp_job_id, next_group_id);
     set.spawn_qty = num_cpus;
     MPI_Info_create(&set.mapping);
 	  MPI_Info_set(set.mapping, "hostfile", file_name);
@@ -198,8 +206,9 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
 //of ranks in each spawned group.
 void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm **spawn_comm, int *qty_comms) {
   int i = 0, i_comm = 0;
-  int jid=0, n=0;
+  int n=0;
   char *file_name = NULL;
+  char *tmp_job_id = NULL;
   Spawn_set set;
 
   int actual_procs, new_procs, spawned_nodes;
@@ -207,9 +216,12 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
   spawned_nodes = 0;
   set.cmd = get_spawn_cmd();
 #if MAM_USE_SLURM
-  char *tmp = getenv("SLURM_JOB_ID");
-  if(tmp != NULL) { jid = atoi(tmp); }
+  tmp_job_id = getenv("SLURM_JOB_ID");
 #endif
+  if(tmp_job_id == NULL) { 
+    tmp_job_id = malloc(2 * sizeof *tmp_job_id);
+    snprintf(tmp_job_id, 2, "0");
+  }
 
   *spawn_comm = NULL;
   if(exp_id < groups) {  // Overexpect the worst case for this array
@@ -226,7 +238,7 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
 
       if(exp_id == j) {
         //printf("P%d is expanding to node %d\n", exp_id, spawned_nodes); fflush(stdout);
-        set_hostfile_name(&file_name, &n, jid, spawned_nodes);
+        set_hostfile_name(&file_name, &n, tmp_job_id, spawned_nodes);
         set.spawn_qty = mall->spawned_cpus[i]; 
         MPI_Info_create(&set.mapping);
         MPI_Info_set(set.mapping, "hostfile", file_name);

@@ -29,7 +29,7 @@ do
     max_numP=$numP
   fi
 done
-node_qty=$(($max_numP / $cores))
+node_qty=$(( ($max_numP + $cores - 1) / $cores ))
 if [ $node_qty -eq 0 ]
 then
   node_qty=1

@@ -81,5 +81,4 @@ fi
 echo "END TEST"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
 sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
-MAM_ID=$(($SLURM_JOB_ID % 1000)) //FIXME: Operand ERROR
-rm MAM_HF_ID*$MAM_ID*.tmp
+rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp
