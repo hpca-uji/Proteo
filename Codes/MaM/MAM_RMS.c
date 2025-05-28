@@ -416,5 +416,6 @@ void MAM_I_slurm_get_assigned_cpus() {
   MPI_Bcast(mall->assigned_cpus, mall->num_nodes, MPI_INT, MAM_ROOT, mall->comm);
 
   free(my_host);
+  free(procs_hashes);
 }
 #endif

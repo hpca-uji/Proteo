@@ -217,12 +217,12 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
     if(data_struct->requests != NULL && data_struct->request_qty != NULL) {
       for(i=0; i<max; i++) {
         if(data_struct->requests[i] != NULL) {
-	  for(j=0; j<data_struct->request_qty[i]; j++) {
-	    if(data_struct->requests[i][j] != MPI_REQUEST_NULL) {
-              MPI_Request_free(&(data_struct->requests[i][j]));
-	      data_struct->requests[i][j] = MPI_REQUEST_NULL;
-	    }
-	  }
+          for(j=0; j<data_struct->request_qty[i]; j++) {
+            if(data_struct->requests[i][j] != MPI_REQUEST_NULL) {
+                    MPI_Request_free(&(data_struct->requests[i][j]));
+              data_struct->requests[i][j] = MPI_REQUEST_NULL;
+            }
+          }
           free(data_struct->requests[i]);
 	}
       }
@@ -235,6 +235,12 @@ void free_malleability_data_struct(malleability_data_t *data_struct) {
     }
 
     if(data_struct->arrays != NULL) {
+      for(i=0; i<max && mall->zombie; i++) { // Only for zombies that MaM will kill
+        if(data_struct->arrays[i] != NULL) {
+          free(data_struct->arrays[i]);
+          data_struct->arrays[i] = NULL;
+        }
+      }
       free(data_struct->arrays);
     }
   }

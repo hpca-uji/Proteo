@@ -29,9 +29,10 @@ int print_local_results();
 int print_final_results();
 int create_out_file(char *nombre, int *ptr, int newstdout);
 
-
+void modify_configuration();
 void init_originals();
 void init_targets();
+void update_surviving_targets();
 void update_targets();
 void user_redistribution(void *args);
 
@@ -42,10 +43,9 @@ MPI_Comm comm, new_comm;
 int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
 
 int main(int argc, char *argv[]) {
-    int numP, myId, res;
+    int numP, myId;
     int req;
     int im_child;
-    size_t i;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
@@ -81,46 +81,27 @@ int main(int argc, char *argv[]) {
     do {
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
-
       if(group->grp != 0) {
         obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
         MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->user_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
-
-      if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
-        MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
-			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
-	      for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
-	        MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
-	      }
-	      for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
-	        MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
-	      }
-        MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
-
-        if(group->grp != 0) {
-          MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-          MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-        }
-      }
+      modify_configuration();
     
-      res = work();
-
-      if(res==1) { // Se ha llegado al final de la aplicacion
-        MPI_Barrier(comm);
-        results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
-        print_local_results();
-      }
-      
+      work();
 
       reset_results_index(results);
-
       group->grp = group->grp + 1;
-    } while(config_file->n_groups > group->grp);
-
+      if(config_file->n_groups != group->grp) { update_targets(); }
+    } while(config_file->n_groups != group->grp);
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
     // 
+
+    MPI_Barrier(comm);
+    results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
+    group->grp = group->grp - 1; //Adapt to real grp that ends the execution
+    print_local_results();
+    group->grp = group->grp + 1;
     print_final_results(); // Pasado este punto ya no pueden escribir los procesos
 
     MPI_Barrier(comm);
@@ -370,6 +351,10 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
   group->iter_start  = 0;
   group->argc        = argc;
   group->argv        = argv;
+  group->sync_array  = NULL;
+  group->async_array = NULL;
+  group->sync_qty    = NULL;
+  group->async_qty   = NULL;
 }
 
 /*
@@ -456,25 +441,10 @@ void free_application_data() {
       free(group->sync_array[i]);
       group->sync_array[i] = NULL;
     }
-    free(group->sync_qty);
-    group->sync_qty = NULL;
-    free(group->sync_array);
-    group->sync_array = NULL;
+  }
 
-  }
-  if(config_file->adr && group->async_array != NULL) {
-    for(i=0; i<group->async_data_groups; i++) {
-      free(group->async_array[i]);
-      group->async_array[i] = NULL;
-    }
-    free(group->async_qty);
-    group->async_qty = NULL;
-    free(group->async_array);
-    group->async_array = NULL;
-  }
   abort_needed = MAM_Finalize();
   free_zombie_process();
-  free(group);
   if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
 }
 
@@ -483,10 +453,14 @@ void free_application_data() {
  * Libera la memoria asociada a un proceso Zombie
  */
 void free_zombie_process() {
-  free_results_data(results, config_file->n_stages);
-  free(results);
-  
   size_t i;
+  if(config_file->sdr && group->sync_array != NULL) {
+    free(group->sync_qty);
+    group->sync_qty = NULL;
+    free(group->sync_array);
+    group->sync_array = NULL;
+  }
+
   if(config_file->adr && group->async_array != NULL) {
     for(i=0; i<group->async_data_groups; i++) {
       free(group->async_array[i]);
@@ -497,8 +471,11 @@ void free_zombie_process() {
     free(group->async_array);
     group->async_array = NULL;
   }
-
+  
+  free_results_data(results, config_file->n_stages);
+  free(results);
   free_config(config_file);
+  free(group);
 }
 
 
@@ -532,7 +509,27 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
 //================ INIT MALLEABILITY ===================||
 //======================================================||
 //======================================================||
-//FIXME TENER EN CUENTA QUE ADR PUEDE SER 0
+
+void modify_configuration() {
+  int req;
+  size_t i;
+  if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
+    MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
+      config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
+    for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
+	    MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
+	  }
+	  for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
+	    MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
+	  }
+    MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
+
+    if(group->grp != 0) {
+      MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
+      MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+    }
+  }
+}
 
 void init_originals() {
   size_t i;
@@ -564,11 +561,37 @@ void init_targets() {
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
 }
 
+void update_surviving_targets() {
+  size_t i;
+  if(config_file->sdr && group->sync_array != NULL) {
+    for(i=0; i<group->sync_data_groups; i++) {
+      free(group->sync_array[i]);
+      group->sync_array[i] = NULL;
+    }
+    free(group->sync_qty);
+    group->sync_qty = NULL;
+    free(group->sync_array);
+    group->sync_array = NULL;
+  }
+
+  if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
+    free(group->async_array);
+    group->async_array = NULL;
+  }
+}
+
 void update_targets() { //FIXME Should also be called by the surviving processes
   size_t i, entries, total_qty;
   void *value = NULL;
   MPI_Datatype type;
 
+  update_surviving_targets();
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
     group->sync_qty = (int *) malloc(entries * sizeof(int));
