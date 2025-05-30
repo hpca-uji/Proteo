@@ -49,7 +49,8 @@ numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 
 #EXECUTE RUN
-echo "Nodes=$SLURM_JOB_NODELIST"
+which mpirun
+echo "Nodes=$SLURM_JOB_NODELIST - Starting hostlist=$initial_nodelist"
 if [ $use_external -eq 0 ] #NORMAL
 then
   for ((i=0; i<qty; i++))

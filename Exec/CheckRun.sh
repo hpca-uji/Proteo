@@ -206,11 +206,12 @@ do
     fi
 
     #2.2 - Get nodes
-    cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
-    node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+    result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+    node_qty=$(echo $result | cut -d ',' -f1)
+    constraint=$(echo $result | cut -d ',' -f2)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
   fi
 done
 
