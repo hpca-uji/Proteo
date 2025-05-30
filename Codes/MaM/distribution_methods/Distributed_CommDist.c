@@ -274,7 +274,7 @@ void sync_communication(void *send, void *recv, MPI_Datatype datatype, struct Co
 void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
     int i, j, init, end, total_sends, datasize;
     size_t offset, offset2;
-    MPI_Request *sends;
+    MPI_Request *sends = NULL;
 
     MPI_Type_size(datatype, &datasize);
     init = s_counts.idI;

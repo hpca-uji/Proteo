@@ -303,7 +303,8 @@ int print_local_results() {
 
     fflush(stdout);
     close(1);
-    dup(ptr_out);
+    err = dup(ptr_out);
+    if(err < 0) { return -3; } // No ha sido posible redireccionar a salida estandar
     close(ptr_out);
   }
   return 0;
@@ -334,7 +335,8 @@ int print_final_results() {
       free(file_name);
 
       close(1);
-      dup(ptr_out);
+      err = dup(ptr_out);
+      if(err < 0) { return -3; } // No ha sido posible redireccionar a salida estandar
     }
   }
   return 0;

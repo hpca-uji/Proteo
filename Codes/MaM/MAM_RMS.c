@@ -131,7 +131,10 @@ int MAM_I_get_hosts_info() {
   int detected_cpus, *procs_cpus;
   char *my_host, *all_hosts, *confirmed_host, *tested_host;
 
-  all_hosts = NULL;
+  unique_hosts = NULL;
+  procs_hashes = NULL; hashes = NULL; procs_cpus = NULL; 
+  my_host = NULL; all_hosts = NULL; confirmed_host = NULL; tested_host = NULL;
+  
   my_host = (char *) malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
   MPI_Get_processor_name(my_host, &name_len);
 

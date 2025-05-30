@@ -239,7 +239,8 @@ void deallocate_spawn_data() {
  * Cuando termina, modifica la variable global para indicar este cambio
  */
 void generic_spawn(MPI_Comm *child, int data_stage) {
-  int local_state, aux_state;
+  int local_state = MAM_I_UNRESERVED;
+  int aux_state;
 
   // WORK
   if(spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES

@@ -273,7 +273,7 @@ void MAM_Commit(int *mam_state) {
     mall->assigned_cpus = mall->spawned_cpus;
     mall->spawned_cpus = calloc(mall->num_nodes, sizeof *mall->spawned_cpus);
 
-    for(int i; i < mall->num_nodes; i++) {
+    for(int i=0; i < mall->num_nodes; i++) {
       mall->spawned_cpus[i] = 0;
     }
   } else {

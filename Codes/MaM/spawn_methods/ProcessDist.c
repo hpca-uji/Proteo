@@ -112,6 +112,8 @@ int check_homogenous_dist() {
   return 1;
 }
 
+//FIXME: Supposes the library can choose which nodes should be returned
+//TODO: Should consider removing full nodes if possible, and with prefference to Intercomm nodes
 void remove_dist(Spawn_data spawn_data) {
   if(spawn_data.initial_qty <= spawn_data.target_qty) return;
 
@@ -552,7 +554,7 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
 }
 
 void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data){
-  int index = 0, jid, count;
+  int index = 0, jid, count, err_sn;
   size_t qty_index = 0, len_line = 0;
   char *hostfile_name, *line;
   hostlist_t hostlist;
@@ -564,7 +566,11 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
   line = NULL;
   hostlist = slurm_hostlist_create(nodelist);
   hostfile_name = (char *) malloc(count * sizeof *hostfile_name);
-  snprintf(hostfile_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, tmp_job_id, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  err_sn = snprintf(hostfile_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, tmp_job_id, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  if(err_sn < 0) { 
+    perror("Process_Dist snprintf error"); 
+    MPI_Abort(MPI_COMM_WORLD, -1); 
+  }
   count = MAM_HOSTFILE_SIZE1+jid;
 
   if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) { // MULTIPLE
@@ -572,7 +578,11 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
       // This strat creates 1 hostfile per spawn
       fill_multiple_hostfile_slurm(hostfile_name, qty, &qty_index, &hostlist, &line, &len_line);
       set_mapping_host(qty[qty_index-1], "hostfile", hostfile_name, index, spawn_data); 
-      snprintf(hostfile_name+count, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+      err_sn = snprintf(hostfile_name+count, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+      if(err_sn < 0) { 
+        perror("Process_Dist snprintf error"); 
+        MPI_Abort(MPI_COMM_WORLD, -1); 
+      }
     }
     free(line);
 
