@@ -89,9 +89,11 @@ int main(int argc, char *argv[]) {
     
       work();
 
-      reset_results_index(results);
       group->grp = group->grp + 1;
-      if(config_file->n_groups != group->grp) { update_targets(); }
+      if(config_file->n_groups != group->grp) { 
+        reset_results_index(results); 
+        update_targets(); 
+      }
     } while(config_file->n_groups != group->grp);
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
