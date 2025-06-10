@@ -228,11 +228,11 @@ void MAM_Check_configuration() {
   }
 
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
-  if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
+  /*if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) FIXME: UNCOMMENT ME - CHANGED FOR FCGS
   || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL) )
   && global_internodes && mall->numP > mall->numC) { // Ensure when shrinking there are no internodes WORLDS left
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
-  }
+  }*/
 
   if(mall_conf->spawn_method == MAM_SPAWN_MERGE) {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {

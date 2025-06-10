@@ -50,7 +50,9 @@ void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *
     DEBUG_FUNC("Starting spawning of processes", mall->myId, mall->numP); fflush(stdout);
   #endif
 
-  if (spawn_data.spawn_is_parallel) {
+  if (spawn_data.spawn_is_parallel
+    || spawn_data.spawn_is_multiple //FIXME: DELETEME
+  ) {
     // This spawn is quite different from the rest, as so
     // it takes care of everything related to spawning.
     parallel_strat_parents(spawn_data, spawn_port, child);
@@ -88,7 +90,9 @@ void baseline_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *
 
 
 void baseline_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_Comm *parents) {
-  if(spawn_data.spawn_is_parallel) {
+  if(spawn_data.spawn_is_parallel
+    || spawn_data.spawn_is_multiple //FIXME: DELETEME
+  ) {
     // This spawn is quite different from the rest, as so
     // it takes care of everything related to spawning.
     parallel_strat_children(spawn_data, spawn_port, parents);

@@ -80,6 +80,6 @@ fi
 # Get constraint for experimental setup
 node_qties_coma=$(echo "${node_qties[@]}" | sed "s/ /,/g")
 nodes_names_coma=$(echo "${nodes_names[@]}" | sed "s/ /,/g")
-constraint=$(bash $PROTEO_HOME$execDir/BashScripts/getNaspConstraint.sh $node_qties_coma $nodes_names_coma)
+#constraint=$(bash $PROTEO_HOME$execDir/BashScripts/getNaspConstraint.sh $node_qties_coma $nodes_names_coma)
 
 echo "$node_qty,$constraint"

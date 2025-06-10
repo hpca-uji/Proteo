@@ -39,7 +39,8 @@ void parallel_strat_parents(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI_
   open_port(spawn_port, opening, groups);
 
   // Chose specific algorithm
-  if(check_homogenous_dist()) {
+  //if(check_homogenous_dist()) { //FIXME: UNCOMMENT
+  if(spawn_data.spawn_is_multiple) { //FIXME: DELETEME
     #if MAM_DEBUG >= 4
       DEBUG_FUNC("Additional spawn action - Parallel PA uses Hypercube", mall->myId, mall->numP); fflush(stdout);
     #endif
@@ -85,7 +86,8 @@ void parallel_strat_children(Spawn_data spawn_data, Spawn_ports *spawn_port, MPI
   opening = (mall->myId == MAM_ROOT && group_id < (groups-init_nodes)/2) ? 1 : 0;
   open_port(spawn_port, opening, group_id);
 
-  if(check_homogenous_dist()) {
+  //if(check_homogenous_dist()) { //FIXME: UNCOMMENT
+  if(spawn_data.spawn_is_multiple) { //FIXME: DELETEME
     #if MAM_DEBUG >= 4
       DEBUG_FUNC("Additional spawn action - Parallel CH uses Hypercube", mall->myId, mall->numP); fflush(stdout);
     #endif

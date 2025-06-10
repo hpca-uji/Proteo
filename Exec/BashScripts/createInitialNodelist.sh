@@ -5,9 +5,6 @@
 # Parameter 1 - Amount of processes that will be spawned with mpirun
 #====== Do not modify these values =======
 
-#cores=$2
-#nodelist=$3
-
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <numP>"
     exit 1
@@ -27,15 +24,17 @@ for part in "${parts[@]}"; do
         for ((i=0; i<nodes_count; i++)); do
             cpus_per_node+=($count)
         done
-    else
+    else # If it is only one node with this qty of cores
         cpus_per_node+=($part)
     fi
 done
 
 # Generate list
 output=()
+output2=()
 process_count=0
 
+#FIXME: Uncomment to return to expected behaviour
 for i in "${!nodes[@]}"; do
     node_name=${nodes[$i]}
     max_cores=${cpus_per_node[$i]}
@@ -48,5 +47,40 @@ for i in "${!nodes[@]}"; do
     fi
 done
 
-string_output=$(echo "${output[*]}" | sed -e 's/ /,/g')
+#FIXME: BEGIN Added for hetero tests
+#total_nodes="${#nodes[@]}"
+#mid=$(( total_nodes / 2 ))
+#rem=$(( total_nodes % 2 ))
+#i=0
+#while (( process_count < numP && i < mid )); do
+#    node_name=${nodes[$i]}
+#    max_cores=${cpus_per_node[$i]}
+#    for ((j=0; j<max_cores && process_count<numP; j++)); do
+#        output+=("$node_name")
+#        ((process_count++))
+#    done
+#    if [ $process_count -ge $numP ]; then
+#        break
+#    fi
+#    i2=$(( i + mid + rem ))
+#    node_name=${nodes[$i2]}
+#    max_cores=${cpus_per_node[$i2]}
+#    for ((j=0; j<max_cores && process_count<numP; j++)); do
+#        output2+=("$node_name")
+#        ((process_count++))
+#    done
+#    i=$(( i + 1 ))
+#done
+
+#if [ $rem -ne 0 ] && [ $process_count -lt $numP ]; then
+#    node_name=${nodes[$mid]}
+#    max_cores=${cpus_per_node[$mid]}
+#    for ((j=0; j<max_cores && process_count<numP; j++)); do
+#        output+=("$node_name")
+#        ((process_count++))
+#    done
+#fi
+#FIXME: END Added for hetero tests
+
+string_output=$(echo "${output[*]}" "${output2[*]}"  | sed -e 's/ /,/g')
 echo $string_output
