@@ -34,7 +34,6 @@ output=()
 output2=()
 process_count=0
 
-#FIXME: Uncomment to return to expected behaviour
 for i in "${!nodes[@]}"; do
     node_name=${nodes[$i]}
     max_cores=${cpus_per_node[$i]}

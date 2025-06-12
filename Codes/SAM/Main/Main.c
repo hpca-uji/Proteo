@@ -442,8 +442,18 @@ void free_application_data() {
 
   if(config_file->sdr && group->sync_array != NULL) {
     for(i=0; i<group->sync_data_groups; i++) {
-      free(group->sync_array[i]);
-      group->sync_array[i] = NULL;
+      if(group->sync_array[i] != NULL) {
+        free(group->sync_array[i]);
+        group->sync_array[i] = NULL;
+      }
+    }
+  }
+  if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      if(group->async_array[i] != NULL) {
+        free(group->async_array[i]);
+        group->async_array[i] = NULL;
+      }
     }
   }
 
@@ -457,7 +467,7 @@ void free_application_data() {
  * Libera la memoria asociada a un proceso Zombie
  */
 void free_zombie_process() {
-  size_t i;
+  
   if(config_file->sdr && group->sync_array != NULL) {
     free(group->sync_qty);
     group->sync_qty = NULL;
@@ -466,10 +476,6 @@ void free_zombie_process() {
   }
 
   if(config_file->adr && group->async_array != NULL) {
-    for(i=0; i<group->async_data_groups; i++) {
-      free(group->async_array[i]);
-      group->async_array[i] = NULL;
-    }
     free(group->async_qty);
     group->async_qty = NULL;
     free(group->async_array);
