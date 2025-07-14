@@ -191,8 +191,9 @@ do
     config_file="$common_name$run.ini"
     slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
 
-    #2.1 - Get partition name, default otherwise
+    #2.1 - Get partition name, default otherwise (Avoid duplicates)
     partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+    partition=$(echo $partition | cut -d ' ' -f1)
     if [ -z "$partition" ];
     then
       partition='P1'
