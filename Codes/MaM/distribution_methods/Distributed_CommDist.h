@@ -2,13 +2,14 @@
 #define MAM_DISTRIBUTED_COMMDIST_H
 
 #include <mpi.h>
+#include "../MAM_Types.h"
 
-void sync_communication(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm);
+void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous);
+void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous);
 
-void async_communication_start(void *send, void **recv, int qty, MPI_Datatype datatype, int numP, int numO, int is_children_group, MPI_Comm comm, MPI_Request **requests, size_t *request_qty, MPI_Win *win);
 int async_communication_check(int is_children_group, MPI_Request *requests, size_t request_qty);
 void async_communication_wait(MPI_Request *requests, size_t request_qty);
-void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win);
+void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win, int *idS);
 
 
 void malloc_comm_array(char **array, int qty, int myId, int numP);

@@ -1,5 +1,9 @@
 #Ignore ini files
 *.ini
+#Ignore pkl files
+*.pkl
+#Ignore out files
+*.out
 
 #Ignore build files
 /Codes/build/
@@ -7,4 +11,7 @@
 /Codes/SAM/build
 
 #Ignore Results files
-/Results/*
+/Results/**/
+
+#Ignore VS jsons
+.vscode/*.json

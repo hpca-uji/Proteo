@@ -19,7 +19,6 @@ typedef struct {
 
   MPI_Comm children, parents;
 
-  char *compute_comm_array, *compute_comm_recv;
   char **argv;
   char **sync_array, **async_array;
   int *sync_qty, *async_qty;

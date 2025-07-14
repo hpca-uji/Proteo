@@ -2,60 +2,57 @@
 
 # !!!!This script should only be called by others scripts, do not call it directly!!!
 # Runs a given configuration file with the indicated parameters.
-# Parameter 1 - Number of cores in a single machine
-# Parameter 2 - Configuration file name for the emulation.
-# Parameter 3 - Use Extrae(1) or not(0).
-# Parameter 4 - Index to use for the output files. Must be a positive integer.
-# Parameter 5 - Amount of executions per file. Must be a positive number.
+# Parameter 1 - Configuration file name for the emulation.
+# Parameter 2 - Use Extrae(1) or not(0).
+# Parameter 3 - Index to use for the output files. Must be a positive integer.
+# Parameter 4 - Amount of executions per file. Must be a positive number.
 #====== Do not modify these values =======
 
 execDir="/Exec"
 
 echo "START TEST"
 
-#$1 == cores
-#$2 == configFile
-#$3 == use_external
-#$4 == outFileIndex
-#$5 == qty
+#$1 == configFile
+#$2 == use_external
+#$3 == outFileIndex
+#$4 == qty
 
 echo $@
-if [ $# -lt 3 ]
+if [ $# -lt 2 ]
 then
   echo "Internal ERROR generalRunCostum.sh - Not enough arguments were given"
   exit -1
 fi
 
 #READ PARAMETERS AND ENSURE CORRECTNESS
-cores=$1
-configFile=$2
+configFile=$1
 use_external=0
 outFileIndex=0
 qty=1
 
+if [ $# -ge 2 ]
+then
+  use_external=$2
+fi
+
 if [ $# -ge 3 ]
 then
-  use_external=$3
+  outFileIndex=$3
 fi
 
 if [ $# -ge 4 ]
 then
-  outFileIndex=$4
-fi
-
-if [ $# -ge 5 ]
-then
-  qty=$5
+  qty=$4
 fi
 
 numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 nodelist=$SLURM_JOB_NODELIST
 if [ -z "$nodelist" ];
 then
-  nodelist="localhost"
-  initial_nodelist="localhost"
+  nodelist=$(hostname)
+  initial_nodelist=$nodelist
 else
-  initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP $cores $nodelist)
+  initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 fi
 
 #EXECUTE RUN
@@ -88,5 +85,4 @@ else
 fi
 
 echo "END TEST"
-MAM_ID=$(($SLURM_JOB_ID % 1000))
-rm MAM_HF_ID*$MAM_ID*.tmp
+rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp

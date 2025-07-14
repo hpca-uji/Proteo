@@ -1,67 +1,70 @@
 #!/bin/bash
 
-partition="P1"
-exclude="c00,c01,c02"
-
 # Executes a given configuration file with the aid of
 # the RMS Slurm.
 # Parameter 1: Configuration file name for the emulation.
-# Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
-# Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
-# Parameter 4(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
-# Parameter 5(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
-# Parameter 6(Optional): Path where the output files should be saved. 
+# Parameter 2: Partition name.
+# Parameter 3(Optional): Index to use for the output files. Must be a positive integer.
+# Parameter 4(Optional): Number of repetitions to perform. Must be a positive integer.
+# Parameter 5(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
+# Parameter 6(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
+# Parameter 7(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
-if [ $# -lt 1 ]
+if [ $# -lt 2 ]
 then
   echo "Not enough arguments. Usage:"
-  echo "bash singleRun.sh config.ini [outFileIndex] [Qty] [Use extrae] [Output path]"
+  echo "bash singleRun.sh config.ini partition [outFileIndex] [Qty] [Use extrae] [Time] [Output path]"
   exit 1
 fi
 
 #$1 == configFile
-#$2 == outFileIndex
-#$3 == Qty of repetitions
-#$4 == Use external NO(0) Valgrind(1), Extrae(2)
-#$5 == Max time per execution(s)
-#$6 == Output path
+#$2 == Partition Name
+#$3 == outFileIndex
+#$4 == Qty of repetitions
+#$5 == Use external NO(0) Valgrind(1), Extrae(2)
+#$6 == Max time per execution(s)
+#$7 == Output path
 
 config_file=$1
+partition=$2
 outFileIndex=0
 qty=1
 use_external=0
 
-if [ $# -ge 2 ]
-then
-  outFileIndex=$2
-fi
 if [ $# -ge 3 ]
 then
-  qty=$3
+  outFileIndex=$3
 fi
 if [ $# -ge 4 ]
 then
-  use_external=$4
+  qty=$4
+fi
+if [ $# -ge 5 ]
+then
+  use_external=$5
 fi
 limit_time=$((0))
-if [ $# -ge 5 ] #Max time per execution in seconds
+if [ $# -ge 6 ] #Max time per execution in seconds
 then
-  limit_time=$(($5 * $qty / 60 + 1))
+  limit_time=$(($6 * $qty / 60 + 1))
 fi
-if [ $# -ge 6 ]
+if [ $# -ge 7 ]
 then
-  output=$6
+  output=$7
 fi
 
 #Obtain amount of nodes neeeded
-node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+node_qty=$(echo $result | cut -d ',' -f1)
+constraint=$(echo $result | cut -d ',' -f2)
+
 #Run with the expected amount of nodes
-sbatch -p $partition --exclude=$exclude -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_external $outFileIndex $qty
+echo "Execute job with Nodes=$node_qty, Constraints=$constraint and config_file=$config_file"
+sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

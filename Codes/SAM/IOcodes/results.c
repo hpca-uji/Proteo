@@ -165,6 +165,9 @@ int compare(const void *a, const void *b) {
 void compute_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
   double *aux_all_iters, median;
   struct TimeWithIndex *aux_id_iters;
+
+  aux_all_iters = NULL;
+  aux_id_iters = NULL;
   if(myId == root) {
     aux_all_iters = malloc(numP *results->iter_index * sizeof(double));
     aux_id_iters = malloc(numP * sizeof(struct TimeWithIndex));
@@ -196,7 +199,7 @@ void compute_median(results_data *results, double *computed_array, size_t *used_
  * Como resultado devuelve un vector con la mediana calculada.
  */
 void match_median(results_data *results, double *computed_array, size_t *used_ids, int myId, int numP, int root, MPI_Comm comm) {
-  double *aux_all_iters;
+  double *aux_all_iters = NULL;
   size_t matched_id;
   if(myId == root) {
     aux_all_iters = malloc(numP * results->iter_index * sizeof(double));

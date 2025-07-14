@@ -14,16 +14,16 @@
 #define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (9) -- Part of SIZE1
 #define MAM_HOSTFILE_NAME2 "_S"  // Constant size name (2) -- Part of SIZE1
 #define MAM_HOSTFILE_NAME3 ".tmp"  // Constant size name (4) -- Part of SIZE2
-#define MAM_HOSTFILE_SIZE1 15 // 11 Chars + 4 Digits 
+#define MAM_HOSTFILE_SIZE1 11 // 11 Chars (Does not count slurm job id)
 #define MAM_HOSTFILE_SIZE2 8 // 4 Chars + 3 Digits + \0
-#define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //23 = 15 Chars + 7 Digits + \0
+#define MAM_HOSTFILE_SIZE MAM_HOSTFILE_SIZE1 + MAM_HOSTFILE_SIZE2 //19 = 11 Chars + 3 Digits + \0
 #define MAM_HOSTFILE_LINE_SIZE 32
 
 //--------------PRIVATE DECLARATIONS---------------//
 
-void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns);
-void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
-void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs);
+void node_dist(Spawn_data spawn_data, int *used_nodes, int *total_spawns);
+void spread_dist(Spawn_data spawn_data, int *used_nodes);
+void compact_dist(Spawn_data spawn_data, int *used_nodes);
 
 void generate_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
 void generate_multiple_info_string(char *nodelist, int *procs_array, size_t nodes, Spawn_data *spawn_data);
@@ -55,48 +55,111 @@ void fill_multiple_hostfile_slurm(char* file_name, int *qty, size_t *index, host
  */
 void processes_dist(Spawn_data *spawn_data) {
   int used_nodes=0;
-  int *procs_array;
 
   // GET NEW DISTRIBUTION 
-  node_dist(*spawn_data, &procs_array, &used_nodes, &spawn_data->total_spawns);
+  node_dist(*spawn_data, &used_nodes, &spawn_data->total_spawns);
   spawn_data->sets = (Spawn_set *) malloc(spawn_data->total_spawns * sizeof(Spawn_set));
 #if MAM_USE_SLURM
   switch(spawn_data->mapping_fill_method) {
     case MAM_PHY_TYPE_STRING:
       if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) {
-        generate_multiple_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
+        generate_multiple_info_string_slurm(mall->nodelist, mall->spawned_cpus, used_nodes, spawn_data);
       } else {
-        generate_info_string_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
+        generate_info_string_slurm(mall->nodelist, mall->spawned_cpus, used_nodes, spawn_data);
       }
       break;
     case MAM_PHY_TYPE_HOSTFILE:
-      generate_info_hostfile_slurm(mall->nodelist, procs_array, used_nodes, spawn_data);
+      generate_info_hostfile_slurm(mall->nodelist, mall->spawned_cpus, used_nodes, spawn_data);
       break;
   }
 #else
   if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) {
-    generate_multiple_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
+    generate_multiple_info_string(mall->nodelist, mall->spawned_cpus, used_nodes, spawn_data);
   } else {
-    generate_info_string(mall->nodelist, procs_array, used_nodes, spawn_data);
+    generate_info_string(mall->nodelist, mall->spawned_cpus, used_nodes, spawn_data);
   }
 #endif
   char *aux_cmd = get_spawn_cmd();
   for(int index = 0; index<spawn_data->total_spawns; index++) {
     spawn_data->sets[index].cmd = aux_cmd;
   }
-  free(procs_array);
+
+  #if MAM_DEBUG >= 2
+    printf("SPAWN_CPUS:     [");
+    for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
+      printf("%d ", mall->spawned_cpus[i_debug]);
+    }
+    printf("]\n");
+    fflush(stdout); 
+  #endif
 }
 
-void set_hostfile_name(char **file_name, int *n, int jid, int index) {
+int check_homogenous_dist() {
+  int actual, last, i;
+
+  i = 0;
+  while(!mall->spawned_cpus[i]) { i++; }
+  if(i >= mall->num_nodes) { return 1; }
+
+  last = mall->spawned_cpus[i];
+  for(i++; i < mall->num_nodes; i++) {
+    actual = mall->spawned_cpus[i];
+    if(actual != 0) { 
+      if(last != actual) { return 0; }
+      last = actual; 
+    }
+  }
+  return 1;
+}
+
+//FIXME: Supposes the library can choose which nodes should be returned
+//TODO: Should consider removing full nodes if possible, and with prefference to Intercomm nodes
+void remove_dist(Spawn_data spawn_data) {
+  if(spawn_data.initial_qty <= spawn_data.target_qty) return;
+
+  int i;
+  int to_remove_ranks=spawn_data.initial_qty - spawn_data.target_qty;
+  for(i=mall->num_nodes-1; 0 <= i && 0 < to_remove_ranks; i--) {
+    if(mall->assigned_cpus[i]) {
+      to_remove_ranks -= mall->assigned_cpus[i];
+      mall->spawned_cpus[i] -= mall->assigned_cpus[i];
+    }
+  }
+  //Last node could try to remove more than needed
+  mall->spawned_cpus[i+1] -= to_remove_ranks;
+
+  if(0 < to_remove_ranks) {
+    perror("ProcesDist Shrink Error. Target amount of cores cannot be reached\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    exit(-1);
+  }
+
+#if MAM_DEBUG >= 2
+  if(mall->myId == mall->root) {
+    printf("SPAWN_CPUS:     [");
+    for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
+      printf("%d ", mall->spawned_cpus[i_debug]);
+    }
+    printf("]\n");
+    fflush(stdout); 
+  }
+#endif
+}
+
+void set_hostfile_name(char **file_name, int *n, const char *jid, int index) {
+  int jid_count, count;
+
+  jid_count = snprintf(NULL, 0, "%s", jid);
+  count = MAM_HOSTFILE_SIZE + jid_count;
   if(*file_name == NULL) {
-    *file_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
+    *file_name = malloc(count * sizeof *file_name);
   }
 
   if(*n == 0) {
-    jid = jid % 1000;
-    snprintf(*file_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+    snprintf(*file_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
   } else {
-    snprintf((*file_name)+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index, MAM_HOSTFILE_NAME3);
+    count = MAM_HOSTFILE_SIZE1 + jid_count;
+    snprintf((*file_name)+count, MAM_HOSTFILE_SIZE2, "%03d%s", index, MAM_HOSTFILE_NAME3);
   }
   *n=1;
 }
@@ -138,60 +201,79 @@ int read_hostfile_procs(char *file_name, int *qty) {
  *  COMM_PHY_CPU   (2): Orientada a completar la capacidad de un nodo antes de
  *                      ocupar otro nodo.
  */
-void node_dist(Spawn_data spawn_data, int **qty, int *used_nodes, int *total_spawns) {
-  int i, *procs;
-  procs = calloc(mall->num_nodes, sizeof(int)); // Numero de procesos por nodo
+void node_dist(Spawn_data spawn_data, int *used_nodes, int *total_spawns) {
+  int i;
 
   /* GET NEW DISTRIBUTION  */
   switch(mall_conf->spawn_dist) {
     case MAM_PHY_DIST_SPREAD: // DIST NODES
-      spread_dist(spawn_data, used_nodes, procs);
+      spread_dist(spawn_data, used_nodes);
       break;
     case MAM_PHY_DIST_COMPACT: // DIST CPUs
-      compact_dist(spawn_data, used_nodes, procs);
+      compact_dist(spawn_data, used_nodes);
       break;
   }
 
-  //Copy results to output vector qty
-  *qty = calloc(*used_nodes, sizeof(int)); // Numero de procesos por nodo
-
-//  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) ) {
+  *total_spawns = 1;
   if(spawn_data.spawn_is_multiple || spawn_data.spawn_is_parallel) {
+    *total_spawns = 0;
     for(i=0; i< *used_nodes; i++) {
-      (*qty)[i] = procs[i];
-      if(procs[i]) (*total_spawns)++;
-    }
-  } else {
-    *total_spawns = 1;
-    for(i=0; i< *used_nodes; i++) {
-      (*qty)[i] = procs[i];
+      if(mall->spawned_cpus[i]) (*total_spawns)++;
     }
   }
-  free(procs);
 }
 
+#define OCCUPIED_CPUS(i) ((spawn_data.already_created) ? (mall->assigned_cpus[i] + mall->spawned_cpus[i]) : (mall->spawned_cpus[i]))
 /*
  * Distribucion basada en equilibrar el numero de procesos en cada nodo
  * para que todos los nodos tengan el mismo numero. Devuelve el total de
  * nodos utilizados y el numero de procesos a crear en cada nodo.
- *
- * Asume que los procesos que ya existen estan en los nodos mas bajos
- * con el mismo tamBl. //FIXME No deberia asumir el tamBl.
- *
- * FIXME Tener en cuenta localizacion de procesos ya creados (already_created)
  */
-void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
-  int i, tamBl, remainder;
+void spread_dist(Spawn_data spawn_data, int *used_nodes) {
+  int i, tam_bl, diff, not_full_nodes, to_assig_cores;
 
-  *used_nodes = mall->num_nodes;
-  tamBl = spawn_data.target_qty / *used_nodes;
-  i = spawn_data.already_created / tamBl;
-  remainder = spawn_data.already_created % tamBl;
-  if(remainder) {
-    procs[i++] = tamBl - remainder;
+  not_full_nodes = 0;
+  to_assig_cores = spawn_data.spawn_qty;
+  for(i = 0; i<mall->num_nodes; i++) {
+    if(mall->max_cpus[i] > OCCUPIED_CPUS(i)) {
+      not_full_nodes++; 
+    }
   }
-  for(; i<*used_nodes; i++) {
-    procs[i] = tamBl; 
+
+  while(0 < to_assig_cores && to_assig_cores > not_full_nodes && not_full_nodes) {
+    tam_bl = to_assig_cores / not_full_nodes;
+    for(i = 0; i < mall->num_nodes; i++) {
+      diff = mall->max_cpus[i] - OCCUPIED_CPUS(i);
+      if(0 < (diff - tam_bl)) {
+        mall->spawned_cpus[i] += tam_bl;
+        to_assig_cores -= tam_bl;
+      } else if(0 < diff) {
+        mall->spawned_cpus[i] += diff;
+        to_assig_cores -= diff;
+        not_full_nodes--;
+      }
+    }
+  }
+
+  if(!not_full_nodes && 0 < to_assig_cores) {
+    perror("ProcesDist SPREAD Error. Target amount of cores cannot be reached\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    exit(-1);
+  }
+  
+  
+  if(0 < to_assig_cores) {
+    for(i = 0; i<mall->num_nodes && to_assig_cores; i++) {
+      if(mall->max_cpus[i] > OCCUPIED_CPUS(i)) {
+        mall->spawned_cpus[i] +=1;
+        to_assig_cores--;
+      }
+    }
+  }
+  
+  *used_nodes = 0;
+  for(i=0; i<mall->num_nodes; i++) {
+    if(mall->spawned_cpus[i]) (*used_nodes)++;
   }
 }
 
@@ -203,39 +285,42 @@ void spread_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
  * Tiene en cuenta los procesos ya existentes para el mappeado de 
  * los procesos a crear.
  */
-void compact_dist(Spawn_data spawn_data, int *used_nodes, int *procs) {
-  int i, asigCores;
-  int tamBl, remainder;
+void compact_dist(Spawn_data spawn_data, int *used_nodes) {
+  int i, diff, asigCores;
 
-  tamBl = mall->num_cpus;
   asigCores = spawn_data.already_created;
-  i = *used_nodes = spawn_data.already_created / tamBl;
-  remainder = spawn_data.already_created % tamBl;
 
-  //FIXME REFACTOR Que pasa si los nodos 1 y 2 tienen espacios libres
-  //First nodes could already have existing procs
-  //Start from the first with free spaces
-  if (remainder && asigCores + (tamBl - remainder) < spawn_data.target_qty) {
-    procs[i] = tamBl - remainder;
-    asigCores += procs[i];
-    i = (i+1) % mall->num_nodes;
-    (*used_nodes)++;
+  if(spawn_data.already_created) {
+    for(i=0; i < mall->num_nodes && asigCores < spawn_data.target_qty; i++) {
+      diff = mall->max_cpus[i] - mall->assigned_cpus[i];
+      if(0 < diff) {
+        if(asigCores+diff > spawn_data.target_qty) {
+          diff -= (asigCores + diff) - spawn_data.target_qty;
+        }
+        asigCores += diff;
+        mall->spawned_cpus[i] = diff;
+      }
+    }
+  } else {
+    for(i=0; i < mall->num_nodes && asigCores < spawn_data.target_qty; i++) {
+      diff = mall->max_cpus[i];
+      if(0 < diff) {
+        if(asigCores+diff > spawn_data.target_qty) {
+          diff -= (asigCores + diff) - spawn_data.target_qty;
+        }
+        asigCores += diff;
+        mall->spawned_cpus[i] = diff;
+      }
+    }
   }
 
-  //Assign tamBl to each node
-  while(asigCores+tamBl <= spawn_data.target_qty) {
-    asigCores += tamBl;
-    procs[i] += tamBl;
-    i = (i+1) % mall->num_nodes;
-    (*used_nodes)++;
+  if(asigCores < spawn_data.target_qty ) {
+    perror("ProcesDist COMPACT Error. Target amount of cores cannot be reached\n");
+    MPI_Abort(MPI_COMM_WORLD, -1);
+    exit(-1);
   }
 
-  //Last node could have less procs than tamBl
-  if(asigCores < spawn_data.target_qty) { 
-    procs[i] += spawn_data.target_qty - asigCores;
-    (*used_nodes)++;
-  }
-  if(*used_nodes > mall->num_nodes) *used_nodes = mall->num_nodes;  //FIXME Si ocurre esto no es un error?
+  *used_nodes = i;
 }
 
 //--------------PRIVATE FUNCTIONS---------------//
@@ -469,24 +554,35 @@ void fill_str_hosts_slurm(char *nodelist, int *qty, size_t used_nodes, char **ho
 }
 
 void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, Spawn_data *spawn_data){
-  int index = 0, jid;
+  int index = 0, jid, count, err_sn;
   size_t qty_index = 0, len_line = 0;
   char *hostfile_name, *line;
   hostlist_t hostlist;
 
-  jid = mall_conf->slurm_jid%1000; //Modified for DMR
+  char *tmp_job_id = getenv("SLURM_JOB_ID");
+  jid = snprintf(NULL, 0, "%s", tmp_job_id);
+  count = MAM_HOSTFILE_SIZE + jid;
 
   line = NULL;
   hostlist = slurm_hostlist_create(nodelist);
-  hostfile_name = (char *) malloc(MAM_HOSTFILE_SIZE * sizeof(char));
-  snprintf(hostfile_name, MAM_HOSTFILE_SIZE , "%s%04d%s%03d%s", MAM_HOSTFILE_NAME1, jid, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  hostfile_name = (char *) malloc(count * sizeof *hostfile_name);
+  err_sn = snprintf(hostfile_name, count, "%s%s%s%03d%s", MAM_HOSTFILE_NAME1, tmp_job_id, MAM_HOSTFILE_NAME2, index, MAM_HOSTFILE_NAME3);
+  if(err_sn < 0) { 
+    perror("Process_Dist snprintf error"); 
+    MPI_Abort(MPI_COMM_WORLD, -1); 
+  }
+  count = MAM_HOSTFILE_SIZE1+jid;
 
   if(spawn_data->spawn_is_multiple || spawn_data->spawn_is_parallel) { // MULTIPLE
     for(; index<spawn_data->total_spawns; index++) {
       // This strat creates 1 hostfile per spawn
       fill_multiple_hostfile_slurm(hostfile_name, qty, &qty_index, &hostlist, &line, &len_line);
       set_mapping_host(qty[qty_index-1], "hostfile", hostfile_name, index, spawn_data); 
-      snprintf(hostfile_name+MAM_HOSTFILE_SIZE1, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+      err_sn = snprintf(hostfile_name+count, MAM_HOSTFILE_SIZE2 , "%03d%s", index+1, MAM_HOSTFILE_NAME3);
+      if(err_sn < 0) { 
+        perror("Process_Dist snprintf error"); 
+        MPI_Abort(MPI_COMM_WORLD, -1); 
+      }
     }
     free(line);
 
@@ -502,7 +598,7 @@ void generate_info_hostfile_slurm(char *nodelist, int *qty, size_t used_nodes, S
 // Function to generate the configuration file
 void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_t *hostlist) {
   char *host, *line;
-  size_t i=0, len_line=0;
+  size_t i=0, i_used=0, len_line=0;
 
   line = NULL;
   int file = open(file_name, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -511,9 +607,10 @@ void fill_hostfile_slurm(char* file_name, size_t used_nodes, int *qty, hostlist_
     exit(EXIT_FAILURE);
   }
 
-  while ( (host = slurm_hostlist_shift(*hostlist)) && i < used_nodes) {
+  while ( (host = slurm_hostlist_shift(*hostlist)) && i_used < used_nodes) {
     if(qty[i] != 0) {
       write_hostfile_node(file, qty[i], host, &line, &len_line);
+      i_used++;
     }
     i++;
     free(host);

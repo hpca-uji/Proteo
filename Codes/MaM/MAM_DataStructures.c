@@ -9,7 +9,7 @@ int state = MAM_I_UNRESERVED;
  * de MaM.
  */
 void MAM_Def_main_datatype() {
-  int i, counts = 14;
+  int i, counts = 13;
   int blocklengths[counts];
   MPI_Aint displs[counts];
   MPI_Datatype types[counts];
@@ -36,9 +36,8 @@ void MAM_Def_main_datatype() {
   MPI_Get_address(&(mall->numC), &displs[8]); //TODO Add only when MultipleSpawn strat active?
   MPI_Get_address(&(mall->gid), &displs[9]); //TODO Add only when ParallelSpawn strat active?
   MPI_Get_address(&(mall->inter_numP), &displs[10]);
-  MPI_Get_address(&(mall->num_cpus), &displs[11]);
-  MPI_Get_address(&(mall->num_nodes), &displs[12]);
-  MPI_Get_address(&(mall->nodelist_len), &displs[13]);
+  MPI_Get_address(&(mall->num_nodes), &displs[11]);
+  MPI_Get_address(&(mall->nodelist_len), &displs[12]);
 
   MPI_Type_create_struct(counts, blocklengths, displs, types, &mall->struct_type);
   MPI_Type_commit(&mall->struct_type);
@@ -59,10 +58,16 @@ void MAM_Comm_main_structures(MPI_Comm comm, int rootBcast) {
   MPI_Bcast(MPI_BOTTOM, 1, mall->struct_type, rootBcast, comm);
 
   if(mall->nodelist == NULL) {
+    mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
+    mall->assigned_cpus = malloc(mall->num_nodes * sizeof *mall->assigned_cpus);
+    mall->spawned_cpus = malloc(mall->num_nodes * sizeof *mall->spawned_cpus);
     mall->nodelist = malloc((mall->nodelist_len) * sizeof(char));
     mall->nodelist[mall->nodelist_len-1] = '\0';
   }
   MPI_Bcast(mall->nodelist, mall->nodelist_len, MPI_CHAR, rootBcast, comm);
+  MPI_Bcast(mall->max_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
+  MPI_Bcast(mall->assigned_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
+  MPI_Bcast(mall->spawned_cpus, mall->num_nodes, MPI_INT, rootBcast, comm);
 }
 
 /*

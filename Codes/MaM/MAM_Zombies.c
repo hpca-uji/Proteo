@@ -8,8 +8,8 @@
 #include "MAM_Zombies.h"
 #include "MAM_DataStructures.h"
 
-#define PIDS_QTY 320
-//TODO Add option to allow the usage of signal USR2 or not.
+#define PIDS_QTY 1024 //FIXME: What if there are more ranks than this value?? This value should be computed in exec time.
+//TODO: Add option to allow the usage of signal USR2 or not.
 //This code asumes ROOT of each group will be the last to be zombified
 //
 
@@ -24,6 +24,13 @@ int zombies_qty = 0;
 
 
 void MAM_Zombies_service_init() {
+  int numP;
+  MPI_Comm_size(mall->original_comm, &numP);
+  if(numP > PIDS_QTY) { 
+    perror("MAM_Zombies.c: Surpassed PID_QTY, increase it?");
+    MPI_Abort(MPI_COMM_WORLD, -1); 
+  }
+
   zombies_qty = 0;
   pids = malloc(PIDS_QTY * sizeof(int));
 

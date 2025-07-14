@@ -65,7 +65,8 @@ typedef struct {
   MPI_Request wait_targets;
   
   char *name_exec, *nodelist;
-  int num_cpus, num_nodes, nodelist_len;
+  int num_nodes, nodelist_len;
+  int *max_cpus, *assigned_cpus, *spawned_cpus;
   int internode_group;
   int inter_numP; //DMR ADDITION - If first group is internode, how many processes are
 } malleability_t;

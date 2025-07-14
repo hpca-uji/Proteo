@@ -161,7 +161,7 @@ void MAM_Use_valgrind(int flag) {
 
   mall_conf->external_usage = flag ? MAM_USE_VALGRIND: 0;
   #if MAM_DEBUG
-    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Valgrind Wrapper", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root && flag) { DEBUG_FUNC("Settled Valgrind Wrapper", mall->myId, mall->numP); fflush(stdout); }
   #endif
 }
 
@@ -174,7 +174,7 @@ void MAM_Use_extrae(int flag) {
 
   mall_conf->external_usage = flag ? MAM_USE_EXTRAE: 0;
   #if MAM_DEBUG
-    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Extrae Wrapper", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root && flag) { DEBUG_FUNC("Settled Extrae Wrapper", mall->myId, mall->numP); fflush(stdout); }
   #endif
 }
 
@@ -243,13 +243,13 @@ void MAM_Check_configuration() {
   // END ADDED FOR DMR
 
   MPI_Allreduce(&mall->internode_group, &global_internodes, 1, MPI_INT, MPI_MAX, mall->comm);
-  if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
+  /*if((MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL) FIXME: UNCOMMENT ME - CHANGED FOR FCGS
   || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL) )
   && global_internodes
   && mall->numC < mall->inter_numP) { //DMR ADDITION
     // Remove internode MPI_COMM_WORLDs
     MAM_Set_key_configuration(MAM_SPAWN_METHOD, MAM_SPAWN_BASELINE, NULL);
-  }
+  }*/
 
   if(mall_conf->spawn_method == MAM_SPAWN_MERGE) {
     if(MAM_I_contains_strat(mall_conf->spawn_strategies, MAM_MASK_SPAWN_INTERCOMM)) {

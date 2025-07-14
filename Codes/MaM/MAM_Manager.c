@@ -99,9 +99,13 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
   mall->original_comm = original_comm;
   mall->user_comm = comm; 
   mall->tmp_comm = MPI_COMM_NULL;
+  mall->intercomm = MPI_COMM_NULL;
 
   mall->name_exec = name_exec;
   mall->nodelist = NULL;
+  mall->max_cpus = NULL;
+  mall->assigned_cpus = NULL;
+  mall->spawned_cpus = NULL;
   mall->nodelist_len = 0;
 
   rep_s_data->entries = 0;
@@ -158,6 +162,9 @@ int MAM_Finalize() {
   free(dist_s_data);
   free(dist_a_data);
   if(mall->nodelist != NULL) free(mall->nodelist);
+  if(NULL != mall->max_cpus) { free(mall->max_cpus); }
+  if(NULL != mall->assigned_cpus) { free(mall->assigned_cpus); }
+  if(NULL != mall->spawned_cpus) { free(mall->spawned_cpus); }
 
   MAM_Free_main_datatype();
   request_abort = MAM_Zombies_service_free();
@@ -276,7 +283,23 @@ void MAM_Commit(int *mam_state) {
   #endif
 
   // Get times before commiting
-  malleability_times_broadcast(mall->root_collectives);
+  if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
+    // This communication is only needed when the root process will become a zombie
+    malleability_times_broadcast(mall->root_collectives);
+    // Change assigned_cpus to spawned_cpus
+    free(mall->assigned_cpus); mall->assigned_cpus = NULL;
+    mall->assigned_cpus = mall->spawned_cpus;
+    mall->spawned_cpus = calloc(mall->num_nodes, sizeof *mall->spawned_cpus);
+
+    for(int i=0; i < mall->num_nodes; i++) {
+      mall->spawned_cpus[i] = 0;
+    }
+  } else {
+    for(int i=0; i < mall->num_nodes; i++) {
+      mall->assigned_cpus[i] += mall->spawned_cpus[i];
+      mall->spawned_cpus[i] = 0;
+    }
+  }
 
   // Free unneded communicators
   if(mall->tmp_comm != MPI_COMM_WORLD && mall->tmp_comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->tmp_comm));
@@ -317,7 +340,7 @@ void MAM_Commit(int *mam_state) {
   // Set new communicator
   MPI_Comm_dup(mall->comm, mall->user_comm);
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout); }
   #endif
 
   #if MAM_USE_BARRIERS
@@ -482,65 +505,6 @@ int MAM_Get_Reconf_Info(mam_user_reconf_t *reconf_info) {
 
 //======================================================||
 //================PRIVATE FUNCTIONS=====================||
-//================DATA COMMUNICATION====================||
-//======================================================||
-//======================================================||
-
-/*
- * Funcion generalizada para enviar datos desde los hijos.
- * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
- * de forma bloqueante o no. El padre puede tener varios hilos.
- */
-void send_data(int numP_children, malleability_data_t *data_struct, int is_asynchronous) {
-  size_t i;
-  void *aux_send, *aux_recv;
-
-  if(is_asynchronous) {
-    for(i=0; i < data_struct->entries; i++) {
-      aux_send = data_struct->arrays[i];
-      aux_recv = NULL;
-      async_communication_start(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES,  
-		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
-    }
-  } else {
-    for(i=0; i < data_struct->entries; i++) {
-      aux_send = data_struct->arrays[i];
-      aux_recv = NULL;
-      sync_communication(aux_send, &aux_recv, data_struct->qty[i], data_struct->types[i], mall->numP, numP_children, MAM_SOURCES, mall->intercomm);
-      if(aux_recv != NULL) data_struct->arrays[i] = aux_recv;
-    }
-  }
-}
-
-/*
- * Funcion generalizada para recibir datos desde los hijos.
- * La asincronizidad se refiere a si el hilo padre e hijo lo hacen
- * de forma bloqueante o no. El padre puede tener varios hilos.
- */
-void recv_data(int numP_parents, malleability_data_t *data_struct, int is_asynchronous) {
-  size_t i;
-  void *aux, *aux_s = NULL;
-
-  if(is_asynchronous) {
-    for(i=0; i < data_struct->entries; i++) {
-      aux = data_struct->arrays[i];
-      async_communication_start(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS,
-		      mall->intercomm, &(data_struct->requests[i]), &(data_struct->request_qty[i]), &(data_struct->windows[i]));
-      data_struct->arrays[i] = aux;
-    }
-  } else {
-    for(i=0; i < data_struct->entries; i++) {
-      aux = data_struct->arrays[i];
-      sync_communication(aux_s, &aux, data_struct->qty[i], data_struct->types[i], mall->numP, numP_parents, MAM_TARGETS, mall->intercomm);
-      data_struct->arrays[i] = aux;
-    }
-  }
-}
-
-
-//======================================================||
-//================PRIVATE FUNCTIONS=====================||
 //====================MAM STAGES========================||
 //======================================================||
 //======================================================||
@@ -633,7 +597,7 @@ int MAM_St_user_start(int *mam_state) {
 
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout); }
   #endif
   if(user_function != NULL) {
     MAM_I_create_user_struct(MAM_SOURCES);
@@ -650,7 +614,7 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
     #if MAM_DEBUG
-      if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
+      if(mall->myId == mall->root) { DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout); }
     #endif
     return 1;
   }
@@ -776,10 +740,11 @@ void Children_init(void (*user_function)(void *), void *user_args) {
         DEBUG_FUNC("Spawned waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
       #endif
       for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]));
+        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]), &dist_a_data->idS[i*2]);
       }
+      free(dist_a_data->idS); dist_a_data->idS = NULL;
       for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]));
+        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]), &rep_a_data->idS[i*2]);
       }
     }
 
@@ -811,6 +776,9 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   #endif
   mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
+  #if MAM_DEBUG >= 2
+      DEBUG_FUNC("Spawned start synchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     #if MAM_USE_BARRIERS
@@ -907,7 +875,7 @@ int start_redistribution() {
       if(mall->zombie && MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
         MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
         mall->wait_targets_posted = 1;
-      }
+      } 
       return MAM_I_DIST_PENDING; 
     }
   } 
@@ -995,13 +963,14 @@ int check_redistribution(int wait_completed) {
     req_completed = dist_a_data->requests[i];
     req_qty = dist_a_data->request_qty[i];
     window = dist_a_data->windows[i];
-    async_communication_end(req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window, &dist_a_data->idS[i*2]);
   }
+  free(dist_a_data->idS); dist_a_data->idS = NULL;
   for(i=0; i<rep_a_data->entries; i++) {
     req_completed = rep_a_data->requests[i];
     req_qty = rep_a_data->request_qty[i];
     window = rep_a_data->windows[i];
-    async_communication_end(req_completed, req_qty, &window);
+    async_communication_end(req_completed, req_qty, &window, &rep_a_data->idS[i*2]);
   }
 
   #if MAM_USE_BARRIERS
@@ -1023,6 +992,9 @@ int end_redistribution() {
   size_t i;
   int local_state;
 
+  #if MAM_DEBUG
+    DEBUG_FUNC("Sources have started synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_SOURCES);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     #if MAM_USE_BARRIERS
