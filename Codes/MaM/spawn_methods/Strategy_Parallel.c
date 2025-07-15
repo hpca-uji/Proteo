@@ -174,7 +174,10 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
   //if(mall->myId == 0)printf("T1 P%d+%d step=%d next_id=%d aux_sum=%d actual_nodes=%d comms=%d\n", mall->myId, group_id, actual_step, next_group_id, aux_sum, actual_nodes, *qty_comms);
 
 #if MAM_USE_SLURM
-  tmp_job_id = getenv("SLURM_JOB_ID");
+  //tmp_job_id = getenv("SLURM_JOB_ID"); //Modified for DMR
+  size_t jid_count = snprintf(NULL, 0, "%d", mall_conf->slurm_jid) + 1; //Added for DMR
+  tmp_job_id = malloc(jid_count * sizeof *tmp_job_id); //Added for DMR
+  snprintf(tmp_job_id, jid_count, "%d", mall_conf->slurm_jid); //Added for DMR
 #endif
   if(tmp_job_id == NULL) { 
     tmp_job_id = malloc(2 * sizeof *tmp_job_id);
@@ -184,7 +187,7 @@ void hypercube_spawn(int group_id, int groups, int init_nodes, int init_step,
   set.cmd = get_spawn_cmd();
   i = 0;
   while(next_group_id < groups - init_nodes) {
-    set_hostfile_name(&file_name, &n, mall_conf->slurm_jid, next_group_id); //Modified for DMR
+    set_hostfile_name(&file_name, &n, tmp_job_id, next_group_id);
     set.spawn_qty = num_cpus;
     MPI_Info_create(&set.mapping);
 	  MPI_Info_set(set.mapping, "hostfile", file_name);
@@ -218,7 +221,10 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
   spawned_nodes = 0;
   set.cmd = get_spawn_cmd();
 #if MAM_USE_SLURM
-  tmp_job_id = getenv("SLURM_JOB_ID");
+  //tmp_job_id = getenv("SLURM_JOB_ID");
+  size_t jid_count = snprintf(NULL, 0, "%d", mall_conf->slurm_jid) + 1; //Added for DMR
+  tmp_job_id = malloc(jid_count * sizeof *tmp_job_id); //Added for DMR
+  snprintf(tmp_job_id, jid_count, "%d", mall_conf->slurm_jid); //Added for DMR
 #endif
   if(tmp_job_id == NULL) { 
     tmp_job_id = malloc(2 * sizeof *tmp_job_id);
@@ -240,7 +246,7 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
 
       if(exp_id == j) {
         //printf("P%d is expanding to node %d\n", exp_id, spawned_nodes); fflush(stdout);
-        set_hostfile_name(&file_name, &n, mall_conf->slurm_jid, spawned_nodes); //Modified for DMR
+        set_hostfile_name(&file_name, &n, tmp_job_id, spawned_nodes);
         set.spawn_qty = mall->spawned_cpus[i]; 
         MPI_Info_create(&set.mapping);
         MPI_Info_set(set.mapping, "hostfile", file_name);

@@ -340,11 +340,11 @@ int MAM_I_slurm_getenv_hosts_info() {
  * TODO
  */
 int MAM_I_slurm_getjob_hosts_info() {
-  int jobId, err;
+  int err;
   size_t i, j, t;
   char *tmp = NULL;
   job_info_msg_t *j_info;
-  resource_allocation_response_msg_t *alloc_msg;
+  resource_allocation_response_msg_t *alloc_msg; //Modified for DMR
 
   tmp = getenv("SLURM_JOB_ID");
   if(tmp == NULL) return 1;
@@ -352,7 +352,7 @@ int MAM_I_slurm_getjob_hosts_info() {
 
   err = slurm_load_job(&j_info, mall_conf->slurm_jid, 1); // FIXME Valgrind Not freed //Modified for DMR
   if(err) return err;
-  err = slurm_allocation_lookup(jobId, &alloc_msg);
+  err = slurm_allocation_lookup(mall_conf->slurm_jid, &alloc_msg);
   if(err) { return err; }
 
   mall->num_nodes = alloc_msg->node_cnt;
