@@ -54,7 +54,7 @@ void add_data(void *data, size_t total_qty, MPI_Datatype type, size_t request_qt
 void modify_data(void *data, size_t index, size_t total_qty, MPI_Datatype type, size_t request_qty, malleability_data_t *data_struct) {
   size_t i;
   
-  if(data_struct->entries < index) { // Index does not exist
+  if(data_struct->entries <= index) { // Index does not exist
     return;
   }
   if(data_struct->requests[index] != NULL) {

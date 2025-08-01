@@ -227,7 +227,7 @@ void diffusive_iterative_spawn(int exp_id, int groups, int init_procs, MPI_Comm 
 
   *spawn_comm = NULL;
   if(exp_id < groups) {  // Overexpect the worst case for this array
-    *qty_comms = groups/2;
+    *qty_comms = ceil(groups/2.0);
     *spawn_comm = (MPI_Comm *) malloc(*qty_comms * sizeof(MPI_Comm));
   }
   

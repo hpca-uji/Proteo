@@ -523,7 +523,7 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
 void modify_configuration() {
   int req;
   size_t i;
-  if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
+  if(config_file->n_groups != group->grp + 1) {
     MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
       config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
     for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
@@ -533,11 +533,6 @@ void modify_configuration() {
 	    MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
 	  }
     MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
-
-    if(group->grp != 0) {
-      MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-      MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-    }
   }
 }
 

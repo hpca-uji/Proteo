@@ -9,7 +9,7 @@ MAM_FLAGS = -I$(MAM_HOME) -L$(MAM_HOME)/build
 
 ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
     C_FLAGS += -g -O1
-	#C_FLAGS += -fsanitize=address
+    #C_FLAGS += -fsanitize=address
 endif
 
 # Final binary
