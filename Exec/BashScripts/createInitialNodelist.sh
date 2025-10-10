@@ -54,30 +54,25 @@ i=0
 while (( process_count < numP && i < mid )); do
     node_name=${nodes[$i]}
     max_cores=${cpus_per_node[$i]}
-    for ((j=0; j<max_cores && process_count<numP; j++)); do
-        output+=("$node_name")
-        ((process_count++))
-    done
+    output+=("$node_name:$max_cores")
+    process_count=$((process_count + max_cores))
     if [ $process_count -ge $numP ]; then
         break
     fi
     i2=$(( i + mid + rem ))
     node_name=${nodes[$i2]}
     max_cores=${cpus_per_node[$i2]}
-    for ((j=0; j<max_cores && process_count<numP; j++)); do
-        output2+=("$node_name")
-        ((process_count++))
-    done
+    output2+=("$node_name:$max_cores")
+    process_count=$((process_count + max_cores))
     i=$(( i + 1 ))
 done
+
 
 if [ $rem -ne 0 ] && [ $process_count -lt $numP ]; then
     node_name=${nodes[$mid]}
     max_cores=${cpus_per_node[$mid]}
-    for ((j=0; j<max_cores && process_count<numP; j++)); do
-        output+=("$node_name")
-        ((process_count++))
-    done
+    output+=("$node_name:$max_cores")
+    process_count=$((process_count + max_cores))
 fi
 #FIXME: END Added for hetero tests
 

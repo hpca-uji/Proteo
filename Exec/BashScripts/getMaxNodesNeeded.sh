@@ -4,6 +4,7 @@
 # Parameter 1 - Configuration file name for the emulation.
 # Parameter 2 - Partition to use
 # FIXME: Not tested for shared systems
+# FIXME: Does not correctly balance out the amount of nodes in all casses
 # NOTE: Actual script tries to always balance out the types of node used
 #====== Do not modify these values =======
 
