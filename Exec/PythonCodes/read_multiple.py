@@ -187,12 +187,24 @@ def write_output_file(datasets, common_output_name, output_index):
 def check_sections_assumptions(datasets):
     total_groups=int(datasets[0][Config_section.P_TOTAL_RESIZES.value])+1
     total_stages=int(datasets[0][Config_section.P_TOTAL_STAGES.value])
+    first_group_index=total_stages+1
 
     adr = datasets[0][Config_section.P_ADR.value]
     for i in range(total_groups):
         #Not valid if resize is to the same amount of processes
+        if i+1 < total_groups:
+            if datasets[first_group_index+i+1][Config_section.P_RESIZE_PROCS.value] == datasets[first_group_index+i][Config_section.P_RESIZE_PROCS.value]:
+                return False
+        #Not valid if Merge Shrink with Parallel
         if i>0:
-            if datasets[total_stages+1+i][Config_section.P_RESIZE_PROCS.value] == datasets[total_stages+i][Config_section.P_RESIZE_PROCS.value]:
+            if datasets[first_group_index+i][Config_section.P_RESIZE_SPAWN_METHOD.value] == 1 \
+              and datasets[first_group_index+i][Config_section.P_RESIZE_SPAWN_STRATEGY.value] != 0 \
+              and datasets[first_group_index+i-1][Config_section.P_RESIZE_PROCS.value] > datasets[first_group_index+i][Config_section.P_RESIZE_PROCS.value]:
+                return False
+        #Not valid if Baseline without Parallel
+        if i>0:
+            if datasets[first_group_index+i][Config_section.P_RESIZE_SPAWN_METHOD.value] == 0 \
+              and datasets[first_group_index+i][Config_section.P_RESIZE_SPAWN_STRATEGY.value] == 0:
                 return False
     return True
 
