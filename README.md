@@ -1,14 +1,19 @@
-# Proteo - Parallel spawning branch
+# Proteo - Parallel spawning paper preprint
 
 ## Overview
-This branch contains the codebase used for a new feature to perform parallel spawning in diverse kind of systems.
+This branch contains the codebase used for a new feature to perform parallel spawning in diverse kind of systems. It has been used for a work in progress paper, which we are still working on.
+
+## Paper Information
+- **Title:** Parallel Spawning Strategies for Dynamic-Aware MPI Applications
+- **Authors:** Iker Martín-Álvarez, José I. Aliaga, Maribel Castillo, Sergio Iserte
+- **Submission Date:** 10/10/2025
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
 - **Analysis**: Contains the scripts and notebook to perform analysis of Proteo executions.
 - **Codes**: Contains all the codes used to compile Proteo.
 - **Exec**: Contains the scripts to execute Proteo in different ways and check if the runs have completed successfully.
-- **Results**: Contains the configuration files used to emulate the malleable emulation of the CG.
+- **Results**: Contains the configuration files used for the evaluation
 
 ## Installation
 
@@ -30,24 +35,24 @@ The following requisites are optional and only needed to process and analyse the
 1. Clone the repository to your local machine:
 
     ```bash
-    $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
-    $ cd malleability_benchmark
-    $ git checkout JournalSupercomputing23/24
+    git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
+    cd malleability_benchmark
+    git checkout Paper-ParallelSpawn
     ```
 
 2. Compile the code using the `make` command:
 
     ```bash
-    $ cd Codes/
-    $ make
+    cd Codes/
+    make
     ```
 
     This command compiles the code using the MPI (MPICH) library.
 
 3. Test the installation:
     ```bash
-    $ cd ../Results
-    $ bash ../Exec/singleRun.sh test.ini
+    cd ../Results
+    bash ../Exec/singleRun.sh test.ini
     ```
     This test launches an Slurm Job with a basic configuration file that performs a reconfiguration from 10 to 2 processes.
     As soon as it ends, 4 files will appear, one is the slurm output, and the other 3 are Proteo's output. 
@@ -71,3 +76,107 @@ To clean the installation and remove compiled binaries, use:
 ```bash
 $ make clean
 ```
+
+## Reproducing Experiments Section 5.2
+All the needed files for the evaluation in MNV are already in this branch. Keep in mind these only work properly in the system MNV, as they have been modelled for that system.
+To reproduce the experiments performed with Proteo the following steps have to be performed:
+
+1. Preparing the configuration files:
+    ```bash
+    $ cd Results/MNV
+    $ mkdir resize_files
+    $ bash ../../../Exec/multipleRuns.sh complex_config.ini config
+    $ mv Desglosed*/* resize_files/
+    $ rmdir Desglosed*
+    ```
+
+    The script multipleRuns.sh creates multiple configuration file from a compact configuration file which describes different possible configurations. The resulting configuration files are the ones that will be used by the jobs.
+    This step can be ommited and use the files in the directory "Results/MNV/config_files" instead.
+
+2. Launching the jobs:
+    ```bash
+    $ cd Results/MNV/resize_files
+    $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
+    ```
+
+    The script runAll.sh will create a job for each configuration file in the directory. Each configuration file will be run 20 times, and each run will have a Slurm limited time of 100s. The execution of the scripts creates 168 Slurm jobs.
+
+3. After all the jobs have finished, some error checking must be performed:
+    ```bash
+    $ cd Results/MNV/resize_files
+    $ bash ../../../Exec/CheckRun.sh config 168 20 2 2 2 100 >> Checkrun.txt
+    $ cat Checkrun.txt | tail -1
+    ```
+
+    The Checkrun.txt last line indicates the runs state for each directory. The values are: 
+- SUCCESS: the directory runs have been completed. 
+- FAILURE: a major error appeared, it is recommended to contact the code mantainer. 
+- REPEATING: some configuration files may had an error related to monitoring times and are being repeated. The Checkrun.sh script must be executed again for that directory when the new jobs finish.
+
+When all Checkrun.txt return a SUCCESS state, the experiments have been completed and the raw data can be used. It is recommended to process it before analysing the results.
+For the next step, is possible to use the files in "Results/MNV/raw_data", that contains the original executed results.
+
+4. (Optional) When the experiments end, you can process the data. To perform this task the optional installation requisites must be meet. To process the data:
+    ```bash
+    $ cd Analysis/
+    $ python3 MallTimes.py R ../Results/MNV/resize_files dataG
+    $ python3 CreateResizeDataframe.py dataG.pkl dataM
+    $ python3 CreateIterDataframe.py dataG.pkl dataL
+    $ python3 CreateStageDataframe.py dataG.pkl dataS
+    ```
+    After these commands, you will have multiple files called dataG.pkl, dataM.pkl, dataL*.pkl and dataS*.pkl. These files can be opened in Pandas as dataframes to analyse the data.
+    Keep in mind that the last two scripts could require a few minutes to obtain the data.
+
+<!-- Terminar con paso 5 -->
+
+## Reproducing Experiments Section 5.3
+All the needed files for the evaluation in Nasp are already in this branch. Keep in mind these only work properly in the system Nasp, as they have been modelled for that system.
+To reproduce the experiments performed with Proteo the following steps have to be performed:
+
+1. Preparing the configuration files:
+    ```bash
+    $ cd Results/NASP
+    $ mkdir resize_files
+    $ bash ../../../Exec/multipleRuns.sh complex_config.ini config
+    $ mv Desglosed*/* resize_files/
+    $ rmdir Desglosed*
+    ```
+
+    The script multipleRuns.sh creates multiple configuration file from a compact configuration file which describes different possible configurations. The resulting configuration files are the ones that will be used by the jobs.
+    This step can be ommited and use the files in the directory "Results/NASP/config_files" instead.
+
+2. Launching the jobs:
+    ```bash
+    $ cd Results/NASP/resize_files
+    $ bash ../../../Exec/runAll.sh 20 100 > runAll.txt
+    ```
+
+    The script runAll.sh will create a job for each configuration file in the directory. Each configuration file will be run 20 times, and each run will have a Slurm limited time of 100s. The execution of the scripts creates 180 Slurm jobs.
+
+3. After all the jobs have finished, some error checking must be performed:
+    ```bash
+    $ cd Results/NASP/resize_files
+    $ bash ../../../Exec/CheckRun.sh config 180 20 2 2 2 100 >> Checkrun.txt
+    $ cat Checkrun.txt | tail -1
+    ```
+
+    The Checkrun.txt last line indicates the runs state for each directory. The values are: 
+- SUCCESS: the directory runs have been completed. 
+- FAILURE: a major error appeared, it is recommended to contact the code mantainer. 
+- REPEATING: some configuration files may had an error related to monitoring times and are being repeated. The Checkrun.sh script must be executed again for that directory when the new jobs finish.
+
+When all Checkrun.txt return a SUCCESS state, the experiments have been completed and the raw data can be used. It is recommended to process it before analysing the results.
+For the next step, is possible to use the files in "Results/NASP/raw_data", that contains the original executed results.
+
+4. (Optional) When the experiments end, you can process the data. To perform this task the optional installation requisites must be meet. To process the data:
+    ```bash
+    $ cd Analysis/
+    $ python3 MallTimes.py R ../Results/NASP/resize_files dataG
+    $ python3 CreateResizeDataframe.py dataG.pkl dataM
+    $ python3 CreateIterDataframe.py dataG.pkl dataL
+    $ python3 CreateStageDataframe.py dataG.pkl dataS
+    ```
+    After these commands, you will have multiple files called dataG.pkl, dataM.pkl, dataL*.pkl and dataS*.pkl. These files can be opened in Pandas as dataframes to analyse the data.
+    Keep in mind that the last two scripts could require a few minutes to obtain the data.
+
+<!-- Terminar con paso 5 -->
