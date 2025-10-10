@@ -1,0 +1,19 @@
+START TEST P=gpp
+config126.ini 0 126 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs09r2b[01-09,11-13,42,46,48-49] - Starting hostlist=gs09r2b01:112,gs09r2b02:112,gs09r2b03:112,gs09r2b04:112,gs09r2b05:112,gs09r2b06:112,gs09r2b07:112,gs09r2b08:112,gs09r2b09:112,gs09r2b11:112,gs09r2b12:112,gs09r2b13:112,gs09r2b42:112,gs09r2b46:112,gs09r2b48:112,gs09r2b49:112,
+Run 0 starts
+Warning: Permanently added 'gs09r2b42' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b12' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b49' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b11' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b08' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b13' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b04' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b09' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b05' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs09r2b06' (ED25519) to the list of known hosts.
+Run 0 ends
+END TEST

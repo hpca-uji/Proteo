@@ -1,0 +1,29 @@
+START TEST P=gpp
+config19.ini 0 19 4
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r3b[26,28,35,37,40-41,45-46] - Starting hostlist=gs18r3b26:112,gs18r3b28:112,
+Run 0 starts
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+[mpiexec@gs18r3b26] MNV cleaning
+Run 3 ends
+END TEST

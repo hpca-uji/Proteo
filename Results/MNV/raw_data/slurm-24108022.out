@@ -1,0 +1,48 @@
+START TEST P=gpp
+config65.ini 0 65 2
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs04r2b[31-52,54-63] - Starting hostlist=gs04r2b31:112,gs04r2b32:112,gs04r2b33:112,gs04r2b34:112,gs04r2b35:112,gs04r2b36:112,gs04r2b37:112,gs04r2b38:112,gs04r2b39:112,gs04r2b40:112,gs04r2b41:112,gs04r2b42:112,gs04r2b43:112,gs04r2b44:112,gs04r2b45:112,gs04r2b46:112,gs04r2b47:112,gs04r2b48:112,gs04r2b49:112,gs04r2b50:112,gs04r2b51:112,gs04r2b52:112,gs04r2b54:112,gs04r2b55:112,gs04r2b56:112,gs04r2b57:112,gs04r2b58:112,gs04r2b59:112,gs04r2b60:112,gs04r2b61:112,gs04r2b62:112,gs04r2b63:112,
+Run 0 starts
+Warning: Permanently added 'gs04r2b49' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b34' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b42' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b40' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b39' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b52' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b41' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b37' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b43' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b47' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b54' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b55' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b38' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b50' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b36' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b48' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b44' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b51' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b32' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b45' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b60' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b61' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b56' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b59' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b57' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b58' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b63' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs04r2b62' (ED25519) to the list of known hosts.
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+[mpiexec@gs04r2b31] MNV cleaning
+Run 1 ends
+END TEST

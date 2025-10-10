@@ -1,0 +1,7 @@
+START TEST P=gpp
+config45.ini 0 45 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs16r3b[01,05-06,16,19,25,36,40-41,44-48,53-54] - Starting hostlist=gs16r3b01:112,gs16r3b05:112,gs16r3b06:112,gs16r3b16:112,gs16r3b19:112,gs16r3b25:112,gs16r3b36:112,gs16r3b40:112,gs16r3b41:112,gs16r3b44:112,gs16r3b45:112,gs16r3b46:112,gs16r3b47:112,gs16r3b48:112,gs16r3b53:112,gs16r3b54:112,
+Run 0 starts
+Run 0 ends
+END TEST

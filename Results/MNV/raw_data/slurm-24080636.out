@@ -1,0 +1,12 @@
+START TEST P=gpp
+config126.ini 0 126 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs21r2b[04,08-10,15,31,33,35-42,46] - Starting hostlist=gs21r2b04:112,gs21r2b08:112,gs21r2b09:112,gs21r2b10:112,gs21r2b15:112,gs21r2b31:112,gs21r2b33:112,gs21r2b35:112,gs21r2b36:112,gs21r2b37:112,gs21r2b38:112,gs21r2b39:112,gs21r2b40:112,gs21r2b41:112,gs21r2b42:112,gs21r2b46:112,
+Run 0 starts
+Connection closed by 10.2.21.109 port 22
+[mpiexec@gs21r2b04] MNV cleaning
+[mpiexec@gs21r2b04] MNV cleaning
+[mpiexec@gs21r2b04] MNV cleaning
+[mpiexec@gs21r2b04] MNV cleaning
+Run 0 ends
+END TEST

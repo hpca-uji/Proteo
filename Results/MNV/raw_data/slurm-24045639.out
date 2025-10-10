@@ -1,0 +1,34 @@
+START TEST P=gpp
+config47.ini 0 47 3
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r1b[24-25,27-30,33-35,37-41,43-44,46,48,50,52-53,55-57,59-63,65,68,70] - Starting hostlist=gs18r1b24:112,gs18r1b25:112,gs18r1b27:112,gs18r1b28:112,gs18r1b29:112,gs18r1b30:112,gs18r1b33:112,gs18r1b34:112,gs18r1b35:112,gs18r1b37:112,gs18r1b38:112,gs18r1b39:112,gs18r1b40:112,gs18r1b41:112,gs18r1b43:112,gs18r1b44:112,gs18r1b46:112,gs18r1b48:112,gs18r1b50:112,gs18r1b52:112,gs18r1b53:112,gs18r1b55:112,gs18r1b56:112,gs18r1b57:112,gs18r1b59:112,gs18r1b60:112,gs18r1b61:112,gs18r1b62:112,gs18r1b63:112,gs18r1b65:112,gs18r1b68:112,gs18r1b70:112,
+Run 0 starts
+Warning: Permanently added 'gs18r1b61' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b63' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b62' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b68' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b53' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b59' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b60' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b34' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b28' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b38' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b52' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b55' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b37' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b50' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b25' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b56' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b27' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b65' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b29' (ED25519) to the list of known hosts.
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+Run 2 ends
+END TEST

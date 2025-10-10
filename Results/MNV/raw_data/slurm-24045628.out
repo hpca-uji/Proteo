@@ -1,0 +1,26 @@
+START TEST P=gpp
+config26.ini 0 26 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs17r3b[01-05,07-13,51-53,66] - Starting hostlist=gs17r3b01:112,gs17r3b02:112,gs17r3b03:112,gs17r3b04:112,
+Run 0 starts
+Warning: Permanently added 'gs17r3b04' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b03' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b02' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b09' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b12' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b53' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b51' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b10' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b52' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b08' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b11' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b05' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b66' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs17r3b13' (ED25519) to the list of known hosts.
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+Run 0 ends
+END TEST

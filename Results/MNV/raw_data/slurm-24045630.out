@@ -1,0 +1,55 @@
+START TEST P=gpp
+config28.ini 0 28 5
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs13r2b[16-17,19-20,23,45-47,49-57,59,63-64,66-67,69-70] - Starting hostlist=gs13r2b16:112,gs13r2b17:112,gs13r2b19:112,gs13r2b20:112,gs13r2b23:112,gs13r2b45:112,gs13r2b46:112,gs13r2b47:112,gs13r2b49:112,gs13r2b50:112,gs13r2b51:112,gs13r2b52:112,gs13r2b53:112,gs13r2b54:112,gs13r2b55:112,gs13r2b56:112,gs13r2b57:112,gs13r2b59:112,gs13r2b63:112,gs13r2b64:112,gs13r2b66:112,gs13r2b67:112,gs13r2b69:112,gs13r2b70:112,
+Run 0 starts
+Warning: Permanently added 'gs13r2b23' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b63' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b20' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b66' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b70' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b56' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b59' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b19' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b51' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b49' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b47' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b57' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b50' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b52' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b55' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b69' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b45' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b53' (ED25519) to the list of known hosts.
+Connection closed by 10.2.13.138 port 22
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+Run 0 ends
+Run 1 starts
+Connection closed by 10.2.13.138 port 22
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+Run 1 ends
+Run 2 starts
+Connection closed by 10.2.13.138 port 22
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+Run 2 ends
+Run 3 starts
+Connection closed by 10.2.13.138 port 22
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+[mpiexec@gs13r2b16] MNV cleaning
+Run 3 ends
+Run 4 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 4 ends
+END TEST

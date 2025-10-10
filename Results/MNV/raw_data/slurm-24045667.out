@@ -1,0 +1,18 @@
+START TEST P=gpp
+config113.ini 0 113 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs13r2b[15,29-32,34-36] - Starting hostlist=gs13r2b15:112,gs13r2b29:112,gs13r2b30:112,gs13r2b31:112,gs13r2b32:112,gs13r2b34:112,gs13r2b35:112,gs13r2b36:112,
+Run 0 starts
+Warning: Permanently added 'gs13r2b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b36' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b32' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b31' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b29' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b34' (ED25519) to the list of known hosts.
+[mpiexec@gs13r2b15] MNV cleaning
+[mpiexec@gs13r2b15] MNV cleaning
+[mpiexec@gs13r2b15] MNV cleaning
+[mpiexec@gs13r2b15] MNV cleaning
+Run 0 ends
+END TEST

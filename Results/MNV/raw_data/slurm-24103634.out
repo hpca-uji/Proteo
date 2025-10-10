@@ -1,0 +1,46 @@
+START TEST P=gpp
+config65.ini 0 65 2
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs14r2b[04-35] - Starting hostlist=gs14r2b04:112,gs14r2b05:112,gs14r2b06:112,gs14r2b07:112,gs14r2b08:112,gs14r2b09:112,gs14r2b10:112,gs14r2b11:112,gs14r2b12:112,gs14r2b13:112,gs14r2b14:112,gs14r2b15:112,gs14r2b16:112,gs14r2b17:112,gs14r2b18:112,gs14r2b19:112,gs14r2b20:112,gs14r2b21:112,gs14r2b22:112,gs14r2b23:112,gs14r2b24:112,gs14r2b25:112,gs14r2b26:112,gs14r2b27:112,gs14r2b28:112,gs14r2b29:112,gs14r2b30:112,gs14r2b31:112,gs14r2b32:112,gs14r2b33:112,gs14r2b34:112,gs14r2b35:112,
+Run 0 starts
+Warning: Permanently added 'gs14r2b20' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b09' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b15' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b17' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b16' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b24' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b13' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b06' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b12' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b19' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b10' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b08' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b22' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b21' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b05' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b27' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b34' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b26' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b28' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b31' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b32' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b25' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs14r2b29' (ED25519) to the list of known hosts.
+Connection closed by 10.2.14.98 port 22
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+Run 0 ends
+Run 1 starts
+Connection closed by 10.2.14.98 port 22
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+[mpiexec@gs14r2b04] MNV cleaning
+Run 1 ends
+END TEST

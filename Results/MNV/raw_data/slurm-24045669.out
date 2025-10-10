@@ -1,0 +1,7 @@
+START TEST P=gpp
+config123.ini 0 123 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs13r2b[15,29-32,34-36] - Starting hostlist=gs13r2b15:112,
+Run 0 starts
+Run 0 ends
+END TEST

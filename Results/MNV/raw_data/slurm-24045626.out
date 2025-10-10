@@ -1,0 +1,20 @@
+START TEST P=gpp
+config21.ini 0 21 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs21r2b[06-07,30,35-45,49-50] - Starting hostlist=gs21r2b06:112,gs21r2b07:112,gs21r2b30:112,gs21r2b35:112,gs21r2b36:112,gs21r2b37:112,gs21r2b38:112,gs21r2b39:112,gs21r2b40:112,gs21r2b41:112,gs21r2b42:112,gs21r2b43:112,gs21r2b44:112,gs21r2b45:112,gs21r2b49:112,gs21r2b50:112,
+Run 0 starts
+Warning: Permanently added 'gs21r2b37' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b38' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b39' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b40' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b36' (ED25519) to the list of known hosts.
+Connection closed by 10.2.21.116 port 22
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+Run 0 ends
+END TEST

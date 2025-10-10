@@ -1,0 +1,12 @@
+START TEST P=gpp
+config27.ini 0 27 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs17r3b[01-05,07-13,51-53,66] - Starting hostlist=gs17r3b01:112,gs17r3b02:112,gs17r3b03:112,gs17r3b04:112,gs17r3b05:112,gs17r3b07:112,gs17r3b08:112,gs17r3b09:112,
+Run 0 starts
+Connection closed by 10.2.17.152 port 22
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+[mpiexec@gs17r3b01] MNV cleaning
+Run 0 ends
+END TEST

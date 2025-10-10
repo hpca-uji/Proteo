@@ -1,0 +1,47 @@
+START TEST P=gpp
+config79.ini 0 79 7
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[02,04-07,22,30-31,37-38,41-46,49-51,53-61,63-66] - Starting hostlist=gs08r2b02:112,gs08r2b04:112,
+Run 0 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 3 ends
+Run 4 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 4 ends
+Run 5 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 5 ends
+Run 6 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 6 ends
+END TEST

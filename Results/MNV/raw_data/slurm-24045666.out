@@ -1,0 +1,12 @@
+START TEST P=gpp
+config110.ini 0 110 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r1b[01-12,15-17,20-25,27-30,33-35,37-40] - Starting hostlist=gs18r1b01:112,gs18r1b02:112,gs18r1b03:112,gs18r1b04:112,gs18r1b05:112,gs18r1b06:112,gs18r1b07:112,gs18r1b08:112,gs18r1b09:112,gs18r1b10:112,gs18r1b11:112,gs18r1b12:112,gs18r1b15:112,gs18r1b16:112,gs18r1b17:112,gs18r1b20:112,gs18r1b21:112,gs18r1b22:112,gs18r1b23:112,gs18r1b24:112,gs18r1b25:112,gs18r1b27:112,gs18r1b28:112,gs18r1b29:112,gs18r1b30:112,gs18r1b33:112,gs18r1b34:112,gs18r1b35:112,gs18r1b37:112,gs18r1b38:112,gs18r1b39:112,gs18r1b40:112,
+Run 0 starts
+Connection closed by 10.2.18.33 port 22
+[mpiexec@gs18r1b01] MNV cleaning
+[mpiexec@gs18r1b01] MNV cleaning
+[mpiexec@gs18r1b01] MNV cleaning
+[mpiexec@gs18r1b01] MNV cleaning
+Run 0 ends
+END TEST

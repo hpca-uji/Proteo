@@ -1,0 +1,65 @@
+START TEST P=gpp
+config9.ini 0 9 20
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs02r1b[02,19-23,25-26,28,30,33,37-38,54-56] - Starting hostlist=gs02r1b02:112,gs02r1b19:112,gs02r1b20:112,gs02r1b21:112,gs02r1b22:112,gs02r1b23:112,gs02r1b25:112,gs02r1b26:112,gs02r1b28:112,gs02r1b30:112,gs02r1b33:112,gs02r1b37:112,gs02r1b38:112,gs02r1b54:112,gs02r1b55:112,gs02r1b56:112,
+Run 0 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 0 ends
+Run 1 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 1 ends
+Run 2 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 2 ends
+Run 3 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 3 ends
+Run 4 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 4 ends
+Run 5 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 5 ends
+Run 6 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 6 ends
+Run 7 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 7 ends
+Run 8 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 8 ends
+Run 9 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 9 ends
+Run 10 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 10 ends
+Run 11 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 11 ends
+Run 12 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 12 ends
+Run 13 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 13 ends
+Run 14 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 14 ends
+Run 15 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 15 ends
+Run 16 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 16 ends
+Run 17 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 17 ends
+Run 18 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 18 ends
+Run 19 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 19 ends
+END TEST

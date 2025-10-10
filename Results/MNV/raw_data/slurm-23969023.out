@@ -1,0 +1,14 @@
+START TEST P=gpp
+config12.ini 0 12 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs02r2b[01,20,24,69] - Starting hostlist=gs02r2b01:112,
+Run 0 starts
+Warning: Permanently added 'gs02r2b69' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b20' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b24' (ED25519) to the list of known hosts.
+[mpiexec@gs02r2b01] MNV cleaning
+[mpiexec@gs02r2b01] MNV cleaning
+[mpiexec@gs02r2b01] MNV cleaning
+[mpiexec@gs02r2b01] MNV cleaning
+Run 0 ends
+END TEST

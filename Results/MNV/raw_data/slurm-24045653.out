@@ -1,0 +1,35 @@
+START TEST P=gpp
+config79.ini 0 79 2
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r1b[02-12,15-17,20-25,27-30,33-35,37-41] - Starting hostlist=gs18r1b02:112,gs18r1b03:112,
+Run 0 starts
+Warning: Permanently added 'gs18r1b03' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b04' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b20' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b08' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b21' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b10' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b24' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b22' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b09' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b15' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b12' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b11' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b05' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b23' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b17' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b06' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b16' (ED25519) to the list of known hosts.
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+[mpiexec@gs18r1b02] MNV cleaning
+Run 1 ends
+END TEST

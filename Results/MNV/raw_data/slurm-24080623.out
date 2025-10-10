@@ -1,0 +1,37 @@
+START TEST P=gpp
+config70.ini 0 70 5
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs04r1b[25,31,33-34,36-39,41-42,45,47,49-55,59-62,64] - Starting hostlist=gs04r1b25:112,gs04r1b31:112,gs04r1b33:112,gs04r1b34:112,gs04r1b36:112,gs04r1b37:112,gs04r1b38:112,gs04r1b39:112,gs04r1b41:112,gs04r1b42:112,gs04r1b45:112,gs04r1b47:112,gs04r1b49:112,gs04r1b50:112,gs04r1b51:112,gs04r1b52:112,gs04r1b53:112,gs04r1b54:112,gs04r1b55:112,gs04r1b59:112,gs04r1b60:112,gs04r1b61:112,gs04r1b62:112,gs04r1b64:112,
+Run 0 starts
+Connection closed by 10.2.4.31 port 22
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+Run 0 ends
+Run 1 starts
+Connection closed by 10.2.4.31 port 22
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+Run 3 ends
+Run 4 starts
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+[mpiexec@gs04r1b25] MNV cleaning
+Run 4 ends
+END TEST

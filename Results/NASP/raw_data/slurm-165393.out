@@ -1,0 +1,45 @@
+START TEST P=T1
+./config44.ini 0 44 20
+/soft/gnu/mpich-3.4.1-noucx/bin/mpirun
+Nodes=n[00,02,04-06],s[00-04] - Starting hostlist=n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n02,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,n05,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s00,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s01,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s02,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03,s03
+Run 0 starts
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+Run 2 ends
+Run 3 starts
+Run 3 ends
+Run 4 starts
+Run 4 ends
+Run 5 starts
+Run 5 ends
+Run 6 starts
+Run 6 ends
+Run 7 starts
+Run 7 ends
+Run 8 starts
+Run 8 ends
+Run 9 starts
+Run 9 ends
+Run 10 starts
+Run 10 ends
+Run 11 starts
+Run 11 ends
+Run 12 starts
+Run 12 ends
+Run 13 starts
+Run 13 ends
+Run 14 starts
+Run 14 ends
+Run 15 starts
+Run 15 ends
+Run 16 starts
+Run 16 ends
+Run 17 starts
+Run 17 ends
+Run 18 starts
+Run 18 ends
+Run 19 starts
+Run 19 ends
+END TEST

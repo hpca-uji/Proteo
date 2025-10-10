@@ -1,0 +1,7 @@
+START TEST P=gpp
+config37.ini 0 37 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs11r1b[19-30,33-36,40-48,50-56] - Starting hostlist=gs11r1b19:112,gs11r1b20:112,
+Run 0 starts
+Run 0 ends
+END TEST

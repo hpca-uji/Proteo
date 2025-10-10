@@ -1,0 +1,57 @@
+START TEST P=gpp
+config40.ini 0 40 4
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[02,04,07,22,30,37-38,41-46,49-51,53-61,63-67,70,72] - Starting hostlist=gs08r2b02:112,gs08r2b04:112,gs08r2b07:112,gs08r2b22:112,gs08r2b30:112,gs08r2b37:112,gs08r2b38:112,gs08r2b41:112,gs08r2b42:112,gs08r2b43:112,gs08r2b44:112,gs08r2b45:112,gs08r2b46:112,gs08r2b49:112,gs08r2b50:112,gs08r2b51:112,
+Run 0 starts
+Warning: Permanently added 'gs08r2b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b41' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b49' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b50' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b51' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b04' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b37' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b22' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b38' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b07' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b43' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b45' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b44' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b60' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b63' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b57' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b54' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b56' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b59' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b65' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b58' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b55' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b64' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b72' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b53' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b70' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b61' (ED25519) to the list of known hosts.
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 3 ends
+END TEST

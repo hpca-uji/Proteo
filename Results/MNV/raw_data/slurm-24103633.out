@@ -1,0 +1,11 @@
+START TEST P=gpp
+config58.ini 0 58 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs19r1b[01-17,19,21-26] - Starting hostlist=gs19r1b01:112,gs19r1b02:112,gs19r1b03:112,gs19r1b04:112,gs19r1b05:112,gs19r1b06:112,gs19r1b07:112,gs19r1b08:112,gs19r1b09:112,gs19r1b10:112,gs19r1b11:112,gs19r1b12:112,gs19r1b13:112,gs19r1b14:112,gs19r1b15:112,gs19r1b16:112,gs19r1b17:112,gs19r1b19:112,gs19r1b21:112,gs19r1b22:112,gs19r1b23:112,gs19r1b24:112,gs19r1b25:112,gs19r1b26:112,
+Run 0 starts
+[mpiexec@gs19r1b01] MNV cleaning
+[mpiexec@gs19r1b01] MNV cleaning
+[mpiexec@gs19r1b01] MNV cleaning
+[mpiexec@gs19r1b01] MNV cleaning
+Run 0 ends
+END TEST

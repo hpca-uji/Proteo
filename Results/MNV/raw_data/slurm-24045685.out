@@ -1,0 +1,11 @@
+START TEST P=gpp
+config154.ini 0 154 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs21r2b[06-07,30,35-45,49-50] - Starting hostlist=gs21r2b06:112,gs21r2b07:112,
+Run 0 starts
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+[mpiexec@gs21r2b06] MNV cleaning
+Run 0 ends
+END TEST

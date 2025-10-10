@@ -1,0 +1,7 @@
+START TEST P=T1
+config112.ini 0 112 1
+/soft/gnu/mpich-3.4.1-noucx/bin/mpirun
+Nodes=n[00,06-09],s[02-06] - Starting hostlist=n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,n00,
+Run 0 starts
+Run 0 ends
+END TEST

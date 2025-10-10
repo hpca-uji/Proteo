@@ -1,0 +1,8 @@
+START TEST P=gpp
+config10.ini 0 10 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r1b[01-12,15-17,20-25,27-29] - Starting hostlist=gs18r1b01:112,gs18r1b02:112,gs18r1b03:112,gs18r1b04:112,gs18r1b05:112,gs18r1b06:112,gs18r1b07:112,gs18r1b08:112,gs18r1b09:112,gs18r1b10:112,gs18r1b11:112,gs18r1b12:112,gs18r1b15:112,gs18r1b16:112,gs18r1b17:112,gs18r1b20:112,gs18r1b21:112,gs18r1b22:112,gs18r1b23:112,gs18r1b24:112,gs18r1b25:112,gs18r1b27:112,gs18r1b28:112,gs18r1b29:112,
+Run 0 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 0 ends
+END TEST

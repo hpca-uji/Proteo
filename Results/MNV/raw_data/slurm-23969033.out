@@ -1,0 +1,7 @@
+START TEST P=gpp
+config24.ini 0 24 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs18r3b[10,26,28,35,37,40-41,45-51,54-55] - Starting hostlist=gs18r3b10:112,
+Run 0 starts
+Run 0 ends
+END TEST

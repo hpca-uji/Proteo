@@ -1,0 +1,154 @@
+START TEST P=gpp
+./config99.ini 0 99 20
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs11r1b[56-59,62,65],gs13r2b[02,28],gs15r1b[05,38,61-62,64,66],gs18r1b[01-02,39-44,47-48,57,70-71],gs20r2b[01,36-37,62,64] - Starting hostlist=gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,gs11r1b56,
+Run 0 starts
+Warning: Permanently added 'gs18r1b48' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b70' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs20r2b37' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b58' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b62' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b28' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs13r2b02' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b41' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b57' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b42' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b59' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b39' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs20r2b36' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b02' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b57' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs15r1b61' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs20r2b62' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b01' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b71' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b44' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b43' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs20r2b01' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs20r2b64' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs15r1b64' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs18r1b47' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b65' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs15r1b62' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs15r1b05' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs15r1b38' (ED25519) to the list of known hosts.
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 3 ends
+Run 4 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 4 ends
+Run 5 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 5 ends
+Run 6 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 6 ends
+Run 7 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 7 ends
+Run 8 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 8 ends
+Run 9 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 9 ends
+Run 10 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 10 ends
+Run 11 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 11 ends
+Run 12 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 12 ends
+Run 13 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 13 ends
+Run 14 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 14 ends
+Run 15 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 15 ends
+Run 16 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 16 ends
+Run 17 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 17 ends
+Run 18 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 18 ends
+Run 19 starts
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+[mpiexec@gs11r1b56] MNV cleaning
+Run 19 ends
+END TEST

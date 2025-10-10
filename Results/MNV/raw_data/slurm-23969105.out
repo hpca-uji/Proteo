@@ -1,0 +1,7 @@
+START TEST P=gpp
+config105.ini 0 105 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs04r1b[59-60] - Starting hostlist=gs04r1b59:112,gs04r1b60:112,
+Run 0 starts
+Run 0 ends
+END TEST

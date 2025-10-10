@@ -1,0 +1,28 @@
+START TEST P=gpp
+config98.ini 0 98 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs02r2b[03,15,17-27,29,32-33,36,39-45] - Starting hostlist=gs02r2b03:112,gs02r2b15:112,gs02r2b17:112,gs02r2b18:112,gs02r2b19:112,gs02r2b20:112,gs02r2b21:112,gs02r2b22:112,gs02r2b23:112,gs02r2b24:112,gs02r2b25:112,gs02r2b26:112,gs02r2b27:112,gs02r2b29:112,gs02r2b32:112,gs02r2b33:112,
+Run 0 starts
+Warning: Permanently added 'gs02r2b25' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b17' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b32' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b26' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b27' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b18' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b22' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b23' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b19' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b21' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b29' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b42' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b39' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b43' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b40' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b44' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs02r2b41' (ED25519) to the list of known hosts.
+[mpiexec@gs02r2b03] MNV cleaning
+[mpiexec@gs02r2b03] MNV cleaning
+[mpiexec@gs02r2b03] MNV cleaning
+[mpiexec@gs02r2b03] MNV cleaning
+Run 0 ends
+END TEST

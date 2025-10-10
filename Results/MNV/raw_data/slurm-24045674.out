@@ -1,0 +1,36 @@
+START TEST P=gpp
+config132.ini 0 132 5
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[02,28-34,37,43-46,49,59,68] - Starting hostlist=gs08r2b02:112,gs08r2b28:112,gs08r2b29:112,gs08r2b30:112,gs08r2b31:112,gs08r2b32:112,gs08r2b33:112,gs08r2b34:112,
+Run 0 starts
+Warning: Permanently added 'gs08r2b68' (ED25519) to the list of known hosts.
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 0 ends
+Run 1 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 1 ends
+Run 2 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 3 ends
+Run 4 starts
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+[mpiexec@gs08r2b02] MNV cleaning
+Run 4 ends
+END TEST

@@ -1,0 +1,160 @@
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.089574 0.074143 0.085798 0.075159 0.072178 
+T_stage 0: 0.013026 0.013273 0.013034 0.013041 0.013023 
+T_stage 1: 0.076426 0.060670 0.072658 0.062008 0.059050 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.092383 0.076877 0.073735 0.076704 0.074061 
+T_stage 0: 0.013099 0.013095 0.013088 0.013059 0.013099 
+T_stage 1: 0.079185 0.063679 0.060434 0.063501 0.060780 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.091992 0.077270 0.077840 0.077491 0.077098 
+T_stage 0: 0.012969 0.013067 0.012990 0.013054 0.012995 
+T_stage 1: 0.078850 0.064083 0.064741 0.064291 0.063991 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.098927 0.082558 0.082121 0.082108 0.081502 
+T_stage 0: 0.017833 0.017780 0.017780 0.017796 0.017808 
+T_stage 1: 0.080932 0.064719 0.064263 0.064240 0.063650 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.092213 0.074459 0.075346 0.071691 0.074267 
+T_stage 0: 0.012960 0.013029 0.012976 0.012964 0.012984 
+T_stage 1: 0.079104 0.061343 0.062185 0.058614 0.061140 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.090081 0.073030 0.073909 0.079755 0.075783 
+T_stage 0: 0.013011 0.013040 0.012958 0.012997 0.013003 
+T_stage 1: 0.076943 0.059833 0.060811 0.066650 0.062545 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.098103 0.071568 0.071133 0.070655 0.071315 
+T_stage 0: 0.020770 0.013215 0.013211 0.013180 0.013203 
+T_stage 1: 0.077292 0.058264 0.057865 0.057355 0.057965 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.096172 0.077779 0.078934 0.073863 0.076693 
+T_stage 0: 0.017274 0.013200 0.013162 0.013161 0.013121 
+T_stage 1: 0.078787 0.064459 0.065654 0.060527 0.063466 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.093588 0.075725 0.076327 0.075859 0.075610 
+T_stage 0: 0.013043 0.012964 0.012990 0.013037 0.012991 
+T_stage 1: 0.080396 0.062649 0.063218 0.062731 0.062423 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.091651 0.074609 0.080001 0.076004 0.076591 
+T_stage 0: 0.013006 0.013257 0.013033 0.015173 0.014590 
+T_stage 1: 0.078528 0.061230 0.066830 0.060694 0.061897 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.090467 0.081112 0.073798 0.074444 0.073552 
+T_stage 0: 0.013084 0.013136 0.013130 0.013071 0.013123 
+T_stage 1: 0.077268 0.067859 0.060572 0.061252 0.060336 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.091633 0.077462 0.076403 0.075640 0.076062 
+T_stage 0: 0.013564 0.013600 0.013555 0.013576 0.013627 
+T_stage 1: 0.077952 0.063717 0.062722 0.061917 0.062324 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.090807 0.074166 0.074461 0.074005 0.074257 
+T_stage 0: 0.013101 0.013270 0.013263 0.013127 0.013111 
+T_stage 1: 0.077602 0.060791 0.061077 0.060714 0.061037 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.092883 0.074131 0.073681 0.074172 0.074113 
+T_stage 0: 0.012975 0.013252 0.012954 0.012991 0.012970 
+T_stage 1: 0.079791 0.060777 0.060587 0.061082 0.061044 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.092231 0.074258 0.075161 0.076123 0.077908 
+T_stage 0: 0.013171 0.013281 0.013181 0.013226 0.013162 
+T_stage 1: 0.078839 0.060858 0.061875 0.062791 0.064598 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.154309 0.081401 0.072743 0.071523 0.073223 
+T_stage 0: 0.031912 0.013151 0.013066 0.013070 0.013060 
+T_stage 1: 0.125670 0.068206 0.059634 0.058375 0.059994 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.093420 0.078042 0.075392 0.074035 0.077202 
+T_stage 0: 0.013074 0.013092 0.013102 0.013116 0.013114 
+T_stage 1: 0.080251 0.064852 0.062163 0.060823 0.063976 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.090304 0.079590 0.077605 0.083469 0.084035 
+T_stage 0: 0.013016 0.013016 0.012971 0.012985 0.012979 
+T_stage 1: 0.076907 0.066417 0.064504 0.070390 0.070936 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.094424 0.079301 0.081275 0.075450 0.080707 
+T_stage 0: 0.013082 0.013257 0.013116 0.013198 0.013098 
+T_stage 1: 0.081250 0.065895 0.068083 0.062142 0.067511 
+Config: granularity=100000, SDR=1000, ADR=0, Rigid=1, Capture_Method=0
+Stage 0: PT=0, T_stage=0.012350, bytes=0, T_capped=0
+Stage 1: PT=6, T_stage=0.000000, bytes=33176880, T_capped=0
+Group 0: Iters=5, Procs=364, Factors=1.000000, Dist=2, RM=0, SM=0, RS=0, SS=0, parents=0, children=260
+Async_Iters: 0
+T_iter: 0.102467 0.074570 0.081872 0.072388 0.072874 
+T_stage 0: 0.013018 0.013672 0.013090 0.013146 0.013073 
+T_stage 1: 0.089268 0.060744 0.068699 0.059134 0.059686 

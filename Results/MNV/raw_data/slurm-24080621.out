@@ -1,0 +1,19 @@
+START TEST P=gpp
+config65.ini 0 65 2
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs28r3b[01-18,20-27,32,35-39] - Starting hostlist=gs28r3b01:112,gs28r3b02:112,gs28r3b03:112,gs28r3b04:112,gs28r3b05:112,gs28r3b06:112,gs28r3b07:112,gs28r3b08:112,gs28r3b09:112,gs28r3b10:112,gs28r3b11:112,gs28r3b12:112,gs28r3b13:112,gs28r3b14:112,gs28r3b15:112,gs28r3b16:112,gs28r3b17:112,gs28r3b18:112,gs28r3b20:112,gs28r3b21:112,gs28r3b22:112,gs28r3b23:112,gs28r3b24:112,gs28r3b25:112,gs28r3b26:112,gs28r3b27:112,gs28r3b32:112,gs28r3b35:112,gs28r3b36:112,gs28r3b37:112,gs28r3b38:112,gs28r3b39:112,
+Run 0 starts
+Connection closed by 10.2.28.162 port 22
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+Run 0 ends
+Run 1 starts
+Connection closed by 10.2.28.147 port 22
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+[mpiexec@gs28r3b01] MNV cleaning
+Run 1 ends
+END TEST

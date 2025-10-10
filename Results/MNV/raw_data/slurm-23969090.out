@@ -1,0 +1,16 @@
+START TEST P=gpp
+config89.ini 0 89 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs03r2b[38,44,46-49,62,71] - Starting hostlist=gs03r2b38:112,gs03r2b44:112,gs03r2b46:112,gs03r2b47:112,
+Run 0 starts
+Warning: Permanently added 'gs03r2b47' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs03r2b46' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs03r2b44' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs03r2b48' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs03r2b49' (ED25519) to the list of known hosts.
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+Run 0 ends
+END TEST

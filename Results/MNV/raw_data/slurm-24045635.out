@@ -1,0 +1,15 @@
+START TEST P=gpp
+config36.ini 0 36 3
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs11r1b[19-30,33-36,40-48,50-56] - Starting hostlist=gs11r1b19:112,
+Run 0 starts
+Run 0 ends
+Run 1 starts
+[mpiexec@gs11r1b19] MNV cleaning
+[mpiexec@gs11r1b19] MNV cleaning
+[mpiexec@gs11r1b19] MNV cleaning
+[mpiexec@gs11r1b19] MNV cleaning
+Run 1 ends
+Run 2 starts
+Run 2 ends
+END TEST

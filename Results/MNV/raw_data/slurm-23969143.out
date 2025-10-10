@@ -1,0 +1,11 @@
+START TEST P=gpp
+config152.ini 0 152 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs03r2b[38,44,46-49,62,71] - Starting hostlist=gs03r2b38:112,gs03r2b44:112,gs03r2b46:112,gs03r2b47:112,
+Run 0 starts
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+[mpiexec@gs03r2b38] MNV cleaning
+Run 0 ends
+END TEST

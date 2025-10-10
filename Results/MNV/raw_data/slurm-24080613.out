@@ -1,0 +1,14 @@
+START TEST P=gpp
+config21.ini 0 21 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs21r2b[04,08-10,15,31,33,35-42,46] - Starting hostlist=gs21r2b04:112,gs21r2b08:112,gs21r2b09:112,gs21r2b10:112,gs21r2b15:112,gs21r2b31:112,gs21r2b33:112,gs21r2b35:112,gs21r2b36:112,gs21r2b37:112,gs21r2b38:112,gs21r2b39:112,gs21r2b40:112,gs21r2b41:112,gs21r2b42:112,gs21r2b46:112,
+Run 0 starts
+Warning: Permanently added 'gs21r2b09' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b15' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b08' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b10' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs21r2b31' (ED25519) to the list of known hosts.
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 0 ends
+END TEST

@@ -1,0 +1,15 @@
+START TEST P=gpp
+config34.ini 0 34 5
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[02,04-07,17,22,30-31,37-38,41-46,49-51,53-56] - Starting hostlist=gs08r2b02:112,gs08r2b04:112,gs08r2b05:112,gs08r2b06:112,gs08r2b07:112,gs08r2b17:112,gs08r2b22:112,gs08r2b30:112,gs08r2b31:112,gs08r2b37:112,gs08r2b38:112,gs08r2b41:112,gs08r2b42:112,gs08r2b43:112,gs08r2b44:112,gs08r2b45:112,
+Run 0 starts
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+Run 2 ends
+Run 3 starts
+Run 3 ends
+Run 4 starts
+Run 4 ends
+END TEST

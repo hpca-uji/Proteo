@@ -1,0 +1,39 @@
+START TEST P=gpp
+config11.ini 0 11 2
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs11r1b[19-30,33-36,40-43,50-61] - Starting hostlist=gs11r1b19:112,gs11r1b20:112,gs11r1b21:112,gs11r1b22:112,gs11r1b23:112,gs11r1b24:112,gs11r1b25:112,gs11r1b26:112,gs11r1b27:112,gs11r1b28:112,gs11r1b29:112,gs11r1b30:112,gs11r1b33:112,gs11r1b34:112,gs11r1b35:112,gs11r1b36:112,gs11r1b40:112,gs11r1b41:112,gs11r1b42:112,gs11r1b43:112,gs11r1b50:112,gs11r1b51:112,gs11r1b52:112,gs11r1b53:112,gs11r1b54:112,gs11r1b55:112,gs11r1b56:112,gs11r1b57:112,gs11r1b58:112,gs11r1b59:112,gs11r1b60:112,gs11r1b61:112,
+Run 0 starts
+Warning: Permanently added 'gs11r1b28' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b25' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b42' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b50' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b27' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b51' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b22' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b56' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b30' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b54' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b52' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b43' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b41' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b60' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b53' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b61' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b26' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b55' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b36' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b21' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b24' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b29' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b40' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b34' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b23' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs11r1b20' (ED25519) to the list of known hosts.
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 0 ends
+Run 1 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 1 ends
+END TEST

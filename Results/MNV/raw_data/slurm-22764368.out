@@ -1,0 +1,45 @@
+START TEST P=gpp
+./config43.ini 0 43 20
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[08,42,66-67] - Starting hostlist=gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b08,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b42,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b66,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,gs08r2b67,
+Run 0 starts
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+Run 2 ends
+Run 3 starts
+Run 3 ends
+Run 4 starts
+Run 4 ends
+Run 5 starts
+Run 5 ends
+Run 6 starts
+Run 6 ends
+Run 7 starts
+Run 7 ends
+Run 8 starts
+Run 8 ends
+Run 9 starts
+Run 9 ends
+Run 10 starts
+Run 10 ends
+Run 11 starts
+Run 11 ends
+Run 12 starts
+Run 12 ends
+Run 13 starts
+Run 13 ends
+Run 14 starts
+Run 14 ends
+Run 15 starts
+Run 15 ends
+Run 16 starts
+Run 16 ends
+Run 17 starts
+Run 17 ends
+Run 18 starts
+Run 18 ends
+Run 19 starts
+Run 19 ends
+END TEST

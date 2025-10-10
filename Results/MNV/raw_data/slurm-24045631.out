@@ -1,0 +1,25 @@
+START TEST P=gpp
+config30.ini 0 30 3
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[02,04-05,07,10-14,17-18,21-22,27-29,33-35,38-39,42,61-62] - Starting hostlist=gs08r2b02:112,
+Run 0 starts
+Warning: Permanently added 'gs08r2b34' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b35' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b28' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b14' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b18' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b33' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b21' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b10' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b12' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b13' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b27' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b29' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b11' (ED25519) to the list of known hosts.
+Warning: Permanently added 'gs08r2b39' (ED25519) to the list of known hosts.
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+Run 2 ends
+END TEST

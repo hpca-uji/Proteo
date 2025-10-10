@@ -1,0 +1,93 @@
+START TEST P=gpp
+config5.ini 0 5 20
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs29r1b[05,07-08,10,17,19-22,24-25,28-30,32-39,41-44,62-63,66-69] - Starting hostlist=gs29r1b05:112,gs29r1b07:112,gs29r1b08:112,gs29r1b10:112,gs29r1b17:112,gs29r1b19:112,gs29r1b20:112,gs29r1b21:112,gs29r1b22:112,gs29r1b24:112,gs29r1b25:112,gs29r1b28:112,gs29r1b29:112,gs29r1b30:112,gs29r1b32:112,gs29r1b33:112,gs29r1b34:112,gs29r1b35:112,gs29r1b36:112,gs29r1b37:112,gs29r1b38:112,gs29r1b39:112,gs29r1b41:112,gs29r1b42:112,gs29r1b43:112,gs29r1b44:112,gs29r1b62:112,gs29r1b63:112,gs29r1b66:112,gs29r1b67:112,gs29r1b68:112,gs29r1b69:112,
+Run 0 starts
+Connection closed by 10.2.29.17 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 0 ends
+Run 1 starts
+Connection closed by 10.2.29.17 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 1 ends
+Run 2 starts
+Connection closed by 10.2.29.22 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 2 ends
+Run 3 starts
+Connection closed by 10.2.29.22 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 3 ends
+Run 4 starts
+Connection closed by 10.2.29.17 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 4 ends
+Run 5 starts
+Connection closed by 10.2.29.20 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 5 ends
+Run 6 starts
+Connection closed by 10.2.29.17 port 22
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 6 ends
+Run 7 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 7 ends
+Run 8 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 8 ends
+Run 9 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 9 ends
+Run 10 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 10 ends
+Run 11 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 11 ends
+Run 12 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 12 ends
+Run 13 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 13 ends
+Run 14 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 14 ends
+Run 15 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 15 ends
+Run 16 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 16 ends
+Run 17 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 17 ends
+Run 18 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 18 ends
+Run 19 starts
+shrink cleaning on node 0 (rank 0 in comm 0): shrink cleaning 0
+Run 19 ends
+END TEST

@@ -1,0 +1,7 @@
+START TEST P=T1
+config88.ini 0 88 1
+/soft/gnu/mpich-3.4.1-noucx/bin/mpirun
+Nodes=n[04-05],s[00-01] - Starting hostlist=n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,n04,
+Run 0 starts
+Run 0 ends
+END TEST

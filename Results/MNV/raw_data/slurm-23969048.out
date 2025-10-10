@@ -1,0 +1,39 @@
+START TEST P=gpp
+config39.ini 0 39 7
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs29r1b[05,07-08,10,17,19-22,24-25,28-30,32-39,41-44,56-57,62-63,66-67] - Starting hostlist=gs29r1b05:112,gs29r1b07:112,gs29r1b08:112,gs29r1b10:112,gs29r1b17:112,gs29r1b19:112,gs29r1b20:112,gs29r1b21:112,
+Run 0 starts
+Run 0 ends
+Run 1 starts
+Run 1 ends
+Run 2 starts
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 2 ends
+Run 3 starts
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 3 ends
+Run 4 starts
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 4 ends
+Run 5 starts
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 5 ends
+Run 6 starts
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+[mpiexec@gs29r1b05] MNV cleaning
+Run 6 ends
+END TEST

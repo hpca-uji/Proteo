@@ -1,0 +1,12 @@
+START TEST P=gpp
+config97.ini 0 97 1
+/home/bsc/bsc359796/Instalaciones/mpich-4.2.0-ofi/bin/mpirun
+Nodes=gs08r2b[01-02,04-05,07,10-14,17-18,20-22,24,26-29,31-34] - Starting hostlist=gs08r2b01:112,gs08r2b02:112,gs08r2b04:112,gs08r2b05:112,gs08r2b07:112,gs08r2b10:112,gs08r2b11:112,gs08r2b12:112,
+Run 0 starts
+Connection closed by 10.2.8.74 port 22
+[mpiexec@gs08r2b01] MNV cleaning
+[mpiexec@gs08r2b01] MNV cleaning
+[mpiexec@gs08r2b01] MNV cleaning
+[mpiexec@gs08r2b01] MNV cleaning
+Run 0 ends
+END TEST
