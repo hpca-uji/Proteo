@@ -1,13 +1,13 @@
-# Proteo - Sarteco25 Workshop branch
+# Proteo - RMA tests results branch
 
 ## Overview
 This branch contains the codebase used for Proteo experiments and results presented for the paper in section "Paper Information" in the system Nasp. The code represents the state of the project at the time of submission and is tagged accordingly.
 
 ## Paper Information
-- **Title:** Redimensionamiento Dinámico de Aplicaciones Maleables mediante RMA
+- **Title:** Dynamic reconfiguration for malleable applications using RMA
 - **Authors:** Iker Martín-Álvarez, José I. Aliaga, Maribel Castillo
-- **Journal:** XXXV Jornadas de Paralelismo
-- **Submission Date:** XX/03/2025
+- **Conference:** PDP Conference 2026
+- **Submission Date:** 07/11/2025
 
 
 ## Branch Structure
