@@ -161,7 +161,7 @@ void MAM_Use_valgrind(int flag) {
 
   mall_conf->external_usage = flag ? MAM_USE_VALGRIND: 0;
   #if MAM_DEBUG
-    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Valgrind Wrapper", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root && flag) { DEBUG_FUNC("Settled Valgrind Wrapper", mall->myId, mall->numP); fflush(stdout); }
   #endif
 }
 
@@ -174,7 +174,7 @@ void MAM_Use_extrae(int flag) {
 
   mall_conf->external_usage = flag ? MAM_USE_EXTRAE: 0;
   #if MAM_DEBUG
-    if(mall->myId == mall->root && flag) DEBUG_FUNC("Settled Extrae Wrapper", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root && flag) { DEBUG_FUNC("Settled Extrae Wrapper", mall->myId, mall->numP); fflush(stdout); }
   #endif
 }
 

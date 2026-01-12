@@ -103,6 +103,9 @@ int MAM_Init(int root, MPI_Comm *comm, char *name_exec, void (*user_function)(vo
 
   mall->name_exec = name_exec;
   mall->nodelist = NULL;
+  mall->max_cpus = NULL;
+  mall->assigned_cpus = NULL;
+  mall->spawned_cpus = NULL;
   mall->nodelist_len = 0;
 
   rep_s_data->entries = 0;
@@ -158,6 +161,9 @@ int MAM_Finalize() {
   free(dist_s_data);
   free(dist_a_data);
   if(mall->nodelist != NULL) free(mall->nodelist);
+  if(NULL != mall->max_cpus) { free(mall->max_cpus); }
+  if(NULL != mall->assigned_cpus) { free(mall->assigned_cpus); }
+  if(NULL != mall->spawned_cpus) { free(mall->spawned_cpus); }
 
   MAM_Free_main_datatype();
   request_abort = MAM_Zombies_service_free();
@@ -262,6 +268,19 @@ void MAM_Commit(int *mam_state) {
   if(mall_conf->spawn_method == MAM_SPAWN_BASELINE) {
     // This communication is only needed when the root process will become a zombie
     malleability_times_broadcast(mall->root_collectives);
+    // Change assigned_cpus to spawned_cpus
+    free(mall->assigned_cpus); mall->assigned_cpus = NULL;
+    mall->assigned_cpus = mall->spawned_cpus;
+    mall->spawned_cpus = calloc(mall->num_nodes, sizeof *mall->spawned_cpus);
+
+    for(int i=0; i < mall->num_nodes; i++) {
+      mall->spawned_cpus[i] = 0;
+    }
+  } else {
+    for(int i=0; i < mall->num_nodes; i++) {
+      mall->assigned_cpus[i] += mall->spawned_cpus[i];
+      mall->spawned_cpus[i] = 0;
+    }
   }
 
   // Free unneded communicators
@@ -294,7 +313,7 @@ void MAM_Commit(int *mam_state) {
   // Set new communicator
   MPI_Comm_dup(mall->comm, mall->user_comm);
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Reconfiguration has been commited", mall->myId, mall->numP); fflush(stdout); }
   #endif
 
   #if MAM_USE_BARRIERS
@@ -551,7 +570,7 @@ int MAM_St_user_start(int *mam_state) {
 
 int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function)(void *), void *user_args) {
   #if MAM_DEBUG
-    if(mall->myId == mall->root) DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
+    if(mall->myId == mall->root) { DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout); }
   #endif
   if(user_function != NULL) {
     MAM_I_create_user_struct(MAM_SOURCES);
@@ -568,7 +587,7 @@ int MAM_St_user_pending(int *mam_state, int wait_completed, void (*user_function
     #endif
     if(mall_conf->spawn_method == MAM_SPAWN_MERGE) mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
     #if MAM_DEBUG
-      if(mall->myId == mall->root) DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout);
+      if(mall->myId == mall->root) { DEBUG_FUNC("Ended USER redistribution", mall->myId, mall->numP); fflush(stdout); }
     #endif
     return 1;
   }
@@ -730,6 +749,9 @@ void Children_init(void (*user_function)(void *), void *user_args) {
   #endif
   mall_conf->times->user_end = MPI_Wtime(); // Obtener timestamp de cuando termina user redist
 
+  #if MAM_DEBUG >= 2
+      DEBUG_FUNC("Spawned start synchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
   if(dist_s_data->entries || rep_s_data->entries) { // Recibir datos sincronos
     #if MAM_USE_BARRIERS
@@ -846,7 +868,6 @@ int start_redistribution() {
  * terminada cuando los padres terminan de enviar.
  * Si se utiliza el modo "MAL_USE_IBARRIER", se considera terminada cuando
  * los hijos han terminado de recibir.
- * //FIXME Modificar para que se tenga en cuenta rep_a_data
  */
 int check_redistribution(int wait_completed) {
   int completed, local_completed, all_completed;
@@ -943,6 +964,9 @@ int end_redistribution() {
   size_t i;
   int local_state;
 
+  #if MAM_DEBUG
+    DEBUG_FUNC("Sources have started synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(mall->comm);
+  #endif
   comm_data_info(rep_s_data, dist_s_data, MAM_SOURCES);
   if(dist_s_data->entries || rep_s_data->entries) { // Enviar datos sincronos
     #if MAM_USE_BARRIERS

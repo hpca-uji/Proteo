@@ -34,13 +34,14 @@ then
   limit_time=$(($3 * $qty / 60 + 1))
 fi
 
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 files="./*.ini"
 internalIndex=$(echo $files | tr -cd ' ' | wc -c)
 index=$((0))
 for config_file in $files
 do
-  node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+  result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+  node_qty=$(echo $result | cut -d ',' -f1)
+  constraint=$(echo $result | cut -d ',' -f2)
 
   outFileIndex=$(echo $config_file | sed s/[^0-9]//g)
   if [[ $outFileIndex ]]; then 
@@ -51,7 +52,7 @@ do
   fi
 
   #Execute test
-  echo "Execute job $index with Nodes=$node_qty and config_file=$config_file"
-  sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $index $qty
+  echo "Execute job $index with Nodes=$node_qty, Constraints=$constraint and config_file=$config_file"
+  sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $index $qty
 done
 echo "End"

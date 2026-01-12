@@ -1,7 +1,7 @@
-# Proteo - Dev branch
+# Proteo - Parallel spawning branch
 
 ## Overview
-This branch contains the codebase used for Proteo developing branch. 
+This branch contains the codebase used for a new feature to perform parallel spawning in diverse kind of systems.
 
 ## Branch Structure
 This branch is divided into the following 4 directories:

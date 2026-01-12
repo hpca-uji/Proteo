@@ -274,7 +274,7 @@ void sync_communication(void *send, void *recv, MPI_Datatype datatype, struct Co
 void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Counts s_counts, struct Counts r_counts, MPI_Comm comm) {
     int i, j, init, end, total_sends, datasize;
     size_t offset, offset2;
-    MPI_Request *sends;
+    MPI_Request *sends = NULL;
 
     MPI_Type_size(datatype, &datasize);
     init = s_counts.idI;
@@ -330,13 +330,6 @@ void sync_point2point(void *send, void *recv, MPI_Datatype datatype, struct Coun
  * - tamBl (IN): How many elements are stored in the parameter "send".
  * - comm (IN):  Communicator to use to perform the redistribution. Must be an intracommunicator as MPI-RMA requirements.
  * - win (OUT):  Window to allocate for the operations. It is returned to be freed later on.
- *
- * FIXME: In libfabric one of these macros defines the maximum amount of BYTES that can be communicated in a SINGLE MPI_Get
- * A window can have more bytes than the amount shown in those macros, therefore, if you want to read more than that amount
- * you need to perform multiples Gets.
- * prov/psm3/psm3/psm_config.h:179:#define MQ_SHM_THRESH_RNDV 16000
- * prov/psm3/psm3/ptl_am/am_config.h:62:#define PSMI_MQ_RV_THRESH_CMA      16000
- * prov/psm3/psm3/ptl_am/am_config.h:65:#define PSMI_MQ_RV_THRESH_NO_KASSIST 16000
  */
 void sync_rma(void *send, void *recv, MPI_Datatype datatype, struct Counts r_counts, int tamBl, MPI_Comm comm, MPI_Win *win) {
   int datasize;
