@@ -1,7 +1,7 @@
-# Proteo - Parallel spawning branch
+# Proteo - Dev branch
 
 ## Overview
-This branch contains the codebase used for a new feature to perform parallel spawning in diverse kind of systems.
+This branch contains the codebase used the Dev branch of Proteo.
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
@@ -32,7 +32,7 @@ The following requisites are optional and only needed to process and analyse the
     ```bash
     $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
     $ cd malleability_benchmark
-    $ git checkout JournalSupercomputing23/24
+    $ git checkout dev
     ```
 
 2. Compile the code using the `make` command:
