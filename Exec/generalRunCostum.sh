@@ -49,8 +49,8 @@ numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 nodelist=$SLURM_JOB_NODELIST
 if [ -z "$nodelist" ];
 then
-  nodelist="localhost"
-  initial_nodelist="localhost"
+  nodelist=$(hostname)
+  initial_nodelist=$nodelist
 else
   initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 fi
@@ -85,5 +85,4 @@ else
 fi
 
 echo "END TEST"
-MAM_ID=$(($SLURM_JOB_ID % 1000))
-rm MAM_HF_ID*$MAM_ID*.tmp
+rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp

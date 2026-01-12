@@ -191,8 +191,9 @@ do
     config_file="$common_name$run.ini"
     slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
 
-    #2.1 - Get partition name, default otherwise
+    #2.1 - Get partition name, default otherwise (Avoid duplicates)
     partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+    partition=$(echo $partition | cut -d ' ' -f1)
     if [ -z "$partition" ];
     then
       partition='P1'
@@ -206,11 +207,12 @@ do
     fi
 
     #2.2 - Get nodes
-    cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
-    node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+    result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+    node_qty=$(echo $result | cut -d ',' -f1)
+    constraint=$(echo $result | cut -d ',' -f2)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
   fi
 done
 

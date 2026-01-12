@@ -1,0 +1,30 @@
+{
+   slurm_load_job_strdup_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:slurm_xcalloc
+   fun:slurm_xstrdup
+   ...
+   fun:slurm_load_job
+}
+{
+   slurm_load_job_cluster_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:slurm_xcalloc
+   ...
+   fun:slurm_get_cluster_name
+   fun:slurm_load_job
+}
+{
+   slurm_load_job_federation_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:slurm_xrecalloc
+   ...
+   fun:slurm_load_federation
+   fun:slurm_load_job
+}

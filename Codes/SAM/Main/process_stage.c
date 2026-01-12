@@ -88,6 +88,7 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
   double result, t_start, t_total;
   t_start = MPI_Wtime();
   t_total = 0;
+  result = 0;
 
   switch(stage.pt) {
     //Computo

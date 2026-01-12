@@ -60,7 +60,10 @@ def copy_iteration(row, dataL_it, group, iteration, is_asynch):
 
   dataL_it[G_enum.ASYNCH_ITERS.value] = is_asynch
   dataL_it[G_enum.T_ITER.value] = row[G_enum.T_ITER.value][group][iteration]
-  dataL_it[G_enum.T_STAGES.value] = list(row[G_enum.T_STAGES.value][group][iteration])
+  if type(row[G_enum.T_STAGES.value][group][0]) == tuple:
+    dataL_it[G_enum.T_STAGES.value] = list(row[G_enum.T_STAGES.value][group][iteration])
+  else:
+    dataL_it[G_enum.T_STAGES.value] = [0]
   dataL_it[G_enum.IS_DYNAMIC.value] = True if group > 0 else False
 
   for index in basic_indexes:

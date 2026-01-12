@@ -239,12 +239,18 @@ void deallocate_spawn_data() {
  * Cuando termina, modifica la variable global para indicar este cambio
  */
 void generic_spawn(MPI_Comm *child, int data_stage) {
-  int local_state, aux_state;
+  int local_state = MAM_I_UNRESERVED;
+  int aux_state;
 
   // WORK
-  if(mall->myId == mall->root && spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
-    processes_dist(spawn_data);
+  if(spawn_data->spawn_qty > 0) { //SET MAPPING FOR NEW PROCESSES
+    if(mall->myId == mall->root) processes_dist(spawn_data);
+    MPI_Bcast(mall->spawned_cpus, mall->num_nodes, MPI_INT, MAM_ROOT, spawn_data->comm);
   }
+  if(data_stage == MAM_I_DIST_COMPLETED) { //REMOVE FROM CONFIG UNNEDEED RANKS
+    remove_dist(*spawn_data);
+  }
+
   switch(mall_conf->spawn_method) {
     case MAM_SPAWN_BASELINE:
       local_state = baseline(*spawn_data, child);

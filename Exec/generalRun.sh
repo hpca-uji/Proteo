@@ -49,7 +49,8 @@ numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $configFile 0)
 initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 
 #EXECUTE RUN
-echo "Nodes=$SLURM_JOB_NODELIST"
+which mpirun
+echo "Nodes=$SLURM_JOB_NODELIST - Starting hostlist=$initial_nodelist"
 if [ $use_external -eq 0 ] #NORMAL
 then
   for ((i=0; i<qty; i++))
@@ -81,5 +82,4 @@ fi
 echo "END TEST"
 sed -i 's/application called MPI_Abort(MPI_COMM_WORLD, -100) - process/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
 sed -i 's/Abort(-100)/shrink cleaning/g' slurm-$SLURM_JOB_ID.out
-MAM_ID=$(($SLURM_JOB_ID % 1000))
-rm MAM_HF_ID*$MAM_ID*.tmp
+rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp

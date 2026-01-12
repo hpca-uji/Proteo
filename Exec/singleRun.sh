@@ -57,11 +57,14 @@ then
   output=$7
 fi
 
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 #Obtain amount of nodes neeeded
-node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+node_qty=$(echo $result | cut -d ',' -f1)
+constraint=$(echo $result | cut -d ',' -f2)
+
 #Run with the expected amount of nodes
-sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_external $outFileIndex $qty
+echo "Execute job with Nodes=$node_qty, Constraints=$constraint and config_file=$config_file"
+sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_external $outFileIndex $qty
 
 if ! [ -z "$output" ]
 then

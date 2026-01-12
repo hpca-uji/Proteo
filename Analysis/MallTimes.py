@@ -240,6 +240,8 @@ def convert_to_tuples(dfG):
     values = dfG[name].copy()
     for i in range(len(values)):
       for j in range(len(values[i])):
+        if(len(values[i][j]) == 0):
+          values[i][j].append(0) # Add one element in case is empty
         if(type(values[i][j][0]) == list):
           for r in range(len(values[i][j])):
             values[i][j][r] = tuple(values[i][j][r])
