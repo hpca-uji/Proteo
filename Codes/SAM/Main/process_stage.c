@@ -1,25 +1,25 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
 #include <mpi.h>
+#include <math.h>
 #include "computing_func.h"
 #include "comunication_func.h"
 #include "Main_datatypes.h"
 #include "process_stage.h"
 #include "../MaM/distribution_methods/block_distribution.h"
 
-double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
-double init_emulation_icomm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm);
+double init_emulation_comm_time(group_data group, stage_t *stage, MPI_Comm comm);
+double init_emulation_icomm_time(group_data group, stage_t *stage, MPI_Comm comm);
 
-double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
+double init_matrix_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_pi_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
 
-double init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_comm_iptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute);
-double init_comm_wait_pt(configuration *config_file, iter_stage_t *stage);
+double init_comm_ptop_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_iptop_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_bcast_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_allgatherv_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_reduce_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+double init_comm_wait_pt(stage_t *stage, phase_t *phase);
 
 /*
  * Calcula el tiempo por operacion o total de bytes a enviar
@@ -38,41 +38,40 @@ double init_comm_wait_pt(configuration *config_file, iter_stage_t *stage);
  * TODO Que el trabajo se divida entre los procesos.
  * TODO No tiene en cuenta cambios entre maquinas heterogeneas.
  */
-double init_stage(configuration *config_file, int stage_i, group_data group, MPI_Comm comm, int compute) {
+double init_stage(stage_t *stage, phase_t *phase, group_data group, MPI_Comm comm, int compute) {
   double result = 0;
   int qty = 5000;
 
-  iter_stage_t *stage = &(config_file->stages[stage_i]);
   stage->operations = qty;
 
   switch(stage->pt) {
     //Computo
     case COMP_MATRIX:
-      result = init_matrix_pt(group, config_file, stage, comm, compute);
+      result = init_matrix_pt(group, stage, comm, compute);
       break;
     case COMP_PI:
-      result = init_pi_pt(group, config_file, stage, comm, compute);
+      result = init_pi_pt(group, stage, comm, compute);
       break;
 
     //Comunicación
     case COMP_POINT:
-      result = init_comm_ptop_pt(group, config_file, stage, comm, compute);
+      result = init_comm_ptop_pt(group, stage, comm, compute);
       break;
     case COMP_IPOINT:
-      result = init_comm_iptop_pt(group, config_file, stage, comm, compute);
+      result = init_comm_iptop_pt(group, stage, comm, compute);
       break;
     case COMP_BCAST:
-      result = init_comm_bcast_pt(group, config_file, stage, comm, compute);
+      result = init_comm_bcast_pt(group, stage, comm, compute);
       break;
     case COMP_ALLGATHER:
-      result = init_comm_allgatherv_pt(group, config_file, stage, comm, compute);
+      result = init_comm_allgatherv_pt(group, stage, comm, compute);
       break;
     case COMP_REDUCE:
     case COMP_ALLREDUCE:
-      result = init_comm_reduce_pt(group, config_file, stage, comm, compute);
+      result = init_comm_reduce_pt(group, stage, comm, compute);
       break;
     case COMP_WAIT:
-      result = init_comm_wait_pt(config_file, stage);
+      result = init_comm_wait_pt(stage, phase);
       break;
   }
   return result;
@@ -83,7 +82,7 @@ double init_stage(configuration *config_file, int stage_i, group_data group, MPI
  * de operacion a realizar y llamando a la funcion que
  * realizara la operacion.
  */
-double process_stage(configuration config_file, iter_stage_t stage, group_data group, MPI_Comm comm) {
+double process_stage(stage_t stage, group_data group, MPI_Comm comm) {
   int i=0;
   double result, t_start, t_total;
   t_start = MPI_Wtime();
@@ -94,12 +93,12 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
     //Computo
     case COMP_PI:
       for(i=0; i < stage.operations; i++) {
-        result += computePiSerial(config_file.granularity);
+        result += computePiSerial(stage.granularity);
       }
       break;
     case COMP_MATRIX:
       for(i=0; i < stage.operations; i++) {
-        result += computeMatrix(stage.double_array, config_file.granularity);
+        result += computeMatrix(stage.double_array, stage.granularity);
       } 
       break;
     //Comunicaciones
@@ -212,27 +211,27 @@ double process_stage(configuration config_file, iter_stage_t stage, group_data g
  * ========================================================================================
  * ========================================================================================
 */
-double init_emulation_comm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+double init_emulation_comm_time(group_data group, stage_t *stage, MPI_Comm comm) {
   double start_time, end_time, time = 0;
   double t_stage;
 
   MPI_Barrier(comm);
   start_time = MPI_Wtime();
-  process_stage(*config_file, *stage, group, comm);
+  process_stage(*stage, group, comm);
   MPI_Barrier(comm);
   end_time = MPI_Wtime();
   stage->t_op = (end_time - start_time) / stage->operations; //Tiempo de una operacion
-  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
+  t_stage = stage->t_stage * group.grp_config.factor;
   stage->operations = ceil(t_stage / stage->t_op);
   MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
 
   return time;
 }
 
-double init_emulation_icomm_time(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm) {
+double init_emulation_icomm_time(group_data group, stage_t *stage, MPI_Comm comm) {
   double start_time, end_time, time = 0;
   double t_stage;
-  iter_stage_t wait_stage;
+  stage_t wait_stage;
   wait_stage.pt = COMP_WAIT;
   wait_stage.id = stage->id;
   wait_stage.operations = stage->operations;
@@ -241,13 +240,13 @@ double init_emulation_icomm_time(group_data group, configuration *config_file, i
 
   MPI_Barrier(comm);
   start_time = MPI_Wtime();
-  process_stage(*config_file, *stage, group, comm);
-  process_stage(*config_file, wait_stage, group, comm);
+  process_stage(*stage, group, comm);
+  process_stage(wait_stage, group, comm);
   MPI_Barrier(comm);
   end_time = MPI_Wtime();
 
   stage->t_op = (end_time - start_time) / stage->operations; //Tiempo de una operacion
-  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
+  t_stage = stage->t_stage * group.grp_config.factor;
   stage->operations = ceil(t_stage / stage->t_op);
   MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
 
@@ -255,17 +254,17 @@ double init_emulation_icomm_time(group_data group, configuration *config_file, i
 }
 
 
-double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_matrix_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double result, t_stage, start_time;
 
   result = 0;
-  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
-  initMatrix(&(stage->double_array), config_file->granularity);
+  t_stage = stage->t_stage * group.grp_config.factor;
+  initMatrix(&(stage->double_array), stage->granularity);
 
   if(compute) {
     if(group.myId == ROOT) {
       start_time = MPI_Wtime();
-      result+= process_stage(*config_file, *stage, group, comm);
+      result+= process_stage(*stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
       stage->operations = ceil(t_stage / stage->t_op);
     }
@@ -277,15 +276,15 @@ double init_matrix_pt(group_data group, configuration *config_file, iter_stage_t
   return result;
 }
 
-double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_pi_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double result, t_stage, start_time;
 
   result = 0;
-  t_stage = stage->t_stage * config_file->groups[group.grp].factor;
+  t_stage = stage->t_stage * group.grp_config.factor;
   if(compute) {
     if(group.myId == ROOT) {
       start_time = MPI_Wtime();
-      result+= process_stage(*config_file, *stage, group, comm);
+      result+= process_stage(*stage, group, comm);
       stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
       stage->operations = ceil(t_stage / stage->t_op);
     }
@@ -297,26 +296,26 @@ double init_pi_pt(group_data group, configuration *config_file, iter_stage_t *st
   return result;
 }
 
-double init_comm_ptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_comm_ptop_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : stage->granularity;
   stage->array = calloc(stage->real_bytes, sizeof(char));
   stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
-    time = init_emulation_comm_time(group, config_file, stage, comm);
+    time = init_emulation_comm_time(group, stage, comm);
   } else {
     stage->operations = 1;
   }
   return time;
 }
 
-double init_comm_iptop_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_comm_iptop_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   int i;
   double time = 0;
   if(stage->array != NULL)
@@ -326,14 +325,14 @@ double init_comm_iptop_pt(group_data group, configuration *config_file, iter_sta
   if(stage->reqs != NULL) //FIXME May be erroneous if request are active...
     free(stage->reqs);
 
-  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : stage->granularity;
   stage->array = calloc(stage->real_bytes, sizeof(char));
   stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes) { // t_capped is not considered in this case
     stage->req_count = 2 * stage->operations; //FIXME Magical number
     stage->reqs = (MPI_Request *) malloc(stage->req_count * sizeof(MPI_Request));
-    time = init_emulation_icomm_time(group, config_file, stage, comm);
+    time = init_emulation_icomm_time(group, stage, comm);
     free(stage->reqs);
   } else {
     stage->operations = 1;
@@ -349,16 +348,16 @@ double init_comm_iptop_pt(group_data group, configuration *config_file, iter_sta
 
 
 // TODO Compute should be always 1 if the number of processes is different
-double init_comm_bcast_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_comm_bcast_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
 
-  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : stage->granularity;
   stage->array = calloc(stage->real_bytes, sizeof(char)); //FIXME Valgrind indica unitialised
 
   if(compute && !stage->bytes && !stage->t_capped) {
-    time = init_emulation_comm_time(group, config_file, stage, comm);
+    time = init_emulation_comm_time(group, stage, comm);
   } else {
     stage->operations = 1;
   }
@@ -366,7 +365,7 @@ double init_comm_bcast_pt(group_data group, configuration *config_file, iter_sta
 }
 
 // TODO Compute should be always 1 if the number of processes is different
-double init_comm_allgatherv_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_comm_allgatherv_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double time=0;
   struct Dist_data dist_data;
 
@@ -377,7 +376,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : stage->granularity;
 
   prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
       
@@ -388,7 +387,7 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
   stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
-    time = init_emulation_comm_time(group, config_file, stage, comm);
+    time = init_emulation_comm_time(group, stage, comm);
   } else {
     stage->operations = 1;
   }
@@ -397,20 +396,20 @@ double init_comm_allgatherv_pt(group_data group, configuration *config_file, ite
 }
 
 // TODO Compute should be always 1 if the number of processes is different
-double init_comm_reduce_pt(group_data group, configuration *config_file, iter_stage_t *stage, MPI_Comm comm, int compute) {
+double init_comm_reduce_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double time = 0;
   if(stage->array != NULL)
     free(stage->array);
   if(stage->full_array != NULL)
     free(stage->full_array);
 
-  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : config_file->granularity;
+  stage->real_bytes = (stage->bytes && !stage->t_capped) ? stage->bytes : stage->granularity;
   stage->array = calloc(stage->real_bytes, sizeof(char));
   //Full array para el reduce necesita el mismo tamanyo
   stage->full_array = calloc(stage->real_bytes, sizeof(char));
 
   if(compute && !stage->bytes && !stage->t_capped) {
-    time = init_emulation_comm_time(group, config_file, stage, comm);
+    time = init_emulation_comm_time(group, stage, comm);
   } else {
     stage->operations = 1;
   }
@@ -418,21 +417,21 @@ double init_comm_reduce_pt(group_data group, configuration *config_file, iter_st
   return time;
 }
 
-double init_comm_wait_pt(configuration *config_file, iter_stage_t *stage) {
+double init_comm_wait_pt(stage_t *stage, phase_t *phase) {
   size_t i;
   double time = 0;
-  iter_stage_t aux_stage;
+  stage_t aux_stage;
 
   if(stage->id < 0) {
     printf("Error when initializing wait stage. Id is negative\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
     return -1;
   }
-  for(i=0; i<config_file->n_stages; i++) {
-    aux_stage = config_file->stages[i];
+  for(i=0; i<phase->qty_stages; i++) {
+    aux_stage = phase->stages[i];
     if(aux_stage.id == stage->id) { break; }
   }
-  if(i == config_file->n_stages) {
+  if(i >= phase->qty_stages) {
     printf("Error when initializing wait stage. Not found a corresponding id\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
     return -1;

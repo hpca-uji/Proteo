@@ -9,22 +9,6 @@
 
 #define ROOT 0
 
-typedef struct {
-  int myId;
-  int numP;
-  unsigned int grp;
-  int iter_start;
-  int argc;
-  size_t sync_data_groups, async_data_groups;
-
-  MPI_Comm children, parents;
-
-  char **argv;
-  char **sync_array, **async_array;
-  int *sync_qty, *async_qty;
-} group_data;
-
-
 typedef struct
 {
   int pt; // Procedure type to execute
@@ -35,7 +19,7 @@ typedef struct
   double t_stage; // Time to complete the stage
 
   double t_op;
-  int operations;
+  int operations, granularity;
   int bytes, real_bytes, my_bytes;
   
   // Arrays to communicate data;
@@ -47,7 +31,14 @@ typedef struct
   // Arrays to indicate how many bytes are received from each rank
   struct Counts counts;
 
-} iter_stage_t;
+} stage_t;
+
+typedef struct
+{
+  size_t qty_stages;
+  size_t qty_iters;
+  stage_t *stages;
+} phase_t;
 
 typedef struct
 {
@@ -60,15 +51,30 @@ typedef struct
 
 typedef struct
 {
-    size_t n_groups, n_resizes, n_stages; // n_groups==n_resizes+1
-    size_t actual_group, actual_stage;
+    size_t n_groups, n_resizes, n_phases; // n_groups==n_resizes+1
+    size_t actual_group, actual_phase, actual_stage; // Used for IO data 
     int rigid_times, capture_method;
-    int granularity;
     size_t sdr, adr;
 
-    MPI_Datatype config_type, group_type, group_strats_type, iter_stage_type;
-    iter_stage_t *stages;
+    MPI_Datatype config_type, group_type, group_strats_type, phase_type, stage_type;
+    phase_t *phases;
     group_config_t *groups;
 } configuration;
+
+typedef struct {
+  int myId;
+  int numP;
+  unsigned int grp;
+  int argc;
+  size_t sync_data_groups, async_data_groups;
+  size_t start_phase, actual_phase, actual_iter;
+
+  MPI_Comm children, parents;
+
+  char **argv;
+  char **sync_array, **async_array;
+  int *sync_qty, *async_qty;
+  group_config_t grp_config;
+} group_data;
 
 #endif

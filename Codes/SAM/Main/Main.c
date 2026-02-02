@@ -4,7 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "process_stage.h"
+#include "process_phase.h"
 #include "Main_datatypes.h"
 #include "configuration.h"
 #include "../IOcodes/results.h"
@@ -13,14 +13,8 @@
 
 #define DR_MAX_SIZE 1000000000
 
-int work();
-double iterate(int async_comm);
-double iterate_relaxed(double *time, double *times_stages);
-double iterate_rigid(double *time, double *times_stages);
-
 void init_group_struct(char *argv[], int argc, int myId, int numP);
 void init_application();
-void obtain_op_times();
 void free_application_data();
 void free_zombie_process();
 
@@ -82,18 +76,17 @@ int main(int argc, char *argv[]) {
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
       if(group->grp != 0) {
-        obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+        init_phases(group, config_file, results, 0, comm);  //Obtener los nuevos valores de tiempo para el computo
         MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->user_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
       modify_configuration();
     
-      work();
-
-      group->grp = group->grp + 1;
-      if(config_file->n_groups != group->grp) { 
-        reset_results_index(results); 
+      phase_normal(group, config_file, results, comm);
+      if(config_file->n_groups != group->grp + 1) {
+        phase_reconf(group, config_file, results, user_redistribution, comm); // FIXME Como llamo a user_redist?
+        reset_results_index(results, group->actual_phase);
         update_targets(); 
-      }
+      } else { group->grp++; }
     } while(config_file->n_groups != group->grp);
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -114,145 +107,6 @@ int main(int argc, char *argv[]) {
 
     MPI_Finalize();
     return 0;
-}
-
-/*
- * Función de trabajo principal.
- *
- * Incializa los datos para realizar el computo y a continuacion
- * pasa a realizar "maxiter" iteraciones de computo.
- *
- * Terminadas las iteraciones realiza el redimensionado de procesos.
- * Si el redimensionado se realiza de forma asincrona se 
- * siguen realizando iteraciones de computo hasta que termine la 
- * comunicacion asincrona y realizar entonces la sincrona.
- *
- * Si el grupo de procesos es el ultimo que va a ejecutar, se devuelve
- * el valor 1 para indicar que no se va a seguir trabajando con nuevos grupos
- * de procesos. En caso contrario se devuelve 0.
- */
-int work() {
-  int iter, maxiter, state, res;
-  int wait_completed = MAM_CHECK_COMPLETION;
-
-  maxiter = config_file->groups[group->grp].iters;
-  state = MAM_NOT_STARTED;
-  res = 0;
-
-  for(iter=group->iter_start; iter < maxiter; iter++) {
-    iterate(state);
-  }
-
-  group->iter_start = 0;
-  if(config_file->n_groups != group->grp + 1)
-    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
-
-  iter = 0;
-  while(state == MAM_PENDING || state == MAM_USER_PENDING) {
-    if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
-      iterate(state);
-      iter++;
-      group->iter_start = iter;
-    } else { wait_completed = MAM_WAIT_COMPLETION; }
-    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
-  }
-
-  //if(state == MAM_COMPLETED) {}
-  if(config_file->n_groups == group->grp + 1) { res=1; }
-  return res;
-}
-
-
-/////////////////////////////////////////
-/////////////////////////////////////////
-//COMPUTE FUNCTIONS
-/////////////////////////////////////////
-/////////////////////////////////////////
-
-
-/*
- * Simula la ejecucción de una iteración de computo en la aplicación
- * que dura al menos un tiempo determinado por la suma de todas las
- * etapas definidas en la configuracion.
- */
-double iterate(int async_comm) {
-  double time, *times_stages_aux;
-  size_t i;
-  double aux = 0;
-
-  times_stages_aux = malloc(config_file->n_stages * sizeof(double));
-
-  if(config_file->rigid_times) {
-    aux = iterate_rigid(&time, times_stages_aux);
-  } else {
-    aux = iterate_relaxed(&time, times_stages_aux);
-  }
-
-  // Se esta realizando una redistribucion de datos asincrona
-  if(async_comm == MAM_PENDING || async_comm == MAM_USER_PENDING) { 
-    // TODO Que diferencie entre tipo de partes asincronas?
-    results->iters_async += 1;
-  }
-
-  // TODO Pasar el resto de este código a results.c
-  if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
-    realloc_results_iters(results, config_file->n_stages, results->iters_size + 100);
-  }
-  results->iters_time[results->iter_index] = time;
-  for(i=0; i < config_file->n_stages; i++) {
-    results->stage_times[i][results->iter_index] = times_stages_aux[i];
-  }
-  results->iter_index = results->iter_index + 1;
-  // TODO Pasar hasta aqui
-
-  free(times_stages_aux);
-
-  return aux;
-}
-
-
-/*
- * Performs an iteration. The gathered times for iterations
- * and stages could be IMPRECISE in order to ensure the 
- * global execution time is precise.
- */
-double iterate_relaxed(double *time, double *times_stages) {
-  size_t i;
-  double start_time, start_time_stage, aux=0;
-  start_time = MPI_Wtime(); // Imprecise timings
-
-  for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime(); 
-    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    times_stages[i] = MPI_Wtime() - start_time_stage;
-  }
-
-  *time = MPI_Wtime() - start_time; // Guardar tiempos
-  return aux;
-}
-
-/*
- * Performs an iteration. The gathered times for iterations
- * and stages are ensured to be precise but the global 
- * execution time could be imprecise.
- */
-double iterate_rigid(double *time, double *times_stages) {
-  size_t i;
-  double start_time, start_time_stage, aux=0;
-
-  MPI_Barrier(comm);
-  start_time = MPI_Wtime();
-
-  for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime();
-    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    MPI_Barrier(comm);
-    times_stages[i] = MPI_Wtime() - start_time_stage;
-  }
-
-  MPI_Barrier(comm);
-  *time = MPI_Wtime() - start_time; // Guardar tiempos
-  return aux;
 }
 
 //======================================================||
@@ -278,16 +132,16 @@ void print_general_info(int myId, int grp, int numP) {
   free(version);
 }
 
-
 /*
  * Pide al proceso raiz imprimir los datos sobre las iteraciones realizadas por el grupo de procesos.
  */
 int print_local_results() {
   int ptr_local, ptr_out, err;
+  size_t i;
   char *file_name;
 
   // This function causes an overhead in the recorded time for last group
-  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_phases, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -299,8 +153,10 @@ int print_local_results() {
     create_out_file(file_name, &ptr_local, 1);
   
     print_config_group(config_file, group->grp);
-    print_iter_results(*results);
-    print_stage_results(*results, config_file->n_stages);
+    for(i = group->start_phase; i < group->actual_phase; i++) {
+      print_iter_results(*results, i);
+      print_stage_results(*results, i);
+    }
     free(file_name);
 
     fflush(stdout);
@@ -349,16 +205,18 @@ int print_final_results() {
  */
 void init_group_struct(char *argv[], int argc, int myId, int numP) {
   group = malloc(sizeof(group_data)); // Valgrind not freed
-  group->myId        = myId;
-  group->numP        = numP;
-  group->grp         = 0;
-  group->iter_start  = 0;
-  group->argc        = argc;
-  group->argv        = argv;
-  group->sync_array  = NULL;
-  group->async_array = NULL;
-  group->sync_qty    = NULL;
-  group->async_qty   = NULL;
+  group->myId          = myId;
+  group->numP          = numP;
+  group->grp           = 0;
+  group->actual_iter   = 0;
+  group->actual_phase  = 0;
+  group->start_phase   = 0;
+  group->argc          = argc;
+  group->argv          = argv;
+  group->sync_array    = NULL;
+  group->async_array   = NULL;
+  group->sync_qty      = NULL;
+  group->async_qty     = NULL;
 }
 
 /*
@@ -372,6 +230,7 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
  */
 void init_application() {
   int i, last_index;
+  size_t index, *array_iters_aux, *array_stages_aux;
 
   if(group->argc < 2) {
     printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
@@ -380,10 +239,22 @@ void init_application() {
   if(group->argc > 2) {
     run_id = atoi(group->argv[2]);
   }
-
   init_config(group->argv[1], &config_file);
+  group->grp_config = config_file->groups[group->grp];
+
+  // Init results
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+  array_iters_aux = malloc(config_file->n_phases * sizeof *array_iters_aux);
+  array_stages_aux = malloc(config_file->n_phases * sizeof *array_stages_aux);
+  for(index = 0; index < config_file->n_phases; index++) {
+    array_iters_aux[index] = config_file->phases[index].qty_iters;
+    array_stages_aux[index] = config_file->phases[index].qty_stages;
+  }
+  init_results_data(results, config_file->n_resizes, config_file->n_phases, array_stages_aux, array_iters_aux);
+  free(array_iters_aux);
+  free(array_stages_aux);
+
+  // Init distribution arrays for reconfigurations
   if(config_file->sdr) {
     group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
     group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int)); // FIXME Valgrind not freed
@@ -410,27 +281,7 @@ void init_application() {
     malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], group->myId, group->numP);
   }
 
-  obtain_op_times(1);
-}
-
-/*
- * Obtiene cuanto tiempo es necesario para realizar una operacion de PI
- *
- * Si compute esta a 1 se considera que se esta inicializando el entorno
- * y realizará trabajo extra.
- *
- * Si compute esta a 0 se considera un entorno inicializado y solo hay que
- * realizar algunos cambios de reserva de memoria. Si es necesario recalcular
- * algo se obtiene el total de tiempo utilizado en dichas tareas y se resta
- * al tiempo total de ejecucion.
- */
-void obtain_op_times(int compute) {
-  size_t i;
-  double time = 0;
-  for(i=0; i<config_file->n_stages; i++) {
-    time+=init_stage(config_file, i, *group, comm, compute);
-  }
-  if(!compute) {results->wasted_time += time;}
+  init_phases(group, config_file, results, 1, comm);
 }
 
 /*
@@ -482,7 +333,7 @@ void free_zombie_process() {
     group->async_array = NULL;
   }
   
-  free_results_data(results, config_file->n_stages);
+  free_results_data(results, config_file->n_phases);
   free(results);
   free_config(config_file);
   free(group);
@@ -554,48 +405,37 @@ void init_originals() {
 }
 
 void init_targets() {
+  size_t index, *array_iters_aux, *array_stages_aux;
 
   MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
-  MPI_Bcast(&group->iter_start, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&group->actual_iter, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&group->actual_phase, 1, MPI_INT, ROOT, new_comm);
   MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
-  group->grp = group->grp + 1;
+  group->start_phase = group->actual_phase;
 
   recv_config_file(ROOT, new_comm, &config_file);
+
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+  array_iters_aux = malloc(config_file->n_phases * sizeof *array_iters_aux);
+  array_stages_aux = malloc(config_file->n_phases * sizeof *array_stages_aux);
+  for(index = 0; index < config_file->n_phases; index++) {
+    array_iters_aux[index] = config_file->phases[index].qty_iters;
+    array_stages_aux[index] = config_file->phases[index].qty_stages;
+  }
+  init_results_data(results, config_file->n_resizes, config_file->n_phases, array_stages_aux, array_iters_aux);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
+
+  free(array_iters_aux);
+  free(array_stages_aux);
 }
 
-void update_surviving_targets() {
-  size_t i;
-  if(config_file->sdr && group->sync_array != NULL) {
-    for(i=0; i<group->sync_data_groups; i++) {
-      free(group->sync_array[i]);
-      group->sync_array[i] = NULL;
-    }
-    free(group->sync_qty);
-    group->sync_qty = NULL;
-    free(group->sync_array);
-    group->sync_array = NULL;
-  }
-
-  if(config_file->adr && group->async_array != NULL) {
-    for(i=0; i<group->async_data_groups; i++) {
-      free(group->async_array[i]);
-      group->async_array[i] = NULL;
-    }
-    free(group->async_qty);
-    group->async_qty = NULL;
-    free(group->async_array);
-    group->async_array = NULL;
-  }
-}
-
-void update_targets() { //FIXME Should also be called by the surviving processes
+void update_targets() {
   size_t i, entries, total_qty;
   void *value = NULL;
   MPI_Datatype type;
 
+  group->grp = group->grp + 1;
+  group->grp_config = config_file->groups[group->grp];
   update_surviving_targets();
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
@@ -624,6 +464,31 @@ void update_targets() { //FIXME Should also be called by the surviving processes
   }
 }
 
+void update_surviving_targets() {
+  size_t i;
+  if(config_file->sdr && group->sync_array != NULL) {
+    for(i=0; i<group->sync_data_groups; i++) {
+      free(group->sync_array[i]);
+      group->sync_array[i] = NULL;
+    }
+    free(group->sync_qty);
+    group->sync_qty = NULL;
+    free(group->sync_array);
+    group->sync_array = NULL;
+  }
+
+  if(config_file->adr && group->async_array != NULL) {
+    for(i=0; i<group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
+    free(group->async_array);
+    group->async_array = NULL;
+  }
+}
+
 void user_redistribution(void *args) {
   int commited;
   mam_user_reconf_t user_reconf;
@@ -634,8 +499,11 @@ void user_redistribution(void *args) {
     init_targets();
   } else {
     MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
-    MPI_Bcast(&group->iter_start, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&group->actual_iter, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&group->actual_phase, 1, MPI_INT, ROOT, new_comm);
     MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
+    group->start_phase = group->actual_phase;
+
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
 

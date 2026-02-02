@@ -21,17 +21,22 @@ static int handler(void* user, const char* section, const char* name,
     int ret_value=1;
     int *aux;
     size_t aux_len;
+    phase_t *phase;
+    stage_t *stage;
     configuration* pconfig = (configuration*)user;
 
-    if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_stage >= pconfig->n_stages) {
+    if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_phase >= pconfig->n_phases) {
       return 1; // There is no more work to perform
     }
 
     char *resize_name = malloc(10 * sizeof(char));
     snprintf(resize_name, 10, "resize%zu", pconfig->actual_group);
 
-    char *stage_name = malloc(10 * sizeof(char));
-    snprintf(stage_name, 10, "stage%zu", pconfig->actual_stage);
+    char *phase_name = malloc(10 * sizeof(char));
+    snprintf(phase_name, 10, "phase%zu", pconfig->actual_phase);
+
+    char *stage_name = malloc(20 * sizeof(char));
+    snprintf(stage_name, 20, "phase%zu.stage%zu", pconfig->actual_phase, pconfig->actual_stage);
 
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     #define LAST(iter, total) iter < total
@@ -39,11 +44,9 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->n_resizes = strtoul(value, NULL, 10);
         pconfig->n_groups = pconfig->n_resizes+1;
         user_functions->resizes_f(pconfig);
-    } else if (MATCH("general", "Total_Stages")) {
-        pconfig->n_stages = strtoul(value, NULL, 10);
-        user_functions->stages_f(pconfig); 
-    } else if (MATCH("general", "Granularity")) {
-        pconfig->granularity = atoi(value);
+    } else if (MATCH("general", "Total_Phases")) {
+        pconfig->n_phases = strtoul(value, NULL, 10);
+        user_functions->phases_f(pconfig);
     } else if (MATCH("general", "SDR")) { // TODO Refactor a nombre manual
         pconfig->sdr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
@@ -53,18 +56,44 @@ static int handler(void* user, const char* section, const char* name,
     } else if (MATCH("general", "Capture_Method")) {
         pconfig->capture_method = atoi(value);
 
-    // Iter stage
-    } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].pt = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].id = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
+    // Phase
+    } else if (MATCH(phase_name, "Total_Iters") && LAST(pconfig->actual_phase, pconfig->n_phases)) {
+        pconfig->phases[pconfig->actual_phase].qty_iters = strtoul(value, NULL, 10);
+    } else if (MATCH(phase_name, "Total_Stages") && LAST(pconfig->actual_phase, pconfig->n_phases)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        phase->qty_stages = strtoul(value, NULL, 10);
+        user_functions->stages_f(pconfig, pconfig->actual_phase);
+        pconfig->actual_stage = 0;
+
+    // Stage
+    } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->pt = atoi(value);
+    } else if (MATCH(stage_name, "Granularity") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->granularity = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->t_capped = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->bytes = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->id = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->phases[pconfig->actual_phase].qty_stages)) {
+        phase = pconfig->phases+pconfig->actual_phase;
+        stage = phase->stages+pconfig->actual_stage;
+        stage->t_stage = (float) atof(value);
         pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
+        if(pconfig->actual_stage == pconfig->phases[pconfig->actual_phase].qty_stages) { // Ultimo stage de la phase
+            pconfig->actual_phase = pconfig->actual_phase+1; 
+        }
 
     // Resize stage
     } else if (MATCH(resize_name, "Iters") && LAST(pconfig->actual_group, pconfig->n_groups)) {
@@ -99,6 +128,7 @@ static int handler(void* user, const char* section, const char* name,
     }
  
     free(resize_name);
+    free(phase_name);
     free(stage_name);
     return ret_value;
 }
@@ -162,12 +192,19 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
+
+    config->config_type = MPI_DATATYPE_NULL;
+    config->group_type = MPI_DATATYPE_NULL;
+    config->group_strats_type = MPI_DATATYPE_NULL;
+    config->phase_type = MPI_DATATYPE_NULL;
+    config->stage_type = MPI_DATATYPE_NULL;
     config->capture_method = 0;
     config->rigid_times = 0;
     config->n_resizes = 0;
     config->n_groups = 1;
-    config->n_stages = 1;
+    config->n_phases = 1;
     config->actual_group=0;
+    config->actual_phase=0;
     config->actual_stage=0;
 
     user_functions = &init_functions;
