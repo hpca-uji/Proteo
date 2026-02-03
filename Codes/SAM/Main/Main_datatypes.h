@@ -52,7 +52,6 @@ typedef struct
 typedef struct
 {
     size_t n_groups, n_resizes, n_phases; // n_groups==n_resizes+1
-    size_t actual_group, actual_phase, actual_stage; // Used for IO data only //TODO: Move there?
     int rigid_times, capture_method;
     size_t sdr, adr;
 
