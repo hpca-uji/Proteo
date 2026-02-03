@@ -52,7 +52,7 @@ typedef struct
 typedef struct
 {
     size_t n_groups, n_resizes, n_phases; // n_groups==n_resizes+1
-    size_t actual_group, actual_phase, actual_stage; // Used for IO data 
+    size_t actual_group, actual_phase, actual_stage; // Used for IO data only //TODO: Move there?
     int rigid_times, capture_method;
     size_t sdr, adr;
 
@@ -68,6 +68,7 @@ typedef struct {
   int argc;
   size_t sync_data_groups, async_data_groups;
   size_t start_phase, actual_phase, actual_iter;
+  int exec_iters;
 
   MPI_Comm children, parents;
 

@@ -144,11 +144,11 @@ void reset_results_index(results_data *results, size_t phase_ind) {
  * Es necesario obtener el maximo, pues es el que representa el tiempo real
  * que se ha utilizado.
  */
-void compute_results_iter(results_data *results, int myId, int numP, int root, size_t phases, int capture_method, MPI_Comm comm) {
+void compute_results_iter(results_data *results, int myId, int numP, int root, size_t phases, size_t actual_phase, int capture_method, MPI_Comm comm) {
   size_t i;
   results_phase *phase;
 
-  for(i = 0; i < phases; i++) {
+  for(i = actual_phase; i < phases; i++) {
     phase = results->phases_times + i;
     compute_phase(phase, myId, numP, root, capture_method, comm);
   }
@@ -282,6 +282,7 @@ void print_iter_results(results_data results, size_t phase_ind) {
   results_phase phase = results.phases_times[phase_ind];
 
   printf("R_Phase %zu\n", phase_ind);
+  printf("\tIters: %ld\n", phase.iter_index);
   printf("\tAsync_Iters: %ld\n", phase.iters_async);
   printf("\tT_iter: ");
   for(i=0; i< phase.iter_index; i++) {

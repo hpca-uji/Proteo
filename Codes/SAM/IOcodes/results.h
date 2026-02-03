@@ -34,7 +34,7 @@ void capture_m_iterations(results_data *results, size_t phase_ind, size_t qty_it
 void results_comm(results_data *results, int root, size_t resizes, MPI_Comm intercomm);
 
 void reset_results_index(results_data *results, size_t phase_ind);
-void compute_results_iter(results_data *results, int myId, int numP, int root, size_t phases, int capture_method, MPI_Comm comm);
+void compute_results_iter(results_data *results, int myId, int numP, int root, size_t phases, size_t actual_phase, int capture_method, MPI_Comm comm);
 
 void print_iter_results(results_data results, size_t phase_ind);
 void print_stage_results(results_data results, size_t phase_ind);

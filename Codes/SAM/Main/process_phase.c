@@ -52,13 +52,12 @@ void init_phases(group_data *group, configuration *config_file, results_data *re
  * Si sale por terminar el grupo, se tiene que llamar a work_reconf.
  */
 int phase_normal(group_data *group, configuration *config_file, results_data *results, MPI_Comm comm) { 
-  int exec_iters, max_iter, res;
+  int start_iter, max_iter, res;
   double *times_aux, **times_stages_aux;
-  size_t recorded_iters, recorded_stages, phase_ind, iter;
+  size_t recorded_iters, recorded_stages, phase_ind, iter, real_iter;
   phase_t *phase;
 
   max_iter = (group->grp+1) < config_file->n_groups ? config_file->groups[group->grp].iters : -1;
-  exec_iters = 0;
   res = 0;
 
   // Start arrays for recording times
@@ -73,28 +72,30 @@ int phase_normal(group_data *group, configuration *config_file, results_data *re
   for(size_t iter_ind = 0; iter_ind < recorded_iters; iter_ind++) {
     times_stages_aux[iter_ind] = malloc(recorded_stages * sizeof *(times_stages_aux[iter_ind]));
   }
-  phase_ind = group->actual_phase;
+  start_iter = group->actual_iter;
+  real_iter = 0;
 
   // Start work
   for(; group->actual_phase < config_file->n_phases; group->actual_phase++) {
     phase = config_file->phases+group->actual_phase;
 
     for(; group->actual_iter < phase->qty_iters; group->actual_iter++) {
-      if(exec_iters == max_iter) {
-        capture_m_iterations(results, group->actual_phase, group->actual_iter, times_aux, times_stages_aux);
+      real_iter = group->actual_iter - start_iter;
+      if(group->exec_iters == max_iter) {
+        capture_m_iterations(results, group->actual_phase, real_iter, times_aux, times_stages_aux);
         for(iter = 0; iter < recorded_iters; iter++) { free(times_stages_aux[iter]); }
         free(times_aux);
         free(times_stages_aux);
-        group->actual_phase++;
         return res;
       }
 
-      iterate(phase, times_aux+group->actual_iter, times_stages_aux[group->actual_iter], config_file->rigid_times, *group, comm);
-      exec_iters++;
+      iterate(phase, times_aux+real_iter, times_stages_aux[real_iter], config_file->rigid_times, *group, comm);
+      group->exec_iters++;
     }
     
-    capture_m_iterations(results, group->actual_phase, phase->qty_iters, times_aux, times_stages_aux);
-    group->actual_iter = 0;
+    real_iter = group->actual_iter - start_iter;
+    capture_m_iterations(results, group->actual_phase, real_iter, times_aux, times_stages_aux);
+    group->actual_iter = start_iter = 0;
   }
 
   for(iter = 0; iter < recorded_iters; iter++) { free(times_stages_aux[iter]); }
@@ -116,9 +117,10 @@ int phase_reconf(group_data *group, configuration *config_file, results_data *re
 
   for(; group->actual_phase < config_file->n_phases; group->actual_phase++) {
     phase = config_file->phases+group->actual_phase;
-    for(; group->actual_iter < phase->qty_iters; group->actual_iter++) {
+    for(; group->actual_iter < phase->qty_iters; ) {
       
       iterate_with_reconf(phase, state, results, config_file->rigid_times, group->actual_phase, *group, comm);
+      group->actual_iter++; 
       MAM_Checkpoint(&state, MAM_CHECK_COMPLETION, callback, NULL);
       if(MAM_COMPLETED == state) { return res; }
     }

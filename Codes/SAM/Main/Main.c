@@ -83,10 +83,10 @@ int main(int argc, char *argv[]) {
     
       phase_normal(group, config_file, results, comm);
       if(config_file->n_groups != group->grp + 1) {
-        phase_reconf(group, config_file, results, user_redistribution, comm); // FIXME Como llamo a user_redist?
+        phase_reconf(group, config_file, results, user_redistribution, comm);
         reset_results_index(results, group->actual_phase);
         update_targets(); 
-      } else { group->grp++; }
+      } else if(group->actual_phase == config_file->n_phases) { group->grp++; } // ENDING clause
     } while(config_file->n_groups != group->grp);
     //
     // TERMINA LA EJECUCION ----------------------------------------------------------
@@ -141,7 +141,7 @@ int print_local_results() {
   char *file_name;
 
   // This function causes an overhead in the recorded time for last group
-  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_phases, config_file->capture_method, comm);
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_phases, group->actual_phase, config_file->capture_method, comm);
   if(group->myId == ROOT) {
     ptr_out = dup(1);
 
@@ -211,6 +211,7 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
   group->actual_iter   = 0;
   group->actual_phase  = 0;
   group->start_phase   = 0;
+  group->exec_iters    = 0;
   group->argc          = argc;
   group->argv          = argv;
   group->sync_array    = NULL;
@@ -406,12 +407,13 @@ void init_originals() {
 
 void init_targets() {
   size_t index, *array_iters_aux, *array_stages_aux;
+  MPI_Datatype type_size_t;
 
+  MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
   MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
-  MPI_Bcast(&group->actual_iter, 1, MPI_INT, ROOT, new_comm);
-  MPI_Bcast(&group->actual_phase, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&group->actual_iter, 1, type_size_t, ROOT, new_comm);
+  MPI_Bcast(&group->actual_phase, 1, type_size_t, ROOT, new_comm);
   MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
-  group->start_phase = group->actual_phase;
 
   recv_config_file(ROOT, new_comm, &config_file);
 
@@ -436,6 +438,8 @@ void update_targets() {
 
   group->grp = group->grp + 1;
   group->grp_config = config_file->groups[group->grp];
+  group->start_phase = group->actual_phase;
+
   update_surviving_targets();
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
@@ -466,6 +470,8 @@ void update_targets() {
 
 void update_surviving_targets() {
   size_t i;
+  group->exec_iters = 0;
+
   if(config_file->sdr && group->sync_array != NULL) {
     for(i=0; i<group->sync_data_groups; i++) {
       free(group->sync_array[i]);
@@ -491,6 +497,7 @@ void update_surviving_targets() {
 
 void user_redistribution(void *args) {
   int commited;
+  MPI_Datatype type_size_t;
   mam_user_reconf_t user_reconf;
 
   MAM_Get_Reconf_Info(&user_reconf);
@@ -498,16 +505,19 @@ void user_redistribution(void *args) {
   if(user_reconf.rank_state == MAM_PROC_NEW_RANK) {
     init_targets();
   } else {
+    MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
     MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
-    MPI_Bcast(&group->actual_iter, 1, MPI_INT, ROOT, new_comm);
-    MPI_Bcast(&group->actual_phase, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&group->actual_iter, 1, type_size_t, ROOT, new_comm);
+    MPI_Bcast(&group->actual_phase, 1, type_size_t, ROOT, new_comm);
     MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
-    group->start_phase = group->actual_phase;
-
+    
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
+    group->actual_phase++;
     print_local_results();
+    group->actual_phase--;
+
     if(user_reconf.rank_state == MAM_PROC_ZOMBIE) {
       free_zombie_process();
     }
