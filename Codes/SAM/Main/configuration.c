@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
 #include "configuration.h"
@@ -152,6 +153,7 @@ void malloc_config_stages(configuration *user_config, size_t phase_ind) {
       phase->stages[i].operations = 0;
       phase->stages[i].granularity = CONFIG_GRANULARITY_UNDEFINED;
       phase->stages[i].pt = 0;
+      phase->stages[i].fd = -1;
       phase->stages[i].id = -1;
       phase->stages[i].t_op = 0;
       phase->stages[i].t_stage = 0;
@@ -259,6 +261,10 @@ void free_config_stage(stage_t *stage, int *freed_ids, size_t *found_ids) {
       *found_ids=*found_ids + 1;
     }
   }
+
+  if(stage->fd > -1) {
+    close(stage->fd);
+  }
 	
   if(stage->array != NULL) {
     free(stage->array);
@@ -276,7 +282,7 @@ void free_config_stage(stage_t *stage, int *freed_ids, size_t *found_ids) {
     for(mpi_index=0; mpi_index<stage->req_count; mpi_index++) {
       if(stage->reqs[mpi_index] != MPI_REQUEST_NULL) {
         MPI_Request_free(&(stage->reqs[mpi_index]));
-	stage->reqs[mpi_index] = MPI_REQUEST_NULL;
+	      stage->reqs[mpi_index] = MPI_REQUEST_NULL;
       }
     }
     free(stage->reqs);
@@ -371,7 +377,7 @@ void print_config_phase(phase_t *phase, size_t index) {
   for(i=0; i<phase->qty_stages; i++) {
     stage = phase->stages+i;
     printf("\tStage %zu: PT=%d, T_stage=%lf, bytes=%d, Granularity=%d, T_capped=%d\n",
-      i, stage->pt, stage->t_stage, stage->real_bytes, stage->granularity, stage->t_capped);
+      i, stage->pt, stage->t_stage, stage->bytes, stage->granularity, stage->t_capped);
   }
 }
 

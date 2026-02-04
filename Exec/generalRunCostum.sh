@@ -54,6 +54,7 @@ then
 else
   initial_nodelist=$(bash $PROTEO_HOME$execDir/BashScripts/createInitialNodelist.sh $numP)
 fi
+ln -sf $PROTEO_HOME$execDir/SAM_R_FILE.tmp SAM_R_FILE.tmp
 
 #EXECUTE RUN
 echo "Nodes=$nodelist"
@@ -86,3 +87,4 @@ fi
 
 echo "END TEST"
 rm MAM_HF_ID${SLURM_JOB_ID}_S*.tmp
+rm SAM_W_J${SLURM_JOB_ID}_S*.tmp

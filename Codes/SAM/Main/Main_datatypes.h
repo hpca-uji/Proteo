@@ -28,6 +28,9 @@ typedef struct
   int req_count;
   MPI_Request *reqs;
 
+  // I/O related
+  int fd;
+
   // Arrays to indicate how many bytes are received from each rank
   struct Counts counts;
 
