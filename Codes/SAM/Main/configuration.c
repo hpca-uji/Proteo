@@ -152,6 +152,7 @@ void malloc_config_stages(configuration *user_config, size_t phase_ind) {
       phase->stages[i].real_bytes = 0;
       phase->stages[i].operations = 0;
       phase->stages[i].granularity = CONFIG_GRANULARITY_UNDEFINED;
+      phase->stages[i].involved_procs = 0;
       phase->stages[i].pt = 0;
       phase->stages[i].fd = -1;
       phase->stages[i].id = -1;
@@ -376,8 +377,8 @@ void print_config_phase(phase_t *phase, size_t index) {
     index, phase->qty_stages, phase->qty_iters);
   for(i=0; i<phase->qty_stages; i++) {
     stage = phase->stages+i;
-    printf("\tStage %zu: PT=%d, T_stage=%lf, bytes=%d, Granularity=%d, T_capped=%d\n",
-      i, stage->pt, stage->t_stage, stage->bytes, stage->granularity, stage->t_capped);
+    printf("\tStage %zu: PT=%d, T_stage=%lf, bytes=%d, Granularity=%d, Involved_Procs=%d, T_capped=%d\n",
+      i, stage->pt, stage->t_stage, stage->bytes, stage->granularity, stage->involved_procs, stage->t_capped);
   }
 }
 
@@ -611,15 +612,15 @@ void def_struct_phase(configuration *config_file) {
  * de la estructuras de fases de iteracion en una sola comunicacion.
  */
 void def_struct_stage(configuration *config_file, phase_t *phase) {
-  int i, counts = 7;
-  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 8;
+  int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype aux, types[counts];
   stage_t *stages = phase->stages;
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = types[4] = MPI_INT;
-  types[5] = types[6] = MPI_DOUBLE;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_INT;
+  types[6] = types[7] = MPI_DOUBLE;
 
   // Rellenar vector displs
   MPI_Get_address(stages, &dir);
@@ -627,10 +628,11 @@ void def_struct_stage(configuration *config_file, phase_t *phase) {
   MPI_Get_address(&(stages->pt), &displs[0]);
   MPI_Get_address(&(stages->id), &displs[1]);
   MPI_Get_address(&(stages->bytes), &displs[2]);
-  MPI_Get_address(&(stages->t_capped), &displs[3]);
-  MPI_Get_address(&(stages->granularity), &displs[4]);
-  MPI_Get_address(&(stages->t_stage), &displs[5]);
-  MPI_Get_address(&(stages->t_op), &displs[6]);
+  MPI_Get_address(&(stages->involved_procs), &displs[3]);
+  MPI_Get_address(&(stages->t_capped), &displs[4]);
+  MPI_Get_address(&(stages->granularity), &displs[5]);
+  MPI_Get_address(&(stages->t_stage), &displs[6]);
+  MPI_Get_address(&(stages->t_op), &displs[7]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 

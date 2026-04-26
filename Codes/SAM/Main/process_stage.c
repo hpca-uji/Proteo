@@ -215,7 +215,7 @@ double process_stage(stage_t stage, group_data group, MPI_Comm comm) {
 
     // IO functions
     case COMP_IOWRITE:
-      if(group.myId != ROOT) { break; }
+      if(!(group.myId < stage.involved_procs || !stage.involved_procs)) { break; }
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
           write_n_bytes(stage.fd, stage.array, stage.real_bytes);
@@ -228,7 +228,7 @@ double process_stage(stage_t stage, group_data group, MPI_Comm comm) {
       }
       break;
     case COMP_IOREAD:
-      if(group.myId != ROOT) { break; }
+      if(!(group.myId < stage.involved_procs || !stage.involved_procs)) { break; }
       if(stage.t_capped) {
         while(t_total < stage.t_stage) {
           read_n_bytes(stage.fd, stage.array, stage.real_bytes);
@@ -495,12 +495,12 @@ double init_io_write_pt(group_data group, stage_t *stage, phase_t *phase, MPI_Co
   if(stage->array != NULL) { free(stage->array); }
   if(stage->fd > -1) { close(stage->fd); }
 
-  if(group.myId == ROOT) {
+  if(group.myId < stage->involved_procs || !stage->involved_procs) {
     for(stid=0; stid<phase->qty_stages; stid++) {
       if(phase->stages+stid == stage) { break; }
     }
 
-    generate_name_file(&filename, SAM_FILE_WRITE, stid);
+    generate_name_file(&filename, SAM_FILE_WRITE, stid, group.myId);
     stage->fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0600);
     if(stage->fd < 0) {
       perror("SAM: Open write file");
@@ -525,11 +525,15 @@ double init_io_write_pt(group_data group, stage_t *stage, phase_t *phase, MPI_Co
     return result;
   }
 
-  if(group.myId == ROOT) {
+  MPI_Barrier(comm);
+  if(group.myId < stage->involved_procs || !stage->involved_procs) {
     start_time = MPI_Wtime();
     result+= process_stage(*stage, group, comm);
+  }
+  MPI_Barrier(comm);
+  if(group.myId == ROOT) {
     stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
-    stage->operations = ceil(stage->t_stage / stage->t_op);
+    stage->operations = ceil(stage->t_stage / stage->t_op);  
   }
   MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm);
   MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
@@ -565,11 +569,15 @@ double init_io_read_pt(group_data group, stage_t *stage, MPI_Comm comm, int comp
     return result;
   }
 
-  if(group.myId == ROOT) {
+  MPI_Barrier(comm);
+  if(group.myId < stage->involved_procs || !stage->involved_procs) {
     start_time = MPI_Wtime();
     result+= process_stage(*stage, group, comm);
+  }
+  MPI_Barrier(comm);
+  if(group.myId == ROOT) {
     stage->t_op = (MPI_Wtime() - start_time) / stage->operations; //Tiempo de una operacion
-    stage->operations = ceil(stage->t_stage / stage->t_op);
+    stage->operations = ceil(stage->t_stage / stage->t_op);  
   }
   MPI_Bcast(&(stage->operations), 1, MPI_INT, ROOT, comm); 
   MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);

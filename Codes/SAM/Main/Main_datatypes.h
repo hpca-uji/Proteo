@@ -21,6 +21,7 @@ typedef struct
   double t_op;
   int operations, granularity;
   int bytes, real_bytes, my_bytes;
+  int involved_procs;
   
   // Arrays to communicate data;
   char* array, *full_array;

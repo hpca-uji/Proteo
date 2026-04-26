@@ -87,6 +87,10 @@ static int handler(void* user, const char* section, const char* name,
         phase = pconfig->phases+actual_phase;
         stage = phase->stages+actual_stage;
         stage->id = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Involved_Procs") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->involved_procs = atoi(value);
     } else if (MATCH(stage_name, "Stage_Time") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
         phase = pconfig->phases+actual_phase;
         stage = phase->stages+actual_stage;

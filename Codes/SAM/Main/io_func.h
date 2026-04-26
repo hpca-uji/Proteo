@@ -9,7 +9,7 @@
 #define SAM_FILE_WRITE 'W'
 #define SAM_IO_MAX_BYTES 1048576.0 // 1MB
 
-int generate_name_file(char **filename, char type, size_t stid);
+int generate_name_file(char **filename, char type, size_t stid, int rank);
 ssize_t write_n_bytes(int fd, char *array, size_t n);
 ssize_t read_n_bytes(int fd, char *array, size_t n);
 
