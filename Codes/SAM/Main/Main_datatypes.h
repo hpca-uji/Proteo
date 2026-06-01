@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
-#include "../MaM/distribution_methods/block_distribution.h"
-
 
 #define ROOT 0
 
@@ -22,9 +20,14 @@ typedef struct {
   char *compute_comm_array, *compute_comm_recv;
   char **argv;
   char **sync_array, **async_array;
-  int *sync_qty, *async_qty;
+  size_t *sync_qty, *async_qty;
 } group_data;
 
+struct Counts {
+  int len;
+  int *counts;
+  int *displs;
+};
 
 typedef struct
 {

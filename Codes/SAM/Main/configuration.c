@@ -4,7 +4,6 @@
 #include <mpi.h>
 #include "../IOcodes/read_ini.h"
 #include "configuration.h"
-#include "../MaM/distribution_methods/block_distribution.h"
 
 void malloc_config_resizes(configuration *user_config);
 void malloc_config_stages(configuration *user_config);
@@ -117,6 +116,28 @@ void malloc_config_stages(configuration *user_config) {
   }
 }
 
+/*
+ * Reserva memoria para los vectores de counts/displs de las funciones
+ * MPI. Todos los vectores tienen un tamaño de numP.
+ *
+ * El vector counts indica cuantos elementos se comunican desde este proceso
+ * al proceso "i".
+ *
+ * El vector displs indica los desplazamientos necesarios para cada comunicacion
+ * con el proceso "i".
+ *
+ */
+void malloc_counts(struct Counts *counts, size_t numP) {
+
+    counts->counts = calloc(numP, sizeof(int)); 
+    if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
+
+    counts->displs = calloc(numP, sizeof(int));
+    if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
+
+    counts->len = numP;
+}
+
 
 /*
  * Libera toda la memoria de una estructura de configuracion
@@ -199,10 +220,30 @@ void free_config_stage(iter_stage_t *stage, int *freed_ids, size_t *found_ids) {
     stage->reqs = NULL;
   }
   if(stage->counts.counts != NULL) {
-    freeCounts(&(stage->counts));
+    free_counts(&(stage->counts));
   }
 }
 
+/*
+ * Libera la memoria interna de una estructura Counts.
+ *
+ * No libera la memoria de la estructura counts si se ha alojado
+ * de forma dinamica.
+ */
+void free_counts(struct Counts *counts) {
+    if(counts == NULL) {
+      return;
+    }
+
+    if(counts->counts != NULL) {
+      free(counts->counts);
+      counts->counts = NULL;
+    }
+    if(counts->displs != NULL) {
+      free(counts->displs);
+      counts->displs = NULL;
+    }
+}
 
 /*
  * Imprime por salida estandar toda la informacion que contiene
