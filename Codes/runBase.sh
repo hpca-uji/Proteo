@@ -2,7 +2,6 @@
 
 #SBATCH -p P1
 #SBATCH -N 1
-#SBATCH --mem-per-cpu=6000
 #SBATCH --exclusive
 
 source build/config.txt

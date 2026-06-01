@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include "block_distribution.h"
 
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts);
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, MPI_Count *sendcounts);
 void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
 
 /*
@@ -13,7 +13,7 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS);
  *
  * The struct should be freed with freeCounts
  */
-void prepare_comm_alltoall(int myId, int numP, int numP_other, int n, int offset_ids, struct Counts *counts) {
+void prepare_comm_alltoall(int myId, int numP, int numP_other, size_t n, int offset_ids, struct Counts *counts) {
   int i, *idS, first_id = 0;
   struct Dist_data dist_data, dist_target;
  
@@ -87,8 +87,8 @@ void prepare_comm_allgatherv(int numP, int n, struct Counts *counts) {
  * elements per row will have process "Id"
  * and fills the results in a Dist_data struct
  */
-void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
-  int rem;
+void get_block_dist(size_t qty, int id, int numP, struct Dist_data *dist_data) {
+  size_t rem;
 
   dist_data->myId = id;
   dist_data->numP = numP;
@@ -96,7 +96,7 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
   dist_data->tamBl = qty / numP;
   rem = qty % numP;
 
-  if(id < rem) { // First subgroup
+  if(((size_t) id) < rem) { // First subgroup
     dist_data->ini = id * dist_data->tamBl + id;
     dist_data->fin = (id+1) * dist_data->tamBl + (id+1);
   } else { // Second subgroup
@@ -115,9 +115,9 @@ void get_block_dist(int qty, int id, int numP, struct Dist_data *dist_data) {
  * Obtiene para el Id de un proceso dado, cuantos elementos
  * enviara o recibira desde el proceso indicado en Dist_data.
  */
-void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, int *sendcounts) {
+void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int offset_ids, MPI_Count *sendcounts) {
   struct Dist_data other;
-  int biggest_ini, smallest_end;
+  size_t biggest_ini, smallest_end;
 
   get_block_dist(data_dist.qty, id - offset_ids, numP, &other);
 
@@ -144,12 +144,12 @@ void set_interblock_counts(int id, int numP, struct Dist_data data_dist, int off
  */
 void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS) {
     int idI, idE;
-    int tamOther = dist_data.qty / numP_other;
-    int remOther = dist_data.qty % numP_other;
+    size_t tamOther = dist_data.qty / numP_other;
+    size_t remOther = dist_data.qty % numP_other;
     // Indica el punto de corte del grupo de procesos externo que 
     // divide entre los procesos que tienen 
     // un tamaño tamOther + 1 y un tamaño tamOther
-    int middle = (tamOther + 1) * remOther;
+    size_t middle = (tamOther + 1) * remOther;
 
     // Calcular idI teniendo en cuenta si se comunica con un
     // proceso con tamano tamOther o tamOther+1
@@ -196,16 +196,16 @@ void get_util_ids(struct Dist_data dist_data, int numP_other, int **idS) {
  */
 void mallocCounts(struct Counts *counts, size_t numP) {
 
-    counts->counts = calloc(numP, sizeof(int)); 
+    counts->counts = calloc(numP, sizeof(MPI_Count)); 
     if(counts->counts == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
-    counts->displs = calloc(numP, sizeof(int));
+    counts->displs = calloc(numP, sizeof(MPI_Aint));
     if(counts->displs == NULL) { MPI_Abort(MPI_COMM_WORLD, -2);}
 
     counts->len = numP;
     counts->idI = -1;
     counts->idE = -1;
-    counts->first_target_displs = -1;
+    counts->first_target_displs = 0;
 }
 
 
@@ -238,12 +238,12 @@ void freeCounts(struct Counts *counts) {
  * En "name" se puede indicar un string con el fin de identificar mejor a que vectores
  * se refiere la llamada.
  */
-void print_counts(struct Dist_data data_dist, int *xcounts, int *xdispls, int size, int include_zero, const char* name) {
+void print_counts(struct Dist_data data_dist, MPI_Count *xcounts, MPI_Aint *xdispls, int size, int include_zero, const char* name) {
   int i;
 
   for(i=0; i < size; i++) {
     if(xcounts[i] != 0 || include_zero) {
-      printf("P%d of %d | %scounts[%d]=%d disp=%d\n", data_dist.myId, data_dist.numP, name, i, xcounts[i], xdispls[i]);
+      printf("P%d of %d | %scounts[%d]=%lld disp=%ld\n", data_dist.myId, data_dist.numP, name, i, xcounts[i], xdispls[i]);
     }
   }
 }

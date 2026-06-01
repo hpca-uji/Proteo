@@ -12,5 +12,6 @@ void async_communication_wait(MPI_Request *requests, size_t request_qty);
 void async_communication_end(MPI_Request *requests, size_t request_qty, MPI_Win *win, int *idS);
 
 
-void malloc_comm_array(char **array, int qty, int myId, int numP);
+void malloc_comm_array(void **array, size_t qty, size_t datasize, int myId, int numP, int init);
+void check_ordered(const char *array, size_t qty);
 #endif

@@ -1003,18 +1003,12 @@ int thread_creation() {
 int thread_check(int wait_completed) {
   int all_completed = 0;
 
-  if(wait_completed && comm_state == MAM_I_DIST_PENDING) {
-    if(pthread_join(mall->async_thread, NULL)) {
-      printf("Error al esperar al hilo\n");
-      MPI_Abort(MPI_COMM_WORLD, -1);
-      return -2;
-    } 
+  if(!wait_completed) {
+    // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
+    MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
+    if(all_completed != MAM_I_DIST_COMPLETED) return MAM_I_DIST_PENDING; // Continue only if asynchronous send has ended 
   }
-
-  // Comprueba que todos los hilos han terminado la distribucion (Mismo valor en commAsync)
-  MPI_Allreduce(&comm_state, &all_completed, 1, MPI_INT, MPI_MAX, mall->comm);
-  if(all_completed != MAM_I_DIST_COMPLETED) return MAM_I_DIST_PENDING; // Continue only if asynchronous send has ended 
-
+  
   if(pthread_join(mall->async_thread, NULL)) {
     printf("Error al esperar al hilo\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
