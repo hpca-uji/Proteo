@@ -192,12 +192,18 @@ do
     slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
 
     #2.1 - Get partition name, default otherwise
-    partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
-    if [ -z "$partition" ];
-    then
+    if [ -e "$slurm_file" ]; then
+      partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+      if [ -z "$partition" ];
+      then
+        partition='P1'
+        echo "Partition not found in file $slurm_file. Falling to P1 partition."
+      fi
+    else 
       partition='P1'
-      echo "Partition not found in file $slurm_file. Falling to P1 partition."
-    fi
+      echo "The slurm file does not exist. Falling to P1 partition."
+    fi 
+
     res=$(scontrol show partition $partition)
     if [[ "$res" =~ "not found" ]]; 
     then    
@@ -211,6 +217,7 @@ do
 
     #3 - Launch execution
     sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
+    echo "sbatch -p partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff"
   fi
 done
 
