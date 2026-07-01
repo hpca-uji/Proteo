@@ -12,6 +12,7 @@
 
 #Ignore Results files
 /Results/**/
+/Analysis/tmp/**/
 
 #Ignore VS jsons
 .vscode/*.json
