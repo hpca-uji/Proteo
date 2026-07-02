@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
 #include "PortService.h"
 #include "Strategy_Parallel.h"
 #include "ProcessDist.h"
