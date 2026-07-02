@@ -62,7 +62,7 @@ typedef struct
 {
     size_t n_groups, n_resizes, n_phases; // n_groups==n_resizes+1
     int rigid_times, capture_method;
-    size_t sdr, adr;
+    size_t sdr, adr, datasize;
 
     MPI_Datatype config_type, group_type, group_strats_type, phase_type, stage_type;
     phase_t *phases;
@@ -81,7 +81,7 @@ typedef struct {
   MPI_Comm children, parents;
 
   char **argv;
-  char **sync_array, **async_array;
+  void **sync_array, **async_array;
   size_t *sync_qty, *async_qty;
   group_config_t grp_config;
 } group_data;

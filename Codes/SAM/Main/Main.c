@@ -259,31 +259,29 @@ void init_application() {
 
   // Init distribution arrays for reconfigurations
   if(config_file->sdr) {
-    //config_file->sdr = config_file->sdr % sizeof(double) ? config_file->sdr/sizeof(double)+1 : config_file->sdr/sizeof(double);
     group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
     group->sync_qty = (size_t *) malloc(group->sync_data_groups * sizeof(size_t)); // FIXME Valgrind not freed
-    group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *)); // Valgrind not freed
+    group->sync_array = (void **) malloc(group->sync_data_groups * sizeof(void *)); // Valgrind not freed
     last_index = group->sync_data_groups-1; 
     for(i=0; i<last_index; i++) {
       group->sync_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array((void **) &(group->sync_array[i]), group->sync_qty[i], sizeof(char), group->myId, group->numP, init_array);
+      malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], config_file->datasize, group->myId, group->numP, init_array);
     }
     group->sync_qty[last_index] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array((void **) &(group->sync_array[last_index]), group->sync_qty[last_index], sizeof(char), group->myId, group->numP, init_array); // Valgrind not freed
+    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], config_file->datasize, group->myId, group->numP, init_array); // Valgrind not freed
   }
 
   if(config_file->adr) {
-    //config_file->adr = config_file->adr % sizeof(double) ? config_file->adr/sizeof(double)+1 : config_file->adr/sizeof(double);
     group->async_data_groups = config_file->adr % DR_MAX_SIZE ? config_file->adr/DR_MAX_SIZE+1 : config_file->adr/DR_MAX_SIZE;
     group->async_qty = (size_t *) malloc(group->async_data_groups * sizeof(size_t));
-    group->async_array = (char **) malloc(group->async_data_groups * sizeof(char *));
+    group->async_array = (void **) malloc(group->async_data_groups * sizeof(void *));
     last_index = group->async_data_groups-1; 
     for(i=0; i<last_index; i++) {
       group->async_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array((void **) &(group->async_array[i]), group->async_qty[i], sizeof(char), group->myId, group->numP, init_array);
+      malloc_comm_array(&(group->async_array[i]), group->async_qty[i], config_file->datasize, group->myId, group->numP, init_array);
     }
     group->async_qty[last_index] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array((void **) &(group->async_array[last_index]), group->async_qty[last_index], sizeof(char), group->myId, group->numP, init_array);
+    malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], config_file->datasize, group->myId, group->numP, init_array);
   }
 
   init_phases(group, config_file, results, 1, comm);
@@ -448,10 +446,10 @@ void update_targets() {
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
     group->sync_qty = (size_t *) malloc(entries * sizeof(size_t));
-    group->sync_array = (char **) malloc(entries * sizeof(char *));
+    group->sync_array = (void **) malloc(entries * sizeof(void *));
     for(i=0; i<entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
-      group->sync_array[i] = (char *)value;
+      group->sync_array[i] = value;
       group->sync_qty[i] = DR_MAX_SIZE;
     }
     group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
@@ -461,10 +459,10 @@ void update_targets() {
   if(config_file->adr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
     group->async_qty = (size_t *) malloc(entries * sizeof(size_t));
-    group->async_array = (char **) malloc(entries * sizeof(char *));
+    group->async_array = (void **) malloc(entries * sizeof(void *));
     for(i=0; i<entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
-      group->async_array[i] = (char *)value;
+      group->async_array[i] = value;
       group->async_qty[i] = DR_MAX_SIZE;
     }
     group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;

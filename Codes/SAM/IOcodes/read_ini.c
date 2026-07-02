@@ -52,6 +52,8 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->sdr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
         pconfig->adr = strtoul(value, NULL, 10);
+    } else if (MATCH("general", "Datasize")) { // TODO Refactor a nombre manual
+        pconfig->datasize = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
     } else if (MATCH("general", "Capture_Method")) {

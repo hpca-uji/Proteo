@@ -59,12 +59,13 @@ void init_config(char *file_name, configuration **user_config) {
     config->phase_type = MPI_DATATYPE_NULL;
     config->stage_type = MPI_DATATYPE_NULL;
 
-    config->n_resizes=0;
-    config->n_groups=1;
+    config->datasize = sizeof(char);
+    config->n_resizes = 0;
+    config->n_groups = 1;
     malloc_config_resizes(config);
-    config->n_phases=1;
+    config->n_phases = 1;
     malloc_config_phases(config);
-    *user_config=config;
+    *user_config = config;
   }
   check_granularity(*user_config);
   def_struct_config_file(*user_config);
@@ -508,15 +509,15 @@ void recv_config_file(int root, MPI_Comm intercomm, configuration **config_file_
  * de la estructura de configuracion con una sola comunicacion.
  */
 void def_struct_config_file(configuration *config_file) {
-  int i, counts = 6;
-  int blocklengths[6] = {1, 1, 1, 1, 1, 1};
+  int i, counts = 7;
+  int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts], type_size_t;
   MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
 
   // Rellenar vector types
-  types[0] = types[1] = types[2] = types[3] = type_size_t;
-  types[4] = types[5] = MPI_INT;
+  types[0] = types[1] = types[2] = types[3] = types[4] = type_size_t;
+  types[5] = types[6] = MPI_INT;
 
   // Rellenar vector displs
   MPI_Get_address(config_file, &dir);
@@ -525,8 +526,9 @@ void def_struct_config_file(configuration *config_file) {
   MPI_Get_address(&(config_file->n_phases), &displs[1]);
   MPI_Get_address(&(config_file->sdr), &displs[2]);
   MPI_Get_address(&(config_file->adr), &displs[3]);
-  MPI_Get_address(&(config_file->rigid_times), &displs[4]);
-  MPI_Get_address(&(config_file->capture_method), &displs[5]);
+  MPI_Get_address(&(config_file->datasize), &displs[4]);
+  MPI_Get_address(&(config_file->rigid_times), &displs[5]);
+  MPI_Get_address(&(config_file->capture_method), &displs[6]);
 
   for(i=0;i<counts;i++) displs[i] -= dir;
 
