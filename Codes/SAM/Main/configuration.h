@@ -5,12 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
-#include "../Main/Main_datatypes.h"
+#include "Main_datatypes.h"
 
 void init_config(char *file_name, configuration **user_config);
 void free_config(configuration *user_config);
 void print_config(configuration *user_config);
 void print_config_group(configuration *user_config, size_t grp);
+
+void malloc_counts(struct Counts *counts, size_t numP);
+void free_counts(struct Counts *counts);
 
 // MPI Intercomm functions
 void send_config_file(configuration *config_file, int root, MPI_Comm intercomm);

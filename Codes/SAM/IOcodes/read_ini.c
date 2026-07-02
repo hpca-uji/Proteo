@@ -3,7 +3,7 @@
 #include <string.h>
 #include "read_ini.h"
 #include "ini.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
 size_t actual_group, actual_phase, actual_stage; // Used for IO data only
 ext_functions_t *user_functions;

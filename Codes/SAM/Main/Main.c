@@ -7,9 +7,9 @@
 #include "process_phase.h"
 #include "Main_datatypes.h"
 #include "configuration.h"
-#include "../IOcodes/results.h"
+#include "results.h"
 #include "../MaM/distribution_methods/Distributed_CommDist.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
 #define DR_MAX_SIZE 1000000000
 
@@ -228,9 +228,11 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
  *
  * En caso de ser otro grupo de procesos entra a la funcion "Sons_init()" donde
  * se comunican con los padres para inicializar sus datos.
+ * TODO: Should consider type of data from file?
  */
 void init_application() {
   int i, last_index;
+  int init_array = 0;
   size_t index, *array_iters_aux, *array_stages_aux;
 
   if(group->argc < 2) {
@@ -257,29 +259,31 @@ void init_application() {
 
   // Init distribution arrays for reconfigurations
   if(config_file->sdr) {
+    //config_file->sdr = config_file->sdr % sizeof(double) ? config_file->sdr/sizeof(double)+1 : config_file->sdr/sizeof(double);
     group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
-    group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int)); // FIXME Valgrind not freed
+    group->sync_qty = (size_t *) malloc(group->sync_data_groups * sizeof(size_t)); // FIXME Valgrind not freed
     group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *)); // Valgrind not freed
     last_index = group->sync_data_groups-1; 
     for(i=0; i<last_index; i++) {
       group->sync_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], group->myId, group->numP);
+      malloc_comm_array((void **) &(group->sync_array[i]), group->sync_qty[i], sizeof(char), group->myId, group->numP, init_array);
     }
     group->sync_qty[last_index] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], group->myId, group->numP); // Valgrind not freed
+    malloc_comm_array((void **) &(group->sync_array[last_index]), group->sync_qty[last_index], sizeof(char), group->myId, group->numP, init_array); // Valgrind not freed
   }
 
   if(config_file->adr) {
+    //config_file->adr = config_file->adr % sizeof(double) ? config_file->adr/sizeof(double)+1 : config_file->adr/sizeof(double);
     group->async_data_groups = config_file->adr % DR_MAX_SIZE ? config_file->adr/DR_MAX_SIZE+1 : config_file->adr/DR_MAX_SIZE;
-    group->async_qty = (int *) malloc(group->async_data_groups * sizeof(int));
+    group->async_qty = (size_t *) malloc(group->async_data_groups * sizeof(size_t));
     group->async_array = (char **) malloc(group->async_data_groups * sizeof(char *));
     last_index = group->async_data_groups-1; 
     for(i=0; i<last_index; i++) {
       group->async_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array(&(group->async_array[i]), group->async_qty[i], group->myId, group->numP);
+      malloc_comm_array((void **) &(group->async_array[i]), group->async_qty[i], sizeof(char), group->myId, group->numP, init_array);
     }
     group->async_qty[last_index] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], group->myId, group->numP);
+    malloc_comm_array((void **) &(group->async_array[last_index]), group->async_qty[last_index], sizeof(char), group->myId, group->numP, init_array);
   }
 
   init_phases(group, config_file, results, 1, comm);
@@ -443,7 +447,7 @@ void update_targets() {
   update_surviving_targets();
   if(config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
-    group->sync_qty = (int *) malloc(entries * sizeof(int));
+    group->sync_qty = (size_t *) malloc(entries * sizeof(size_t));
     group->sync_array = (char **) malloc(entries * sizeof(char *));
     for(i=0; i<entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
@@ -456,7 +460,7 @@ void update_targets() {
 
   if(config_file->adr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
-    group->async_qty = (int *) malloc(entries * sizeof(int));
+    group->async_qty = (size_t *) malloc(entries * sizeof(size_t));
     group->async_array = (char **) malloc(entries * sizeof(char *));
     for(i=0; i<entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);

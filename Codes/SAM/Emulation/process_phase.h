@@ -2,7 +2,7 @@
 #define PROCESS_PHASE_H
 
 #include "Main_datatypes.h"
-#include "../IOcodes/results.h"
+#include "results.h"
 
 void init_phases(group_data *group, configuration *config_file, results_data *results, int compute, MPI_Comm comm);
 

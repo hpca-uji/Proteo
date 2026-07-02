@@ -8,7 +8,7 @@
 #include "io_func.h"
 #include "Main_datatypes.h"
 #include "process_stage.h"
-#include "../MaM/distribution_methods/block_distribution.h"
+#include "configuration.h"
 
 double init_emulation_comm_time(group_data group, stage_t *stage, MPI_Comm comm);
 double init_emulation_icomm_time(group_data group, stage_t *stage, MPI_Comm comm);
@@ -25,6 +25,10 @@ double init_comm_wait_pt(stage_t *stage, phase_t *phase);
 
 double init_io_write_pt(group_data group, stage_t *stage, phase_t *phase, MPI_Comm comm, int compute);
 double init_io_read_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute);
+
+void prepare_comm_allgatherv(int numP, int n, struct Counts *counts);
+void get_sam_block_dist(int qty, int id, int numP, int *tamBl);
+
 
 /*
  * Calcula el tiempo por operacion o total de bytes a enviar
@@ -100,7 +104,7 @@ double process_stage(stage_t stage, group_data group, MPI_Comm comm) {
   double result, t_start, t_total;
   t_start = MPI_Wtime();
   t_total = 0;
-  result = 0;
+  result = 1;
 
   switch(stage.pt) {
     //Computo
@@ -410,12 +414,11 @@ double init_comm_bcast_pt(group_data group, stage_t *stage, MPI_Comm comm, int c
 // TODO Compute should be always 1 if the number of processes is different
 double init_comm_allgatherv_pt(group_data group, stage_t *stage, MPI_Comm comm, int compute) {
   double time=0;
-  struct Dist_data dist_data;
 
   if(stage->array != NULL)
     free(stage->array);
   if(stage->counts.counts != NULL)
-    freeCounts(&(stage->counts));
+    free_counts(&(stage->counts));
   if(stage->full_array != NULL)
     free(stage->full_array);
 
@@ -423,8 +426,7 @@ double init_comm_allgatherv_pt(group_data group, stage_t *stage, MPI_Comm comm, 
 
   prepare_comm_allgatherv(group.numP, stage->real_bytes, &(stage->counts));
       
-  get_block_dist(stage->real_bytes, group.myId, group.numP, &dist_data);
-  stage->my_bytes = dist_data.tamBl;
+  get_sam_block_dist(stage->real_bytes, group.myId, group.numP, &(stage->my_bytes));
 
   stage->array = calloc(stage->my_bytes, sizeof(char));
   stage->full_array = calloc(stage->real_bytes, sizeof(char));
@@ -583,4 +585,58 @@ double init_io_read_pt(group_data group, stage_t *stage, MPI_Comm comm, int comp
   MPI_Bcast(&(stage->t_op), 1, MPI_DOUBLE, ROOT, comm);
 
   return result;
+}
+
+/*
+ * ========================================================================================
+ * ========================================================================================
+ * ==================================INIT/FREE FUNCTIONS===================================
+ * ========================================================================================
+ * ========================================================================================
+*/
+
+/*
+ * Prepares a communication of "numP" processes of "n" elements an 
+ * returns an struct of counts with 3 arrays to perform the
+ * communications.
+ *
+ * The struct should be freed with freeCounts
+ */
+void prepare_comm_allgatherv(int numP, int n, struct Counts *counts) {
+  int i;
+  int tamBl;
+
+  malloc_counts(counts, numP);
+  get_sam_block_dist(n, 0, numP, &tamBl);
+  counts->counts[0] = tamBl;
+
+  for(i=1; i<numP; i++){
+    get_sam_block_dist(n, i, numP, &tamBl);
+    counts->counts[i] = tamBl;
+    counts->displs[i] = counts->displs[i-1] + counts->counts[i-1];
+  }
+
+}
+
+/* 
+ * Obatains for "Id" and "numP", how many
+ * elements per row will have process "Id"
+ * and fills the results in a Dist_data struct
+ */
+void get_sam_block_dist(int qty, int id, int numP, int *tamBl) {
+  int rem, ini, end;
+  int exp_tamBl = qty / numP;
+  rem = qty % numP;
+
+  if(id < rem) { // First subgroup
+    ini = id * exp_tamBl + id;
+    end = (id+1) * exp_tamBl + (id+1);
+  } else { // Second subgroup
+    ini = id * exp_tamBl + rem;
+    end = (id+1) * exp_tamBl + rem;
+  }
+
+  if(end > qty) { end = qty; }
+  if(ini > end) { ini = end; }
+  *tamBl = end - ini;
 }

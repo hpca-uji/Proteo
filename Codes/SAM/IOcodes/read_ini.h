@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../Main/Main_datatypes.h"
+#include "Main_datatypes.h"
 
 typedef void (*Malloc_conf)(configuration* user_config);
 typedef void (*Malloc_conf_index)(configuration* user_config, size_t index);

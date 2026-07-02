@@ -7,7 +7,7 @@
 #include "Main_datatypes.h"
 #include "process_phase.h"
 #include "process_stage.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
 double iterate(phase_t *phase, double *time, double *time_stages, int rigid_times, group_data group, MPI_Comm comm);
 double iterate_with_reconf(phase_t *phase, int state, results_data *results, int rigid_times, int actual_phase, group_data group, MPI_Comm comm);
