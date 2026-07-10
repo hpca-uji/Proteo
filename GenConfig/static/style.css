@@ -1,0 +1,262 @@
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #656d76;
+  --accent: #0969da;
+  --error: #cf222e;
+  --ok: #1a7f37;
+  --warn: #9a6700;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+header, footer, .toolbar, #editor, #messages {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+header {
+  padding-top: 1.25rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+.subtitle {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-bottom: 0.75rem;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.btn-danger {
+  color: #fff;
+  background: #cf222e;
+  border-color: #a40e26;
+}
+
+button.btn-danger:hover {
+  background: #a40e26;
+  border-color: #822018;
+}
+
+.messages {
+  min-height: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.messages.error {
+  color: var(--error);
+}
+
+.messages.ok {
+  color: var(--ok);
+}
+
+.messages.warn {
+  color: var(--warn);
+}
+
+.messages .warn-heading {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.9rem;
+}
+
+.messages ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.panel > summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.badge {
+  font-weight: normal;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.panel-actions {
+  margin: 0.5rem 0;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.field label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.field .hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  background: #fafbfc;
+}
+
+.card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.stage-card {
+  border-left: 3px solid var(--accent);
+  margin-left: 0.25rem;
+  padding-left: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.phase-panel > summary,
+.group-panel > summary {
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.phase-panel > summary::-webkit-details-marker,
+.group-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.phase-panel > summary::before,
+.group-panel > summary::before {
+  content: "▸ ";
+  display: inline-block;
+  width: 1rem;
+}
+
+.phase-panel[open] > summary::before,
+.group-panel[open] > summary::before {
+  content: "▾ ";
+}
+
+.phase-body,
+.group-body {
+  margin-top: 0.5rem;
+}
+
+.stage-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.strategy-legend-wrap {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.strategy-legend-wrap strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.strategy-legend {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+}
+
+.strategy-legend li {
+  margin-bottom: 0.15rem;
+}
+
+.strategy-legend-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+footer {
+  padding: 1rem 1rem 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+code {
+  background: #eef1f4;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+input[type="number"],
+input[type="text"],
+select {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

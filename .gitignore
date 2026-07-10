@@ -18,5 +18,9 @@
 #Ignore tmp directory
 /Analysis/tmp/**
 
+#Ignore pycache
+__pycache__/
+*.py[cod]
+
 #Ignore VS jsons
 .vscode/*.json
