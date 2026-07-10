@@ -54,9 +54,9 @@ def sanitize_config(config: dict) -> dict:
     return result
 
 
-def _has_granularity(stage: dict) -> bool:
+def _has_granularity_at_least_one(stage: dict) -> bool:
     value = stage.get("Granularity")
-    return _is_positive_int(value)
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
 def _is_time_capped(stage: dict) -> bool:
@@ -69,14 +69,19 @@ def _has_positive_bytes(stage: dict) -> bool:
     return _is_positive_int(value)
 
 
-def _granularity_required(stage: dict, stage_type: int) -> bool:
+def _compute_granularity_required(stage_type: int) -> bool:
+    return stage_type in STAGE_COMPUTE
+
+
+def _non_compute_granularity_required(stage: dict, stage_type: int) -> bool:
+    """Granularity rules for comm/I/O stages (not compute)."""
     if stage_type in STAGE_COMPUTE:
-        return True
-    if stage_type == STAGE_WAIT:
         return False
     if not _has_positive_bytes(stage):
-        return False
-    return not _is_time_capped(stage)
+        return True
+    if _is_time_capped(stage):
+        return True
+    return False
 
 
 def _check_positive_values(stage: dict, path: str, errors: List[str]) -> None:
@@ -119,8 +124,15 @@ def _validate_single_stage(
     has_bytes = _has_positive_bytes(stage)
     has_time = _is_positive_number(stage_time)
 
-    if _granularity_required(stage, stage_type) and not _has_granularity(stage):
-        errors.append(f"{path}: Granularity > 0 is required")
+    if _compute_granularity_required(stage_type):
+        if not _has_granularity_at_least_one(stage):
+            errors.append(f"{path}: compute stage requires Granularity >= 1")
+    elif _non_compute_granularity_required(stage, stage_type):
+        if not _has_granularity_at_least_one(stage):
+            errors.append(f"{path}: Granularity >= 1 is required")
+
+    if stage_type not in STAGE_COMPUTE and _is_time_capped(stage) and not has_time:
+        errors.append(f"{path}: time-capped stage requires Stage_Time > 0")
 
     if stage_type in STAGE_COMPUTE:
         if not has_time:

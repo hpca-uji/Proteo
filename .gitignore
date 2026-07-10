@@ -6,6 +6,8 @@
 *.pkl
 #Ignore out files
 *.out
+#Ignore tmp files
+*.tmp
 
 #Ignore build files
 /Codes/build/

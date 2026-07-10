@@ -63,10 +63,11 @@ Matches `enum compute_methods` in SAM:
 
 On **Validate** or **Download**, the server sanitizes and checks:
 
-- **Compute (0–1):** `Stage_Time > 0` and `Granularity > 0` required. `Stage_Bytes` is not used (forced to 0). `Stage_Identifier` and `Stage_Involved_Procs` are removed.
-- **Comm (2–8):** `Stage_Bytes > 0` or `Stage_Time > 0` required. `Stage_Involved_Procs` is removed. If both bytes and time are set, a warning is shown (bytes are used). `Granularity > 0` required when using bytes without time cap (except Wait).
+- **Compute (0–1):** `Stage_Time > 0` and `Granularity >= 1` required. `Stage_Bytes` is not used (forced to 0). `Stage_Identifier` and `Stage_Involved_Procs` are removed.
+- **Comm (2–8) / I/O (9–10) Granularity:** required (`>= 1`) when bytes are not set, or when both bytes and time cap (`Stage_Time_Capped == 1`) are set; optional when bytes are set without time cap. Time-capped stages also require `Stage_Time > 0`.
+- **Comm (2–8):** `Stage_Bytes > 0` or `Stage_Time > 0` required. `Stage_Involved_Procs` is removed. If both bytes and time are set, a warning is shown (bytes are used).
 - **IPoint (3) / Wait (4):** `Stage_Identifier > 0` required. Every IPoint must have a matching Wait with the same identifier; duplicate Wait identifiers are errors.
-- **I/O (9–10):** `Stage_Bytes > 0` or `Stage_Time > 0`; `Stage_Involved_Procs` required (`>= 0`; `0` = all processes). `Granularity > 0` required when using bytes without time cap.
+- **I/O (9–10):** `Stage_Bytes > 0` or `Stage_Time > 0`; `Stage_Involved_Procs` required (`>= 0`; `0` = all processes).
 - **Stage_Time_Capped:** if set, must be `0` (operation count) or `1` (time cap).
 
 ## Group validation rules

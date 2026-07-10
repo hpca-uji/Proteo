@@ -23,17 +23,17 @@ STAGE_IPOINT = 3
 STAGE_WAIT = 4
 
 STAGE_TYPE_HINTS = {
-    0: "Compute: requires Stage_Time > 0 and Granularity > 0; Stage_Bytes not used.",
-    1: "Compute: requires Stage_Time > 0 and Granularity > 0; Stage_Bytes not used.",
-    2: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity required when using bytes without time cap.",
-    3: "IPoint: requires Stage_Identifier > 0 and a matching Wait stage. Granularity required when using bytes without time cap.",
-    4: "Wait: requires Stage_Identifier > 0 matching an IPoint stage.",
-    5: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity required when using bytes without time cap.",
-    6: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity required when using bytes without time cap.",
-    7: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity required when using bytes without time cap.",
-    8: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity required when using bytes without time cap.",
-    9: "I/O write: requires Stage_Bytes > 0 or Stage_Time > 0; Stage_Involved_Procs required (0 = all processes). Granularity required when using bytes without time cap.",
-    10: "I/O read: requires Stage_Bytes > 0 or Stage_Time > 0; Stage_Involved_Procs required (0 = all processes). Granularity required when using bytes without time cap.",
+    0: "Compute: requires Stage_Time > 0 and Granularity >= 1; Stage_Bytes not used.",
+    1: "Compute: requires Stage_Time > 0 and Granularity >= 1; Stage_Bytes not used.",
+    2: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity >= 1 required unless bytes are set without time cap.",
+    3: "IPoint: requires Stage_Identifier > 0 and a matching Wait stage. Granularity >= 1 required unless bytes are set without time cap.",
+    4: "Wait: requires Stage_Identifier > 0 matching an IPoint stage. Granularity >= 1 required unless bytes are set without time cap.",
+    5: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity >= 1 required unless bytes are set without time cap.",
+    6: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity >= 1 required unless bytes are set without time cap.",
+    7: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity >= 1 required unless bytes are set without time cap.",
+    8: "Comm: requires Stage_Bytes > 0 or Stage_Time > 0. Granularity >= 1 required unless bytes are set without time cap.",
+    9: "I/O write: requires Stage_Bytes > 0 or Stage_Time > 0; Stage_Involved_Procs required (0 = all processes). Granularity >= 1 required unless bytes are set without time cap.",
+    10: "I/O read: requires Stage_Bytes > 0 or Stage_Time > 0; Stage_Involved_Procs required (0 = all processes). Granularity >= 1 required unless bytes are set without time cap.",
 }
 
 STAGE_TIME_CAPPED_OPTIONS = {
@@ -101,7 +101,7 @@ GENERAL_FIELDS = [
 ]
 
 STAGE_OPTIONAL_FIELDS = [
-    ("Granularity", "Problem size; mandatory for compute. Required for other stages when using bytes without time cap (except Wait)."),
+    ("Granularity", "Mandatory for compute (>= 1). Other stages: required (>= 1) when bytes are unset, or when bytes and time cap are both set; optional when bytes are set without time cap."),
     ("Stage_Time_Capped", "0 = operation count, 1 = time cap."),
     ("Stage_Identifier", "Optional stage identifier for MPI request reuse."),
     ("Stage_Involved_Procs", "I/O only: processes involved (0 = all processes participate)."),
