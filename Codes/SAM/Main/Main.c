@@ -236,7 +236,7 @@ void init_application() {
   size_t index, *array_iters_aux, *array_stages_aux;
 
   if(group->argc < 2) {
-    printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
+    printf("Falta el fichero de configuracion. Uso:\n./programa config.ini|config.json id\nEl argumento numerico id es opcional\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
   }
   if(group->argc > 2) {

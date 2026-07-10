@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <mpi.h>
 #include "read_ini.h"
+#include "read_json.h"
 #include "configuration.h"
 
 #define CONFIG_GRANULARITY 600
@@ -29,8 +30,8 @@ void def_struct_stage(configuration *config_file, phase_t *phase);
  * Inicializa una estructura de configuracion
  *
  * Si el parametro "file_name" no es nulo,
- * se obtiene la configuracion a partir de 
- * un fichero .ini
+ * se obtiene la configuracion a partir de
+ * un fichero .ini o .json
  *
  * En caso de que sea nulo, es el usuario
  * el que tiene que elegir los valores a
@@ -39,10 +40,27 @@ void def_struct_stage(configuration *config_file, phase_t *phase);
 void init_config(char *file_name, configuration **user_config) {
   if(file_name != NULL) {
     ext_functions_t mallocs;
+    const char *extension;
+
     mallocs.resizes_f = malloc_config_resizes;
     mallocs.phases_f = malloc_config_phases;
     mallocs.stages_f = malloc_config_stages;
-    *user_config = read_ini_file(file_name, mallocs);
+
+    extension = strrchr(file_name, '.');
+    if(extension != NULL && strcmp(extension, ".json") == 0) {
+      *user_config = read_json_file(file_name, mallocs);
+    } else if(extension != NULL && strcmp(extension, ".ini") == 0) {
+      *user_config = read_ini_file(file_name, mallocs);
+    } else {
+      fprintf(stderr, "Unsupported config extension for '%s' (use .ini or .json)\n", file_name);
+      MPI_Abort(MPI_COMM_WORLD, -4);
+      return;
+    }
+
+    if(*user_config == NULL) {
+      MPI_Abort(MPI_COMM_WORLD, -4);
+      return;
+    }
   } else {
     configuration *config = NULL;
 
