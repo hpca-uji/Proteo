@@ -1,34 +1,79 @@
 {
   "general": {
-    "Total_Resizes": 2,
-    "Total_Phases": 3,
-    "SDR": 500000.0,
-    "ADR": 500000.0,
+    "ADR": 500000,
+    "Capture_Method": 0,
     "Datasize": 1,
     "Rigid": 0,
-    "Capture_Method": 0
+    "SDR": 500000,
+    "Total_Phases": 3,
+    "Total_Resizes": 2
   },
+  "groups": [
+    {
+      "Dist": "compact",
+      "FactorS": 1,
+      "Iters": 5,
+      "Procs": 2,
+      "Redistribution_Method": 0,
+      "Redistribution_Strategy": [
+        0
+      ],
+      "Spawn_Method": 0,
+      "Spawn_Strategy": [
+        0
+      ]
+    },
+    {
+      "Dist": "compact",
+      "FactorS": 1,
+      "Iters": 10,
+      "Procs": 4,
+      "Redistribution_Method": 0,
+      "Redistribution_Strategy": [
+        0
+      ],
+      "Spawn_Method": 1,
+      "Spawn_Strategy": [
+        0
+      ]
+    },
+    {
+      "Dist": "compact",
+      "FactorS": 1,
+      "Iters": 5,
+      "Procs": 6,
+      "Redistribution_Method": 0,
+      "Redistribution_Strategy": [
+        0
+      ],
+      "Spawn_Method": 1,
+      "Spawn_Strategy": [
+        0
+      ]
+    }
+  ],
   "phases": [
     {
       "Total_Iters": 1,
       "Total_Stages": 3,
       "stages": [
         {
-          "Stage_Type": 10,
+          "Granularity": 1000,
           "Stage_Bytes": 0,
-          "Stage_Involved_Procs": 1,
-          "Stage_Time": 4.0
+          "Stage_Involved_Procs": 2,
+          "Stage_Time": 4,
+          "Stage_Type": 10
         },
         {
-          "Stage_Type": 5,
           "Stage_Bytes": 1000,
-          "Stage_Time": 0
+          "Stage_Time": 0,
+          "Stage_Type": 5
         },
         {
-          "Stage_Type": 0,
-          "Stage_Bytes": 0,
           "Granularity": 10000,
-          "Stage_Time": 1.0
+          "Stage_Bytes": 0,
+          "Stage_Time": 1,
+          "Stage_Type": 0
         }
       ]
     },
@@ -37,25 +82,25 @@
       "Total_Stages": 4,
       "stages": [
         {
-          "Stage_Type": 0,
-          "Stage_Bytes": 0,
           "Granularity": 80000,
-          "Stage_Time": 0.6085314
+          "Stage_Bytes": 0,
+          "Stage_Time": 0.6085314,
+          "Stage_Type": 0
         },
         {
-          "Stage_Type": 8,
           "Stage_Bytes": 8,
-          "Stage_Time": 0
+          "Stage_Time": 0,
+          "Stage_Type": 8
         },
         {
-          "Stage_Type": 8,
           "Stage_Bytes": 8,
-          "Stage_Time": 0
+          "Stage_Time": 0,
+          "Stage_Type": 8
         },
         {
-          "Stage_Type": 6,
           "Stage_Bytes": 33176880,
-          "Stage_Time": 0
+          "Stage_Time": 0,
+          "Stage_Type": 6
         }
       ]
     },
@@ -64,44 +109,12 @@
       "Total_Stages": 1,
       "stages": [
         {
-          "Stage_Type": 9,
           "Stage_Bytes": 10485760,
           "Stage_Involved_Procs": 0,
-          "Stage_Time": 4.0
+          "Stage_Time": 4,
+          "Stage_Type": 9
         }
       ]
-    }
-  ],
-  "groups": [
-    {
-      "Iters": 5,
-      "Procs": 2,
-      "FactorS": 1,
-      "Dist": "compact",
-      "Redistribution_Method": 0,
-      "Redistribution_Strategy": [0],
-      "Spawn_Method": 0,
-      "Spawn_Strategy": [0]
-    },
-    {
-      "Iters": 10,
-      "Procs": 4,
-      "FactorS": 1,
-      "Dist": "compact",
-      "Redistribution_Method": 0,
-      "Redistribution_Strategy": [0],
-      "Spawn_Method": 1,
-      "Spawn_Strategy": [0]
-    },
-    {
-      "Iters": 5,
-      "Procs": 6,
-      "FactorS": 1,
-      "Dist": "compact",
-      "Redistribution_Method": 0,
-      "Redistribution_Strategy": [0],
-      "Spawn_Method": 1,
-      "Spawn_Strategy": [0]
     }
   ]
 }
