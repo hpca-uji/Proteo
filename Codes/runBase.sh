@@ -5,7 +5,11 @@
 #SBATCH --mem-per-cpu=6000
 #SBATCH --exclusive
 
+# Parameter 1: Configuration file (.ini or .json).
+# Parameter 2(Optional): Output file index.
+
 source build/config.txt
+source $PROTEO_HOME$execDir/BashScripts/validate_config_ext.sh
 configFile=$1
 
 outIndex=0
@@ -13,6 +17,8 @@ if [ $# -ge 2 ]
 then
   outIndex=$2 
 fi
+
+validate_config_ext "$configFile" || exit 1
 
 module list
 echo "MPICH provider=$FI_PROVIDER"

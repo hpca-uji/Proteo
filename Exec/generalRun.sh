@@ -6,7 +6,7 @@
 
 # !!!!This script should only be called by others scripts, do not call it directly!!!
 # Runs a given configuration file with the indicated parameters with the aid of the RMS Slurm.
-# Parameter 1 - Configuration file name for the emulation.
+# Parameter 1 - Configuration file name for the emulation (.ini or .json).
 # Parameter 2 - Use Valgrind(1), Extrae(2) or nothing(0).
 # Parameter 3 - Index to use for the output files. Must be a positive integer.
 # Parameter 4 - Amount of executions per file. Must be a positive number.
@@ -33,7 +33,7 @@ configFile=$1
 use_external=$2
 outFileIndex=$3
 qty=1
-if [ $# -ge 3 ]
+if [ $# -ge 4 ]
 then
   qty=$4
 fi
@@ -65,7 +65,7 @@ then
   for ((i=0; i<qty; i++))
   do
     echo "Run $i starts"
-    mpirun -hosts $initial_nodelist -np $numP valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=vg.sp.%p.$SLURM_JOB_ID.$i $PROTEO_BIN $configFile $outIndex 
+    mpirun -hosts $initial_nodelist -np $numP valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --trace-children=yes --log-file=vg.sp.%p.$SLURM_JOB_ID.$i $PROTEO_BIN $configFile $outFileIndex 
     echo "Run $i ends"
   done
 else #EXTRAE

@@ -2,7 +2,7 @@
 
 # Executes a given configuration file with the aid of
 # the RMS Slurm.
-# Parameter 1: Configuration file name for the emulation.
+# Parameter 1: Configuration file name for the emulation (.ini or .json).
 # Parameter 2: Partition name.
 # Parameter 3(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 4(Optional): Number of repetitions to perform. Must be a positive integer.
@@ -13,11 +13,12 @@
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
+source $scriptDir/BashScripts/validate_config_ext.sh
 
 if [ $# -lt 2 ]
 then
   echo "Not enough arguments. Usage:"
-  echo "bash singleRun.sh config.ini partition [outFileIndex] [Qty] [Use extrae] [Time] [Output path]"
+  echo "bash singleRun.sh config.ini|config.json partition [outFileIndex] [Qty] [Use extrae] [Time] [Output path]"
   exit 1
 fi
 
@@ -56,6 +57,8 @@ if [ $# -ge 7 ]
 then
   output=$7
 fi
+
+validate_config_ext "$config_file" || exit 1
 
 #Obtain amount of nodes neeeded
 result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)

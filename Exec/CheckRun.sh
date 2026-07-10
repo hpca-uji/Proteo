@@ -188,7 +188,14 @@ do
     fi
 
     #2 - Obtain number of nodes needed
-    config_file="$common_name$run.ini"
+    if [ -f "${common_name}${run}.json" ]; then
+      config_file="${common_name}${run}.json"
+    elif [ -f "${common_name}${run}.ini" ]; then
+      config_file="${common_name}${run}.ini"
+    else
+      echo "Config not found: ${common_name}${run}.ini or ${common_name}${run}.json" >&2
+      continue
+    fi
     slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
 
     #2.1 - Get partition name, default otherwise (Avoid duplicates)

@@ -1,5 +1,7 @@
 #Ignore ini files
 *.ini
+#Ignore json files
+*.json
 #Ignore pkl files
 *.pkl
 #Ignore out files
@@ -12,6 +14,9 @@
 
 #Ignore Results files
 /Results/**/
+
+#Ignore tmp directory
+/Analysis/tmp/**
 
 #Ignore VS jsons
 .vscode/*.json
