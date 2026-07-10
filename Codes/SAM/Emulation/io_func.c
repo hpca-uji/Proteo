@@ -17,9 +17,10 @@ int generate_name_file(char **filename, char type, size_t stid, int rank) {
 
   char *tmp_job_id = getenv("SLURM_JOB_ID");
   if(tmp_job_id == NULL) { 
-    j_c = 1;
+    j_c = 2;
     tmp_job_id = malloc(j_c * sizeof *tmp_job_id);
     tmp_job_id[0] = '0';
+    tmp_job_id[1] = '\0'; 
     get_env = 0;
   } else {
     j_c = snprintf(NULL, 0, "%s", tmp_job_id);
@@ -51,6 +52,9 @@ ssize_t write_n_bytes(int fd, char *array, size_t n) {
     return written;
 }
 
+
+// FIXME: En la app de python que se puedan desplegar las phases.
+// FIXME: Asegurar que lean segun tamanyo fichero, no tamanyo total
 ssize_t read_n_bytes(int fd, char *array, size_t n) {
     ssize_t bytes_read = read(fd, array, n);
     if (bytes_read < 0) {
