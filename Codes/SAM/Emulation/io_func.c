@@ -52,9 +52,7 @@ ssize_t write_n_bytes(int fd, char *array, size_t n) {
     return written;
 }
 
-
-// FIXME: En la app de python que se puedan desplegar las phases.
-// FIXME: Asegurar que lean segun tamanyo fichero, no tamanyo total
+/* Read N bytes from a file */
 ssize_t read_n_bytes(int fd, char *array, size_t n) {
     ssize_t bytes_read = read(fd, array, n);
     if (bytes_read < 0) {

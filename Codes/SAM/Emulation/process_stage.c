@@ -561,6 +561,11 @@ double init_io_read_pt(group_data group, stage_t *stage, MPI_Comm comm, int comp
   stage->array = malloc(stage->real_bytes * sizeof *stage->array);
   stage->array[stage->real_bytes-1] = '\0';
 
+  if(group.myId < stage->involved_procs || !stage->involved_procs) {
+    off_t starting_pos = group.myId * SAM_IO_MAX_BYTES * 100 / group.numP;
+    lseek(stage->fd, starting_pos, SEEK_SET);
+  }
+
   if(stage->bytes || stage->t_capped) {
     stage->operations = min_operations;
     return result;
