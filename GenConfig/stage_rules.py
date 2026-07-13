@@ -4,6 +4,7 @@ import copy
 from typing import Any, Dict, List, Tuple
 
 from schema import STAGE_COMM, STAGE_COMPUTE, STAGE_IO, STAGE_IPOINT, STAGE_WAIT
+from coerce import coerce_config_scalars_inplace
 from restrictions import sanitize_groups
 
 COMPUTE_STRIP_FIELDS = ("Stage_Identifier", "Stage_Involved_Procs")
@@ -34,6 +35,10 @@ def sanitize_config(config: dict) -> dict:
     result = copy.deepcopy(config)
     if not isinstance(result, dict):
         return result
+
+    # Multi mode stores many numeric scalars as strings so users can type variants.
+    # Before applying semantic rules, coerce single-value strings back to numbers.
+    coerce_config_scalars_inplace(result)
 
     phases = result.get("phases")
     if not isinstance(phases, list):

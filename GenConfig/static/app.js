@@ -2,6 +2,7 @@
 
 let schema = null;
 let config = null;
+let multiMode = false;
 const phaseOpenState = new Map();
 const groupOpenState = new Map();
 
@@ -60,6 +61,149 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function formatDisplayValue(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (Array.isArray(value)) {
+    return value.join(",");
+  }
+  return String(value);
+}
+
+function detectMultiConfig(obj) {
+  if (typeof obj === "string" && obj.includes(":")) {
+    return true;
+  }
+  if (Array.isArray(obj)) {
+    return obj.some(detectMultiConfig);
+  }
+  if (obj && typeof obj === "object") {
+    return Object.values(obj).some(detectMultiConfig);
+  }
+  return false;
+}
+
+function convertConfigToMulti(target) {
+  if (target.general) {
+    ["SDR", "ADR", "Datasize", "Rigid", "Capture_Method"].forEach((key) => {
+      if (target.general[key] !== undefined && typeof target.general[key] !== "string") {
+        target.general[key] = formatDisplayValue(target.general[key]);
+      }
+    });
+  }
+  (target.phases || []).forEach((phase) => {
+    if (typeof phase.Total_Iters !== "string") {
+      phase.Total_Iters = formatDisplayValue(phase.Total_Iters);
+    }
+    (phase.stages || []).forEach((stage) => {
+      ["Stage_Type", "Stage_Bytes", "Stage_Time", "Granularity", "Stage_Time_Capped", "Stage_Identifier", "Stage_Involved_Procs"].forEach((key) => {
+        if (stage[key] !== undefined && typeof stage[key] !== "string") {
+          stage[key] = formatDisplayValue(stage[key]);
+        }
+      });
+    });
+  });
+  (target.groups || []).forEach((group) => {
+    ["Iters", "Procs", "FactorS", "Redistribution_Method", "Spawn_Method"].forEach((key) => {
+      if (group[key] !== undefined && typeof group[key] !== "string") {
+        group[key] = formatDisplayValue(group[key]);
+      }
+    });
+    if (typeof group.Dist !== "string") {
+      group.Dist = formatDisplayValue(group.Dist);
+    }
+    if (Array.isArray(group.Redistribution_Strategy)) {
+      group.Redistribution_Strategy = formatStrategy(group.Redistribution_Strategy);
+    }
+    if (Array.isArray(group.Spawn_Strategy)) {
+      group.Spawn_Strategy = formatStrategy(group.Spawn_Strategy);
+    }
+  });
+}
+
+function parseScalarValue(text, asInt = false) {
+  const trimmed = String(text).trim();
+  if (trimmed.includes(":")) {
+    return trimmed;
+  }
+  const num = asInt ? (parseInt(trimmed, 10) || 0) : parseFloat(trimmed);
+  return Number.isNaN(num) ? trimmed : num;
+}
+
+function convertConfigToSingle(target) {
+  if (target.general) {
+    ["SDR", "ADR", "Datasize", "Rigid", "Capture_Method"].forEach((key) => {
+      const val = target.general[key];
+      if (typeof val === "string" && !val.includes(":")) {
+        target.general[key] = key === "Datasize" || key === "Rigid" || key === "Capture_Method"
+          ? (parseInt(val, 10) || 0)
+          : parseFloat(val);
+      }
+    });
+  }
+  (target.phases || []).forEach((phase) => {
+    if (typeof phase.Total_Iters === "string" && !phase.Total_Iters.includes(":")) {
+      phase.Total_Iters = parseInt(phase.Total_Iters, 10) || 1;
+    }
+    (phase.stages || []).forEach((stage) => {
+      ["Stage_Type", "Stage_Bytes", "Granularity", "Stage_Time_Capped", "Stage_Identifier", "Stage_Involved_Procs"].forEach((key) => {
+        if (typeof stage[key] === "string" && !stage[key].includes(":")) {
+          stage[key] = parseInt(stage[key], 10) || 0;
+        }
+      });
+      if (typeof stage.Stage_Time === "string" && !stage.Stage_Time.includes(":")) {
+        stage.Stage_Time = parseFloat(stage.Stage_Time) || 0;
+      }
+    });
+  });
+  (target.groups || []).forEach((group) => {
+    ["Iters", "Procs", "Redistribution_Method", "Spawn_Method"].forEach((key) => {
+      if (typeof group[key] === "string" && !group[key].includes(":")) {
+        group[key] = parseInt(group[key], 10) || 0;
+      }
+    });
+    if (typeof group.FactorS === "string" && !group.FactorS.includes(":")) {
+      group.FactorS = parseFloat(group.FactorS) || 0;
+    }
+    if (typeof group.Dist === "string" && !group.Dist.includes(":")) {
+      group.Dist = group.Dist.trim() || "compact";
+    }
+    if (typeof group.Redistribution_Strategy === "string") {
+      group.Redistribution_Strategy = parseStrategy(group.Redistribution_Strategy);
+    }
+    if (typeof group.Spawn_Strategy === "string") {
+      group.Spawn_Strategy = parseStrategy(group.Spawn_Strategy);
+    }
+  });
+}
+
+function setMultiMode(enabled) {
+  if (enabled === multiMode) {
+    return;
+  }
+  if (enabled) {
+    convertConfigToMulti(config);
+    configFileNameEl.value = "complex.json";
+  } else {
+    convertConfigToSingle(config);
+    if (configFileNameEl.value === "complex.json") {
+      configFileNameEl.value = "config.json";
+    }
+  }
+  multiMode = enabled;
+  document.getElementById("btn-mode-single").classList.toggle("active", !multiMode);
+  document.getElementById("btn-mode-multi").classList.toggle("active", multiMode);
+  renderAll();
+}
+
+function makeVariantOrNumberField(label, value, hint, onChange, multiHint = "") {
+  if (multiMode) {
+    return makeTextField(label, formatDisplayValue(value), multiHint || hint, onChange);
+  }
+  return makeNumberField(label, value, hint, onChange, label === "Stage_Time" || label === "FactorS" ? "any" : "1");
 }
 
 function parseStrategy(text) {
@@ -145,6 +289,9 @@ function syncTotals() {
 }
 
 function defaultStage() {
+  if (multiMode) {
+    return { Stage_Type: "0", Stage_Bytes: "0", Stage_Time: "0" };
+  }
   return { Stage_Type: 0, Stage_Bytes: 0, Stage_Time: 0 };
 }
 
@@ -153,6 +300,18 @@ function defaultPhase() {
 }
 
 function defaultGroup() {
+  if (multiMode) {
+    return {
+      Iters: "1",
+      Procs: "2",
+      FactorS: "1",
+      Dist: "compact",
+      Redistribution_Method: "0",
+      Redistribution_Strategy: "",
+      Spawn_Method: "0",
+      Spawn_Strategy: "",
+    };
+  }
   return {
     Iters: 1,
     Procs: 2,
@@ -216,26 +375,29 @@ function makeSelectField(label, optionsMap, value, hint, onChange) {
 function renderGeneral() {
   generalFieldsEl.innerHTML = "";
   const hints = Object.fromEntries((schema.general_fields || []).map(([k, h]) => [k, h]));
+  const multiHint = (schema.multi_mode_hints || {}).delimiter_colon || "";
 
   const fields = [
     ["Total_Resizes", config.general.Total_Resizes, () => {}, true],
     ["Total_Phases", config.general.Total_Phases, () => {}, true],
-    ["SDR", config.general.SDR, (v) => { config.general.SDR = v; }, false, "any"],
-    ["ADR", config.general.ADR, (v) => { config.general.ADR = v; }, false, "any"],
-    ["Datasize", config.general.Datasize, (v) => { config.general.Datasize = v | 0; }],
-    ["Rigid", config.general.Rigid, (v) => { config.general.Rigid = v | 0; }, false, "1", schema.rigid_options],
-    ["Capture_Method", config.general.Capture_Method, (v) => { config.general.Capture_Method = v | 0; }, false, "1", schema.capture_method_options],
+    ["SDR", config.general.SDR, (v) => { config.general.SDR = multiMode ? v : parseFloat(v); }, false, "any"],
+    ["ADR", config.general.ADR, (v) => { config.general.ADR = multiMode ? v : parseFloat(v); }, false, "any"],
+    ["Datasize", config.general.Datasize, (v) => { config.general.Datasize = multiMode ? v : (v | 0); }],
+    ["Rigid", config.general.Rigid, (v) => { config.general.Rigid = multiMode ? v : (v | 0); }, false, "1", schema.rigid_options],
+    ["Capture_Method", config.general.Capture_Method, (v) => { config.general.Capture_Method = multiMode ? v : (v | 0); }, false, "1", schema.capture_method_options],
   ];
 
   fields.forEach(([name, val, onChange, readonly, step, options]) => {
-    if (options) {
+    if (readonly) {
+      const el = makeNumberField(name, val, hints[name], onChange, step || "1");
+      el.querySelector("input").readOnly = true;
+      generalFieldsEl.appendChild(el);
+    } else if (multiMode) {
+      generalFieldsEl.appendChild(makeTextField(name, formatDisplayValue(val), `${hints[name]} ${multiHint}`, onChange));
+    } else if (options) {
       generalFieldsEl.appendChild(makeSelectField(name, options, val, hints[name], onChange));
     } else {
-      const el = makeNumberField(name, val, hints[name], onChange, step || "1");
-      if (readonly) {
-        el.querySelector("input").readOnly = true;
-      }
-      generalFieldsEl.appendChild(el);
+      generalFieldsEl.appendChild(makeNumberField(name, val, hints[name], onChange, step || "1"));
     }
   });
 }
@@ -246,20 +408,31 @@ function renderStage(stage, phaseIndex, stageIndex) {
   card.innerHTML = `<strong>Stage ${stageIndex}</strong>`;
   const grid = document.createElement("div");
   grid.className = "field-grid";
+  const multiHint = (schema.multi_mode_hints || {}).delimiter_colon || "";
+  const stageType = multiMode ? (parseInt(stage.Stage_Type, 10) || 0) : stage.Stage_Type;
 
-  grid.appendChild(makeSelectField(
-    "Stage_Type",
-    schema.stage_types,
-    stage.Stage_Type,
-    "",
-    (v) => {
-      stage.Stage_Type = v;
-      prepareStageForType(stage, v);
-      renderAll();
-    }
-  ));
+  if (multiMode) {
+    grid.appendChild(makeTextField(
+      "Stage_Type",
+      formatDisplayValue(stage.Stage_Type),
+      multiHint,
+      (v) => { stage.Stage_Type = v; renderAll(); }
+    ));
+  } else {
+    grid.appendChild(makeSelectField(
+      "Stage_Type",
+      schema.stage_types,
+      stage.Stage_Type,
+      "",
+      (v) => {
+        stage.Stage_Type = v;
+        prepareStageForType(stage, v);
+        renderAll();
+      }
+    ));
+  }
 
-  const hintText = (schema.stage_type_hints || {})[stage.Stage_Type];
+  const hintText = (schema.stage_type_hints || {})[stageType];
   if (hintText) {
     const hintEl = document.createElement("p");
     hintEl.className = "stage-hint";
@@ -267,28 +440,40 @@ function renderStage(stage, phaseIndex, stageIndex) {
     grid.appendChild(hintEl);
   }
 
-  if (stageUsesBytes(stage.Stage_Type)) {
-    grid.appendChild(makeNumberField("Stage_Bytes", stage.Stage_Bytes, "", (v) => { stage.Stage_Bytes = v | 0; }));
+  if (stageUsesBytes(stageType)) {
+    grid.appendChild(makeVariantOrNumberField(
+      "Stage_Bytes",
+      stage.Stage_Bytes,
+      "",
+      (v) => { stage.Stage_Bytes = multiMode ? v : (v | 0); }
+    ));
   }
-  grid.appendChild(makeNumberField("Stage_Time", stage.Stage_Time, "seconds", (v) => { stage.Stage_Time = v; }, "any"));
+  grid.appendChild(makeVariantOrNumberField(
+    "Stage_Time",
+    stage.Stage_Time,
+    "seconds",
+    (v) => { stage.Stage_Time = multiMode ? v : parseFloat(v); }
+  ));
 
-  if (stageAlwaysShowsGranularity(stage.Stage_Type)) {
-    prepareStageForType(stage, stage.Stage_Type);
+  if (stageAlwaysShowsGranularity(stageType)) {
+    if (!multiMode) {
+      prepareStageForType(stage, stageType);
+    }
     const granHint = (schema.stage_optional_fields || []).find(([k]) => k === "Granularity");
-    grid.appendChild(makeNumberField(
+    grid.appendChild(makeVariantOrNumberField(
       "Granularity",
       stage.Granularity,
       granHint ? granHint[1] : "",
-      (v) => { stage.Granularity = v | 0; }
+      (v) => { stage.Granularity = multiMode ? v : (v | 0); }
     ));
   }
 
   schema.stage_optional_fields.forEach(([key, hint]) => {
-    if (key === "Granularity" && stageAlwaysShowsGranularity(stage.Stage_Type)) {
+    if (key === "Granularity" && stageAlwaysShowsGranularity(stageType)) {
       return;
     }
     if (stage[key] !== undefined && stage[key] !== null && stage[key] !== "") {
-      if (key === "Stage_Time_Capped") {
+      if (key === "Stage_Time_Capped" && !multiMode) {
         grid.appendChild(makeSelectField(
           key,
           schema.stage_time_capped_options || { 0: "Operation count (0)", 1: "Time cap (1)" },
@@ -297,7 +482,12 @@ function renderStage(stage, phaseIndex, stageIndex) {
           (v) => { stage[key] = v; }
         ));
       } else {
-        grid.appendChild(makeNumberField(key, stage[key], hint, (v) => { stage[key] = v | 0; }));
+        grid.appendChild(makeVariantOrNumberField(
+          key,
+          stage[key],
+          hint,
+          (v) => { stage[key] = multiMode ? v : (v | 0); }
+        ));
       }
     }
   });
@@ -305,19 +495,19 @@ function renderStage(stage, phaseIndex, stageIndex) {
   const optRow = document.createElement("div");
   optRow.className = "card-actions";
   schema.stage_optional_fields.forEach(([key]) => {
-    if (stage[key] === undefined && stageOptionalAllowed(stage.Stage_Type, key)) {
+    if (stage[key] === undefined && stageOptionalAllowed(stageType, key)) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = `+ ${key}`;
       btn.addEventListener("click", () => {
         if (key === "Granularity") {
-          stage[key] = 600;
+          stage[key] = multiMode ? "600" : 600;
         } else if (key === "Stage_Involved_Procs") {
-          stage[key] = 0;
+          stage[key] = multiMode ? "0" : 0;
         } else if (key === "Stage_Time_Capped") {
-          stage[key] = 0;
+          stage[key] = multiMode ? "0" : 0;
         } else {
-          stage[key] = 1;
+          stage[key] = multiMode ? "1" : 1;
         }
         renderAll();
       });
@@ -364,8 +554,8 @@ function renderPhase(phase, phaseIndex) {
 
   const grid = document.createElement("div");
   grid.className = "field-grid";
-  grid.appendChild(makeNumberField("Total_Iters", phase.Total_Iters, "", (v) => {
-    phase.Total_Iters = v | 0;
+  grid.appendChild(makeVariantOrNumberField("Total_Iters", phase.Total_Iters, "", (v) => {
+    phase.Total_Iters = multiMode ? v : (v | 0);
     renderPhases();
   }));
   const ts = makeNumberField("Total_Stages", phase.stages.length, "auto-synced", () => {}, "1");
@@ -431,36 +621,48 @@ function renderGroup(group, groupIndex) {
   grid.className = "field-grid";
 
   const hints = Object.fromEntries((schema.group_fields || []).map(([k, h]) => [k, h]));
+  const multiHint = (schema.multi_mode_hints || {}).delimiter_colon || "";
+  const strategyHint = (schema.multi_mode_hints || {}).delimiter_comma || "";
 
-  grid.appendChild(makeNumberField("Iters", group.Iters, hints.Iters, (v) => {
-    group.Iters = v | 0;
+  grid.appendChild(makeVariantOrNumberField("Iters", group.Iters, hints.Iters, (v) => {
+    group.Iters = multiMode ? v : (v | 0);
     renderGroups();
   }));
-  grid.appendChild(makeNumberField("Procs", group.Procs, hints.Procs, (v) => {
-    group.Procs = v | 0;
+  grid.appendChild(makeVariantOrNumberField("Procs", group.Procs, hints.Procs, (v) => {
+    group.Procs = multiMode ? v : (v | 0);
     renderGroups();
   }));
-  grid.appendChild(makeNumberField("FactorS", group.FactorS, hints.FactorS, (v) => { group.FactorS = v; }, "any"));
+  grid.appendChild(makeVariantOrNumberField("FactorS", group.FactorS, hints.FactorS, (v) => {
+    group.FactorS = multiMode ? v : parseFloat(v);
+  }));
 
-  const distWrap = document.createElement("div");
-  distWrap.className = "field";
-  distWrap.innerHTML = `<label>Dist<span class="hint">${hints.Dist}</span></label>`;
-  const distSelect = document.createElement("select");
-  schema.dist_options.forEach((opt) => {
-    const o = document.createElement("option");
-    o.value = opt;
-    o.textContent = opt;
-    if (group.Dist === opt) o.selected = true;
-    distSelect.appendChild(o);
-  });
-  distSelect.addEventListener("change", () => { group.Dist = distSelect.value; });
-  distWrap.appendChild(distSelect);
-  grid.appendChild(distWrap);
+  if (multiMode) {
+    grid.appendChild(makeTextField("Dist", formatDisplayValue(group.Dist), hints.Dist, (v) => { group.Dist = v; }));
+    grid.appendChild(makeTextField("Redistribution_Method", formatDisplayValue(group.Redistribution_Method), hints.Redistribution_Method, (v) => { group.Redistribution_Method = v; }));
+    grid.appendChild(makeTextField("Redistribution_Strategy", formatDisplayValue(group.Redistribution_Strategy), `${hints.Redistribution_Strategy} ${strategyHint}`, (v) => { group.Redistribution_Strategy = v; }));
+    grid.appendChild(makeTextField("Spawn_Method", formatDisplayValue(group.Spawn_Method), hints.Spawn_Method, (v) => { group.Spawn_Method = v; }));
+    grid.appendChild(makeTextField("Spawn_Strategy", formatDisplayValue(group.Spawn_Strategy), `${hints.Spawn_Strategy} ${strategyHint}`, (v) => { group.Spawn_Strategy = v; }));
+  } else {
+    const distWrap = document.createElement("div");
+    distWrap.className = "field";
+    distWrap.innerHTML = `<label>Dist<span class="hint">${hints.Dist}</span></label>`;
+    const distSelect = document.createElement("select");
+    schema.dist_options.forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt;
+      o.textContent = opt;
+      if (group.Dist === opt) o.selected = true;
+      distSelect.appendChild(o);
+    });
+    distSelect.addEventListener("change", () => { group.Dist = distSelect.value; });
+    distWrap.appendChild(distSelect);
+    grid.appendChild(distWrap);
 
-  grid.appendChild(makeSelectField("Redistribution_Method", schema.redistribution_methods, group.Redistribution_Method, hints.Redistribution_Method, (v) => { group.Redistribution_Method = v; }));
-  grid.appendChild(makeTextField("Redistribution_Strategy", formatStrategy(group.Redistribution_Strategy), hints.Redistribution_Strategy, (v) => { group.Redistribution_Strategy = parseStrategy(v); }));
-  grid.appendChild(makeSelectField("Spawn_Method", schema.spawn_methods, group.Spawn_Method, hints.Spawn_Method, (v) => { group.Spawn_Method = v; }));
-  grid.appendChild(makeTextField("Spawn_Strategy", formatStrategy(group.Spawn_Strategy), hints.Spawn_Strategy, (v) => { group.Spawn_Strategy = parseStrategy(v); }));
+    grid.appendChild(makeSelectField("Redistribution_Method", schema.redistribution_methods, group.Redistribution_Method, hints.Redistribution_Method, (v) => { group.Redistribution_Method = v; }));
+    grid.appendChild(makeTextField("Redistribution_Strategy", formatStrategy(group.Redistribution_Strategy), hints.Redistribution_Strategy, (v) => { group.Redistribution_Strategy = parseStrategy(v); }));
+    grid.appendChild(makeSelectField("Spawn_Method", schema.spawn_methods, group.Spawn_Method, hints.Spawn_Method, (v) => { group.Spawn_Method = v; }));
+    grid.appendChild(makeTextField("Spawn_Strategy", formatStrategy(group.Spawn_Strategy), hints.Spawn_Strategy, (v) => { group.Spawn_Strategy = parseStrategy(v); }));
+  }
 
   body.appendChild(grid);
   body.appendChild(makeStrategyLegendWrap(
@@ -538,7 +740,65 @@ async function runValidation() {
   return data;
 }
 
+async function runMultiValidation() {
+  syncTotals();
+  const validateRes = await fetch("/api/multi/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  const validateData = await validateRes.json();
+  const previewRes = await fetch("/api/multi/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  const previewData = await previewRes.json();
+  return { validateData, previewData };
+}
+
 async function validateConfig() {
+  if (multiMode) {
+    const { validateData, previewData } = await runMultiValidation();
+    const errors = validateData.errors || [];
+    const warnings = validateData.warnings || [];
+    const parts = [];
+    if (previewData.syntax_valid) {
+      parts.push(
+        `${previewData.valid_outputs} valid output(s) from ${previewData.theoretical_combinations} combination(s)`
+      );
+      if (previewData.skipped_procs_filter) {
+        parts.push(`${previewData.skipped_procs_filter} skipped (duplicate consecutive Procs)`);
+      }
+      if (previewData.skipped_invalid) {
+        parts.push(`${previewData.skipped_invalid} skipped (validation failed)`);
+      }
+
+      const invalidReasons = previewData.invalid_reasons || {};
+      const topReasons = Object.entries(invalidReasons)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([reason, count]) => `${count}× ${reason}`);
+      const title = validateData.valid
+        ? `Complex configuration is valid. ${parts.join("; ")}.`
+        : `Complex configuration has syntax issues. ${parts.join("; ")}.`;
+      if (validateData.valid && warnings.length === 0) {
+        if (topReasons.length) {
+          showValidationResult(title, [], topReasons);
+        } else {
+          showMessage(title, "ok");
+        }
+      } else if (validateData.valid) {
+        showValidationResult(title, [], warnings.concat(topReasons));
+      } else {
+        showValidationResult(title, errors, warnings);
+      }
+    } else {
+      showValidationResult("Complex configuration syntax failed:", errors, warnings);
+    }
+    return validateData.valid && previewData.syntax_valid;
+  }
+
   const data = await runValidation();
   const errors = data.errors || [];
   const warnings = data.warnings || [];
@@ -553,6 +813,36 @@ async function validateConfig() {
 }
 
 async function downloadJson() {
+  if (multiMode) {
+    const { validateData, previewData } = await runMultiValidation();
+    const errors = validateData.errors || [];
+    const warnings = validateData.warnings || [];
+    let title = "Complex configuration download started.";
+    if (!validateData.valid) {
+      title = "Downloaded complex configuration with syntax issues.";
+    } else if (previewData.valid_outputs === 0) {
+      title = "Downloaded complex configuration (no valid expanded outputs).";
+    } else {
+      title = `Downloaded complex configuration (${previewData.valid_outputs} valid output(s) predicted).`;
+    }
+    if (errors.length) {
+      showValidationResult(title, errors, warnings);
+    } else if (warnings.length) {
+      showValidationResult(title, [], warnings);
+    } else {
+      showMessage(title, "ok");
+    }
+    syncTotals();
+    const blob = new Blob([JSON.stringify(config, null, 2) + "\n"], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = getDownloadFileName();
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
   const data = await runValidation();
   const errors = data.errors || [];
   const warnings = data.warnings || [];
@@ -580,6 +870,15 @@ function openLocalFile(file) {
     try {
       config = JSON.parse(reader.result);
       configFileNameEl.value = file.name;
+      const shouldMulti = detectMultiConfig(config);
+      if (shouldMulti !== multiMode) {
+        multiMode = shouldMulti;
+        document.getElementById("btn-mode-single").classList.toggle("active", !multiMode);
+        document.getElementById("btn-mode-multi").classList.toggle("active", multiMode);
+        if (multiMode) {
+          convertConfigToMulti(config);
+        }
+      }
       renderAll();
       showMessage(`Opened ${file.name}`, "ok");
     } catch (err) {
@@ -589,7 +888,16 @@ function openLocalFile(file) {
   reader.readAsText(file);
 }
 
-document.getElementById("btn-new").addEventListener("click", loadTemplate);
+document.getElementById("btn-mode-single").addEventListener("click", () => setMultiMode(false));
+document.getElementById("btn-mode-multi").addEventListener("click", () => setMultiMode(true));
+
+document.getElementById("btn-new").addEventListener("click", () => {
+  if (multiMode) {
+    loadBlank();
+  } else {
+    loadTemplate();
+  }
+});
 document.getElementById("btn-validate").addEventListener("click", validateConfig);
 document.getElementById("btn-download").addEventListener("click", downloadJson);
 document.getElementById("btn-open-file").addEventListener("click", () => fileInputEl.click());

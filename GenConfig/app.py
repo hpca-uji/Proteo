@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+from expand_multi import preview_expansions, validate_multi_syntax
 from schema import default_config
 from stage_rules import sanitize_config
 from validator import validate_config_full
@@ -63,6 +64,7 @@ def api_schema():
         DIST_OPTIONS,
         GENERAL_FIELDS,
         GROUP_FIELDS,
+        MULTI_MODE_HINTS,
         REDISTRIBUTION_METHODS,
         REDISTRIBUTION_STRATEGIES,
         REDISTRIBUTION_STRATEGY_OPTIONS,
@@ -92,7 +94,38 @@ def api_schema():
         "general_fields": GENERAL_FIELDS,
         "stage_optional_fields": STAGE_OPTIONAL_FIELDS,
         "group_fields": GROUP_FIELDS,
+        "multi_mode_hints": MULTI_MODE_HINTS,
     })
+
+
+@app.route("/api/multi/validate", methods=["POST"])
+def api_multi_validate():
+    config = request.get_json(silent=True)
+    if not isinstance(config, dict):
+        return jsonify({
+            "valid": False,
+            "errors": ["Root value must be a JSON object"],
+            "warnings": [],
+        })
+    result = validate_multi_syntax(config)
+    return jsonify(result)
+
+
+@app.route("/api/multi/preview", methods=["POST"])
+def api_multi_preview():
+    config = request.get_json(silent=True)
+    if not isinstance(config, dict):
+        return jsonify({
+            "syntax_valid": False,
+            "syntax_errors": ["Root value must be a JSON object"],
+            "syntax_warnings": [],
+            "variant_axes": 0,
+            "theoretical_combinations": 0,
+            "valid_outputs": 0,
+            "skipped_procs_filter": 0,
+            "skipped_invalid": 0,
+        })
+    return jsonify(preview_expansions(config, validate_outputs=True))
 
 
 if __name__ == "__main__":

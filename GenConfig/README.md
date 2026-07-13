@@ -10,7 +10,7 @@ Minimal web UI to create and edit Proteo **JSON** configuration files for the Ph
 ## Install and run
 
 ```bash
-cd Config-Gen
+cd GenConfig
 pip install -r requirements.txt
 python app.py
 ```
@@ -40,6 +40,51 @@ Counts sync automatically:
 - Each phase's `Total_Stages` = number of stages in that phase
 
 Phases and groups are collapsible: click the summary to expand/collapse. When multiple phases or groups exist, only the first is expanded by default.
+
+## Single vs Multi mode
+
+Use the **Single** | **Multi** toggle in the toolbar:
+
+- **Single** — edit one concrete configuration (numeric fields, strategy arrays). Validate and download produce a ready-to-run JSON file.
+- **Multi** — edit a **complex** configuration with variant syntax. Fields accept text such as `"10:20"`. **Validate** checks syntax and shows how many valid expanded outputs would be produced. **Download** saves the complex JSON as-is (for use with the CLI expander below).
+
+Opening a file that contains `:` in any string value automatically switches to Multi mode.
+
+**New** in Multi mode loads a blank config; in Single mode it loads the template.
+
+## Multi-config variant syntax
+
+Colon-separated values define alternatives that are expanded as a Cartesian product (same convention as INI `read_multiple.py`):
+
+| Delimiter | Meaning | Example |
+|-----------|---------|---------|
+| `:` | Alternative values (one per expanded file) | `"500000:1000000"` → two SDR values |
+| `,` | Values kept together in one output (strategies) | `"0,1:0"` → `[0,1]` or `[0]` |
+
+Rules:
+
+- **Structural counts** (`Total_Phases`, `Total_Resizes`, `Total_Stages`) cannot use variant syntax.
+- **ADR 0–100** with variant SDR is treated as a **percentage of SDR** (INI-compatible `correct_adr`).
+- **Procs** variants across groups: combinations where consecutive groups share the same `Procs` are skipped.
+- **FactorS** is not an independent axis when **Procs** varies in the same group; use parallel values (`"1:2"` with `"2:4"`).
+- Multi-mode JSON often stores numeric fields as **strings** (e.g. `"Stage_Type": "0"`) so users can type variants. Expansion and server-side sanitization automatically coerce single-value strings (no `:`) back to numeric types.
+- Expanded outputs are sanitized and validated using **structural + stage semantic rules**. Group cross-field restrictions are still enforced in Single-mode validation, but are not an expansion gate (parity with legacy INI expansion).
+
+Example complex file: `examples/complex.example.json` (8 valid outputs from SDR × ADR × Procs).
+
+### Expand complex JSON from the command line
+
+```bash
+python3 Exec/PythonCodes/read_multiple_json.py GenConfig/examples/complex.example.json my_run_
+```
+
+Writes `my_run_0.json`, `my_run_1.json`, … into `Desglosed-<date>/` in the current working directory. Each file is a concrete, validated configuration.
+
+Shell wrapper (same role as `multipleRuns.sh` for INI):
+
+```bash
+bash Exec/multipleRunsJson.sh path/to/complex.json my_run_
+```
 
 ## Stage types (`Stage_Type`)
 
@@ -96,16 +141,18 @@ bash Exec/singleRunCostum.sh Codes/my_config.json 0 1 0
 
 ## Notes
 
-- This tool outputs **JSON only** (not INI). For combinatorial INI generation, use `Exec/multipleRuns.sh` / `read_multiple.py`.
+- This tool outputs **JSON only** (not INI). For legacy combinatorial INI generation, use `Exec/multipleRuns.sh` / `read_multiple.py`; for JSON, use `Exec/multipleRunsJson.sh` / `read_multiple_json.py`.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Flask server |
-| `schema.py` | Field metadata, enums, defaults |
+| `app.py` | Flask server (single + multi validate/preview APIs) |
+| `expand_multi.py` | Parse variants, Cartesian product, SDR/ADR, filters |
+| `schema.py` | Field metadata, enums, defaults, multi-mode hints |
 | `validator.py` | Structural + semantic validation |
 | `stage_rules.py` | Stage sanitization and semantic rules |
 | `restrictions.py` | Group cross-field rules |
-| `static/app.js` | Form UI logic |
+| `static/app.js` | Form UI logic (single/multi toggle) |
 | `templates/index.html` | Page layout |
+| `examples/complex.example.json` | Sample multi-config for expansion |

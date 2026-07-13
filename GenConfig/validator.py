@@ -42,7 +42,7 @@ def _validate_int_array(value, path):
     return errors
 
 
-def validate_config(config):
+def validate_config(config, *, apply_group_restrictions: bool = True):
     """Return list of human-readable error strings. Empty if valid."""
     errors = []
 
@@ -149,15 +149,29 @@ def validate_config(config):
         if "Spawn_Strategy" in group:
             errors.extend(_validate_int_array(group["Spawn_Strategy"], f"{gp}.Spawn_Strategy"))
 
-    # Group cross-field rules: see restrictions.py (v2)
-    errors.extend(validate_group_restrictions(config))
+    # Group cross-field rules: see restrictions.py.
+    # For expansion we may choose to ignore these to match legacy INI behavior.
+    if apply_group_restrictions:
+        errors.extend(validate_group_restrictions(config))
 
     return errors
 
 
 def validate_config_full(config):
     """Return structural errors, semantic warnings, and combined validity."""
-    errors = validate_config(config)
+    errors = validate_config(config, apply_group_restrictions=True)
+    semantic_errors, warnings = validate_stage_semantics(config)
+    errors.extend(semantic_errors)
+    return {
+        "errors": errors,
+        "warnings": warnings,
+        "valid": len(errors) == 0,
+    }
+
+
+def validate_for_expansion(config):
+    """Validation used for combinatorial expansion (structural + stage rules only)."""
+    errors = validate_config(config, apply_group_restrictions=False)
     semantic_errors, warnings = validate_stage_semantics(config)
     errors.extend(semantic_errors)
     return {

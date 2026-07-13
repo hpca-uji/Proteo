@@ -50,6 +50,29 @@ h1 {
   padding-bottom: 0.75rem;
 }
 
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  padding: 0.35rem 0.65rem;
+}
+
+.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mode-btn:not(.active):hover {
+  background: #eef1f4;
+}
+
 button, input, select {
   font: inherit;
 }

@@ -13,6 +13,10 @@
   </header>
 
   <section class="toolbar">
+    <div class="mode-toggle" role="group" aria-label="Configuration mode">
+      <button type="button" id="btn-mode-single" class="mode-btn active">Single</button>
+      <button type="button" id="btn-mode-multi" class="mode-btn">Multi</button>
+    </div>
     <button type="button" id="btn-new">New</button>
     <button type="button" id="btn-open-file">Open file…</button>
     <input type="file" id="file-input" accept=".json,application/json" hidden>
@@ -55,6 +59,8 @@
       Output matches <code>read_json.c</code>. Legacy flat INI <code>[stageN]</code> layouts are not supported here.
       Group cross-field rules (e.g. Merge spawn strategy) will be added in a future version.
       Validate/Download apply stage semantic rules and field cleanup.
+      Multi mode uses <code>X:Y</code> colon syntax for combinatorial variants; expand with
+      <code>read_multiple_json.py</code>.
     </p>
   </footer>
 

@@ -162,3 +162,12 @@ def default_config():
         "phases": [default_phase()],
         "groups": [default_group()],
     }
+
+
+MULTI_MODE_HINTS = {
+    "delimiter_colon": "Separate alternatives for combinatorial expansion (e.g. 10:20).",
+    "delimiter_comma": "In strategy fields, comma joins values in one output (e.g. 0,1:0).",
+    "structural_fixed": "Total_Phases, Total_Resizes, and Total_Stages cannot use variant syntax.",
+    "factors_procs": "When Procs uses variants, FactorS variants must have the same count (parallel values).",
+    "adr_percentage": "ADR variants 0–100 are treated as percentages of SDR (INI-compatible).",
+}
