@@ -228,7 +228,6 @@ void init_group_struct(char *argv[], int argc, int myId, int numP) {
  *
  * En caso de ser otro grupo de procesos entra a la funcion "Sons_init()" donde
  * se comunican con los padres para inicializar sus datos.
- * TODO: Should consider type of data from file?
  */
 void init_application() {
   int i, last_index;
@@ -392,16 +391,18 @@ void modify_configuration() {
 
 void init_originals() {
   size_t i;
+  MPI_Datatype dist_type;
 
   if(config_file->n_groups > 1) {
+    MPI_Type_match_size(MPI_TYPECLASS_INTEGER, config_file->datasize, &dist_type);
     if(config_file->sdr) {
       for(i=0; i<group->sync_data_groups; i++) {
-        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], dist_type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
       }
     }
     if(config_file->adr) {
       for(i=0; i<group->async_data_groups; i++) {
-        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], dist_type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
       }
     }
   }
