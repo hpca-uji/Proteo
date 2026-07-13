@@ -1,9 +1,13 @@
 #Ignore ini files
 *.ini
+#Ignore json files
+*.json
 #Ignore pkl files
 *.pkl
 #Ignore out files
 *.out
+#Ignore tmp files
+*.tmp
 
 #Ignore build files
 /Codes/build/
@@ -12,6 +16,13 @@
 
 #Ignore Results files
 /Results/**/
+
+#Ignore tmp directory
+/Analysis/tmp/**
+
+#Ignore pycache
+__pycache__/
+*.py[cod]
 
 #Ignore VS jsons
 .vscode/*.json

@@ -7,8 +7,8 @@
 #include <mpi.h>
 #include "ProcessDist.h"
 #include "SpawnUtils.h"
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
 
 //--------------PRIVATE CONSTANTS------------------//
 #define MAM_HOSTFILE_NAME1 "MAM_HF_ID"  // Constant size name (9) -- Part of SIZE1

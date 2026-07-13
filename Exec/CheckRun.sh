@@ -188,16 +188,28 @@ do
     fi
 
     #2 - Obtain number of nodes needed
-    config_file="$common_name$run.ini"
+    if [ -f "${common_name}${run}.json" ]; then
+      config_file="${common_name}${run}.json"
+    elif [ -f "${common_name}${run}.ini" ]; then
+      config_file="${common_name}${run}.ini"
+    else
+      echo "Config not found: ${common_name}${run}.ini or ${common_name}${run}.json" >&2
+      continue
+    fi
     slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
 
     #2.1 - Get partition name, default otherwise (Avoid duplicates)
-    partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
-    partition=$(echo $partition | cut -d ' ' -f1)
-    if [ -z "$partition" ];
-    then
+    if [ -e "$slurm_file" ]; then
+      partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+      partition=$(echo $partition | cut -d ' ' -f1)
+      if [ -z "$partition" ];
+      then
+        partition='P1'
+        echo "Partition not found in file $slurm_file. Falling to P1 partition."
+      fi
+    else
       partition='P1'
-      echo "Partition not found in file $slurm_file. Falling to P1 partition."
+      echo "The slurm file does not exist. Falling to P1 partition."
     fi
     res=$(scontrol show partition $partition)
     if [[ "$res" =~ "not found" ]]; 
@@ -213,6 +225,7 @@ do
 
     #3 - Launch execution
     sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
+    echo "sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff"
   fi
 done
 

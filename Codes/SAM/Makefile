@@ -10,6 +10,7 @@ MAM_FLAGS = -I$(MAM_HOME) -L$(MAM_HOME)/build
 ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
     C_FLAGS += -g -O1
     #C_FLAGS += -fsanitize=address
+	#LD_FLAGS += -static-libasan
 endif
 
 # Final binary
@@ -18,7 +19,8 @@ BIN = a.out
 BUILD_DIR = ./build
 
 # List of all directories where source files are located
-SRCDIRS = IOcodes Main
+SRCDIRS = IOcodes Main Emulation
+INCLUDE_PATHS = -IMain -IEmulation -IIOcodes -I../MaM -I../MaM/distribution_methods -I../MaM/spawn_methods
 
 # List of all .c source files.
 C_FILES = $(foreach dire, $(SRCDIRS), $(wildcard $(dire)/*.c))
@@ -60,4 +62,4 @@ $(BUILD_DIR)/$(BIN) : $(OBJ)
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
 	@mkdir -p $(@D)
-	$(MCC) $(C_FLAGS) $(MAM_FLAGS) $(DEF) -MMD -c $< -o $@
+	$(MCC) $(C_FLAGS) $(MAM_FLAGS) $(INCLUDE_PATHS) -MMD -c $< -o $@

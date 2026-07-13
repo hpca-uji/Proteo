@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
 #include "PortService.h"
 #include "Spawn_state.h"
 #include "Strategy_Single.h"

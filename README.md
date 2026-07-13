@@ -9,6 +9,7 @@ This branch is divided into the following 4 directories:
 - **Codes**: Contains all the codes used to compile Proteo.
 - **Exec**: Contains the scripts to execute Proteo in different ways and check if the runs have completed successfully.
 - **Results**: Contains the configuration files used to emulate the malleable emulation of the CG.
+- **Config-Gen**: Web UI to create JSON configuration files (optional; see `Config-Gen/README.md`).
 
 ## Installation
 
@@ -24,6 +25,7 @@ The following requisites are optional and only needed to process and analyse the
 - Matplotlib 3.7.1(Optional). Only if you want to analyse the data.
 - Scipy 1.10.1(Optional). Only if you want to analyse the data.
 - scikit-posthocs 0.7.0(Optional). Only if you want to analyse the data.
+- Flask 3(Optional). Only if you want to use the JSON configuration builder in `Config-Gen/`.
 
 
 ### Steps

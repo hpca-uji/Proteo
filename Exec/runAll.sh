@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Runs in a given current directory all .ini files with the aid of the RMS
+# Runs in a given current directory all .ini and .json files with the aid of the RMS
 # Parameter 1: Partition name.
 # Parameter 2(Optional) - Amount of executions per file. Must be a positive number
 # Parameter 3(Optional) - Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
@@ -34,11 +34,14 @@ then
   limit_time=$(($3 * $qty / 60 + 1))
 fi
 
-files="./*.ini"
-internalIndex=$(echo $files | tr -cd ' ' | wc -c)
-index=$((0))
-for config_file in $files
+internalIndex=0
+index=0
+for config_file in ./*.ini ./*.json
 do
+  if [ ! -f "$config_file" ]; then
+    continue
+  fi
+
   result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
   node_qty=$(echo $result | cut -d ',' -f1)
   constraint=$(echo $result | cut -d ',' -f2)

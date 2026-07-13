@@ -2,7 +2,7 @@
 
 # Executes a given configuration file. This script can be called with Slurm commands to 
 #   choose the desired user configuration.
-# Parameter 1: Configuration file name for the emulation.
+# Parameter 1: Configuration file name for the emulation (.ini or .json).
 # Parameter 2(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 3(Optional): Number of repetitions to perform. Must be a positive integer.
 # Parameter 4(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
@@ -15,7 +15,7 @@ source $scriptDir/../Codes/build/config.txt
 if [ $# -lt 1 ]
 then
   echo "Not enough arguments. Usage:"
-  echo "singleRunCostum.sh config.ini [outFileIndex] [Qty] [Use Extrae] [Output path]"
+  echo "singleRunCostum.sh config.ini|config.json [outFileIndex] [Qty] [Use Extrae] [Output path]"
   exit 1
 fi
 
@@ -26,6 +26,9 @@ fi
 #$5 == Output path
 
 config_file=$1
+source $scriptDir/BashScripts/validate_config_ext.sh
+validate_config_ext "$config_file" || exit 1
+
 outFileIndex=0
 qty=1
 use_external=0

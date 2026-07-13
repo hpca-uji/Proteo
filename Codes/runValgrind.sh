@@ -4,7 +4,11 @@
 #SBATCH -N 1
 #SBATCH --exclude=c01,c00,c02
 
+# Parameter 1: Configuration file (.ini or .json).
+# Parameter 2(Optional): Output file index.
+
 source build/config.txt
+source $PROTEO_HOME$execDir/BashScripts/validate_config_ext.sh
 nodes=$SLURM_JOB_NUM_NODES
 configFile=$1
 
@@ -13,6 +17,8 @@ if [ $# -ge 2 ]
 then
   outIndex=$2
 fi
+
+validate_config_ext "$configFile" || exit 1
 
 echo "MPICH provider=$FI_PROVIDER"
 mpirun --version

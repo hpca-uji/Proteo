@@ -5,9 +5,9 @@
 #include <pthread.h>
 #include <mpi.h>
 #include <string.h>
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
-#include "../MAM_Configuration.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
+#include "MAM_Configuration.h"
 #include "ProcessDist.h"
 #include "GenericSpawn.h"
 #include "Baseline.h"

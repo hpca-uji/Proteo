@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Obtains for a given configuration file how many nodes will be needed
-# Parameter 1 - Configuration file name for the emulation.
+# Parameter 1 - Configuration file name for the emulation (.ini or .json).
 # Parameter 2 - Partition to use
 # FIXME: Not tested for shared systems
 # FIXME: Does not correctly balance out the amount of nodes in all casses
@@ -11,18 +11,50 @@
 execDir="/Exec"
 ignore='c'
 
+get_total_resizes_from_ini() {
+  grep Total_Resizes $config_file | cut -d '=' -f2
+}
+
+get_total_resizes_from_json() {
+  local total_resizes
+
+  total_resizes=$(grep '"Total_Resizes"' "$config_file" \
+    | sed -n 's/.*"Total_Resizes"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
+    | head -1)
+
+  if [ -z "$total_resizes" ]; then
+    echo "JSON config: missing or invalid Total_Resizes" >&2
+    return 1
+  fi
+
+  echo "$total_resizes"
+}
+
 if [ "$#" -lt "2" ]
 then
   echo "Not enough arguments"
-  echo "Usage -> bash getMaxNodesNeeded.sh Configuration.ini Partition"
+  echo "Usage -> bash getMaxNodesNeeded.sh Configuration.ini|Configuration.json Partition"
   exit -1
 fi
 
 config_file=$1
 partition=$2
+ext="${config_file##*.}"
+
+case "$ext" in
+  ini)
+    total_resizes=$(get_total_resizes_from_ini)
+    ;;
+  json)
+    total_resizes=$(get_total_resizes_from_json) || exit 1
+    ;;
+  *)
+    echo "Unsupported config extension: .$ext (use .ini or .json)" >&2
+    exit 1
+    ;;
+esac
 
 max_numP=-1
-total_resizes=$(grep Total_Resizes $config_file | cut -d '=' -f2)
 total_groups=$(($total_resizes + 1))
 for ((j=0; j<total_groups; j++));
 do

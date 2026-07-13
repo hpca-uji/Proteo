@@ -16,6 +16,7 @@ endif
 ifeq ($(shell test $(MAM_DEBUG) -gt 0; echo $$?),0)
     C_FLAGS += -g -O1
     #C_FLAGS += -fsanitize=address
+	#LD_FLAGS += -static-libasan
 endif
 
 # Final library
@@ -25,6 +26,7 @@ BUILD_DIR = ./build
 
 # List of all directories where source files are located
 SRCDIRS = . spawn_methods distribution_methods
+INCLUDE_PATHS = -I./ -I./distribution_methods -I./spawn_methods
 
 # List of all .c source files.
 C_FILES = $(foreach dire, $(SRCDIRS), $(wildcard $(dire)/*.c))
@@ -66,4 +68,4 @@ $(BUILD_DIR)/$(LIB) : $(OBJ)
 # the same name as the .o file.
 $(BUILD_DIR)/%.o : %.c
 	@mkdir -p $(@D)
-	$(MCC) $(C_FLAGS) $(DEF) -fpic -MMD -c $< -o $@
+	$(MCC) $(C_FLAGS) $(DEF) $(INCLUDE_PATHS) -fpic -MMD -c $< -o $@

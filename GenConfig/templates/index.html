@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proteo Config-Gen</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Proteo Config-Gen</h1>
+    <p class="subtitle">Build JSON configuration files for SAM / MaM (Phases_Feature schema)</p>
+  </header>
+
+  <section class="toolbar">
+    <div class="mode-toggle" role="group" aria-label="Configuration mode">
+      <button type="button" id="btn-mode-single" class="mode-btn active">Single</button>
+      <button type="button" id="btn-mode-multi" class="mode-btn">Multi</button>
+    </div>
+    <button type="button" id="btn-new">New</button>
+    <button type="button" id="btn-open-file">Open file…</button>
+    <input type="file" id="file-input" accept=".json,application/json" hidden>
+    <label>
+      Config file name:
+      <input type="text" id="config-file-name" value="config.json" size="28">
+    </label>
+    <button type="button" id="btn-validate">Validate</button>
+    <button type="button" id="btn-download">Download JSON</button>
+  </section>
+
+  <section id="messages" class="messages" aria-live="polite"></section>
+
+  <main id="editor">
+    <details open class="panel">
+      <summary>General</summary>
+      <div id="general-fields" class="field-grid"></div>
+    </details>
+
+    <details open class="panel">
+      <summary>Phases <span id="phases-count" class="badge"></span></summary>
+      <div class="panel-actions">
+        <button type="button" id="btn-add-phase">Add phase</button>
+      </div>
+      <div id="phases-container"></div>
+    </details>
+
+    <details open class="panel">
+      <summary>Groups <span id="groups-count" class="badge"></span></summary>
+      <div class="panel-actions">
+        <button type="button" id="btn-add-group">Add group</button>
+        <button type="button" id="btn-remove-group" class="btn-danger">Remove last group</button>
+      </div>
+      <div id="groups-container"></div>
+    </details>
+  </main>
+
+  <footer>
+    <p>
+      Output matches <code>read_json.c</code>. Legacy flat INI <code>[stageN]</code> layouts are not supported here.
+      Group cross-field rules (e.g. Merge spawn strategy) will be added in a future version.
+      Validate/Download apply stage semantic rules and field cleanup.
+      Multi mode uses <code>X:Y</code> colon syntax for combinatorial variants; expand with
+      <code>read_multiple_json.py</code>.
+    </p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

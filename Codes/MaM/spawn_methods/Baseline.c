@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
 #include "Baseline.h"
 #include "SpawnUtils.h"
 #include "Strategy_Single.h"

@@ -3,10 +3,11 @@
 #include <string.h>
 #include "read_ini.h"
 #include "ini.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
-
+size_t actual_group, actual_phase, actual_stage; // Used for IO data only
 ext_functions_t *user_functions;
+
 void get_numbers_from_string(const char *input, size_t *res_len, int **res);
 
 /*
@@ -21,17 +22,22 @@ static int handler(void* user, const char* section, const char* name,
     int ret_value=1;
     int *aux;
     size_t aux_len;
+    phase_t *phase;
+    stage_t *stage;
     configuration* pconfig = (configuration*)user;
 
-    if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_stage >= pconfig->n_stages) {
+    if(actual_group >= pconfig->n_groups && actual_phase >= pconfig->n_phases) {
       return 1; // There is no more work to perform
     }
 
     char *resize_name = malloc(10 * sizeof(char));
-    snprintf(resize_name, 10, "resize%zu", pconfig->actual_group);
+    snprintf(resize_name, 10, "resize%zu", actual_group);
 
-    char *stage_name = malloc(10 * sizeof(char));
-    snprintf(stage_name, 10, "stage%zu", pconfig->actual_stage);
+    char *phase_name = malloc(10 * sizeof(char));
+    snprintf(phase_name, 10, "phase%zu", actual_phase);
+
+    char *stage_name = malloc(20 * sizeof(char));
+    snprintf(stage_name, 20, "phase%zu.stage%zu", actual_phase, actual_stage);
 
     #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     #define LAST(iter, total) iter < total
@@ -39,59 +45,89 @@ static int handler(void* user, const char* section, const char* name,
         pconfig->n_resizes = strtoul(value, NULL, 10);
         pconfig->n_groups = pconfig->n_resizes+1;
         user_functions->resizes_f(pconfig);
-    } else if (MATCH("general", "Total_Stages")) {
-        pconfig->n_stages = strtoul(value, NULL, 10);
-        user_functions->stages_f(pconfig); 
-    } else if (MATCH("general", "Granularity")) {
-        pconfig->granularity = atoi(value);
+    } else if (MATCH("general", "Total_Phases")) {
+        pconfig->n_phases = strtoul(value, NULL, 10);
+        user_functions->phases_f(pconfig);
     } else if (MATCH("general", "SDR")) { // TODO Refactor a nombre manual
         pconfig->sdr = strtoul(value, NULL, 10);
     } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
         pconfig->adr = strtoul(value, NULL, 10);
+    } else if (MATCH("general", "Datasize")) { // TODO Refactor a nombre manual
+        pconfig->datasize = strtoul(value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
         pconfig->rigid_times = atoi(value);
     } else if (MATCH("general", "Capture_Method")) {
         pconfig->capture_method = atoi(value);
 
-    // Iter stage
-    } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].pt = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].id = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
-        pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
+    // Phase
+    } else if (MATCH(phase_name, "Total_Iters") && LAST(actual_phase, pconfig->n_phases)) {
+        pconfig->phases[actual_phase].qty_iters = strtoul(value, NULL, 10);
+    } else if (MATCH(phase_name, "Total_Stages") && LAST(actual_phase, pconfig->n_phases)) {
+        phase = pconfig->phases+actual_phase;
+        phase->qty_stages = strtoul(value, NULL, 10);
+        user_functions->stages_f(pconfig, actual_phase);
+        actual_stage = 0;
+
+    // Stage
+    } else if (MATCH(stage_name, "Stage_Type") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->pt = atoi(value);
+    } else if (MATCH(stage_name, "Granularity") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->granularity = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->t_capped = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->bytes = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->id = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Involved_Procs") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->involved_procs = atoi(value);
+    } else if (MATCH(stage_name, "Stage_Time") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases+actual_phase;
+        stage = phase->stages+actual_stage;
+        stage->t_stage = (float) atof(value);
+        actual_stage++; // Ultimo elemento del grupo
+        if(actual_stage == pconfig->phases[actual_phase].qty_stages) { // Ultimo stage de la phase
+            actual_phase++; 
+        }
 
     // Resize stage
-    } else if (MATCH(resize_name, "Iters") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].iters = atoi(value);
-    } else if (MATCH(resize_name, "Procs") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].procs = atoi(value);
-    } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].factor =(float) atof(value);
-    } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+    } else if (MATCH(resize_name, "Iters") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].iters = atoi(value);
+    } else if (MATCH(resize_name, "Procs") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].procs = atoi(value);
+    } else if (MATCH(resize_name, "FactorS") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].factor =(float) atof(value);
+    } else if (MATCH(resize_name, "Dist") && LAST(actual_group, pconfig->n_groups)) {
 	int aux_value = MAM_PHY_DIST_COMPACT;
         if (strcmp(value, "spread") == 0) {
           aux_value = MAM_PHY_DIST_SPREAD;
   	}
-        pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
-    } else if (MATCH(resize_name, "Redistribution_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].rm = atoi(value);
-    } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].phy_dist = aux_value;
+    } else if (MATCH(resize_name, "Redistribution_Method") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].rm = atoi(value);
+    } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(actual_group, pconfig->n_groups)) {
         get_numbers_from_string(value, &aux_len, &aux);
-        pconfig->groups[pconfig->actual_group].rs = aux;
-        pconfig->groups[pconfig->actual_group].rs_len = aux_len;
-    } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].sm = atoi(value);
-    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].rs = aux;
+        pconfig->groups[actual_group].rs_len = aux_len;
+    } else if (MATCH(resize_name, "Spawn_Method") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].sm = atoi(value);
+    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(actual_group, pconfig->n_groups)) {
         get_numbers_from_string(value, &aux_len, &aux);
-        pconfig->groups[pconfig->actual_group].ss = aux;
-        pconfig->groups[pconfig->actual_group].ss_len = aux_len;
-        pconfig->actual_group = pconfig->actual_group+1; // Ultimo elemento de la estructura
+        pconfig->groups[actual_group].ss = aux;
+        pconfig->groups[actual_group].ss_len = aux_len;
+        actual_group++; // Ultimo elemento de la estructura
 
     // Unkown case
     } else {
@@ -99,6 +135,7 @@ static int handler(void* user, const char* section, const char* name,
     }
  
     free(resize_name);
+    free(phase_name);
     free(stage_name);
     return ret_value;
 }
@@ -162,13 +199,21 @@ configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
         printf("Error when reserving configuration structure\n");
 	return NULL;
     }
+
+    config->config_type = MPI_DATATYPE_NULL;
+    config->group_type = MPI_DATATYPE_NULL;
+    config->group_strats_type = MPI_DATATYPE_NULL;
+    config->phase_type = MPI_DATATYPE_NULL;
+    config->stage_type = MPI_DATATYPE_NULL;
     config->capture_method = 0;
     config->rigid_times = 0;
     config->n_resizes = 0;
     config->n_groups = 1;
-    config->n_stages = 1;
-    config->actual_group=0;
-    config->actual_stage=0;
+    config->n_phases = 1;
+
+    actual_group=0;
+    actual_phase=0;
+    actual_stage=0;
 
     user_functions = &init_functions;
 
