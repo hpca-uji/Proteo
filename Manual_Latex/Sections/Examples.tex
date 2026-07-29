@@ -1,0 +1,108 @@
+\section{Examples}
+\label{section:examples}
+
+This section walks through typical Proteo workflows with JSON configurations.
+
+\subsection{Minimal single run}
+
+Use the bundled test configuration \texttt{Codes/test.json} (three phases, two resizes, multiple stage types including I/O):
+
+\begin{lstlisting}[style=bashstyle,caption={Run test.json with Slurm auto-allocation.},captionpos=b]
+cd Results
+bash ../Exec/singleRun.sh ../Codes/test.json mypartition 0 1 0
+bash ../Exec/CheckRun.sh test 0 1 4 3 100
+\end{lstlisting}
+
+Expected outputs (index~0): \texttt{R0\_Global.out}, \texttt{R0\_G0NP2.out}, \texttt{R0\_G1NP4.out}, \texttt{R0\_G2NP6.out}, plus \texttt{slurm-*.out}.
+
+\subsection{Custom allocation}
+
+Obtain a Slurm allocation first, then run inside it:
+
+\begin{lstlisting}[style=bashstyle,caption={Run inside an sbatch allocation.},captionpos=b]
+sbatch -N 2 -p mypartition --wrap \
+  "bash Exec/singleRunCostum.sh Codes/test.json 0 5 0"
+\end{lstlisting}
+
+This runs five repetitions with output prefix \texttt{R0}. Use a different \texttt{outIndex} (2nd argument) to distinguish batches: \texttt{R5\_*}, \texttt{R6\_*}, etc.
+
+\subsection{Creating a config with GenConfig}
+
+\begin{enumerate}
+  \item Start GenConfig (\texttt{python3 app.py} in \texttt{GenConfig/}).
+  \item Stay in \textbf{Single} mode. Click \textbf{New} to load the \texttt{test.json} template.
+  \item Adjust \texttt{Procs} and \texttt{Iters} in the groups section.
+  \item Click \textbf{Validate}, then \textbf{Download JSON} as \texttt{my\_experiment.json}.
+  \item Inside an allocation: \texttt{bash Exec/singleRunCostum.sh my\_experiment.json 0 1 0}.
+\end{enumerate}
+
+\subsection{Simple resize example}
+
+Listing~\ref{code:json-full-example} (Section~\ref{section:json-config}) defines one phase with Monte Carlo + Allreduce + Allgather, resizing from 2 to 10 processes after one source-group iteration. Save it as \texttt{simple\_resize.json} and run:
+
+\begin{lstlisting}[style=bashstyle]
+bash Exec/singleRunCostum.sh simple_resize.json 0 1 0
+\end{lstlisting}
+
+\subsection{Multi-phase application}
+
+Phase~0 of \texttt{Codes/test.json} mixes I/O read, Bcast, and compute:
+
+\begin{lstlisting}[language=json,caption={Phase 0 of Codes/test.json.},captionpos=b,label=code:json-phase-excerpt]
+{
+  "Total_Iters": 1,
+  "Total_Stages": 3,
+  "stages": [
+    {
+      "Stage_Type": 10,
+      "Stage_Bytes": 0,
+      "Stage_Involved_Procs": 2,
+      "Stage_Time": 4,
+      "Granularity": 1000
+    },
+    { "Stage_Type": 5, "Stage_Bytes": 1000, "Stage_Time": 0 },
+    {
+      "Stage_Type": 0,
+      "Stage_Bytes": 0,
+      "Stage_Time": 1,
+      "Granularity": 10000
+    }
+  ]
+}
+\end{lstlisting}
+
+Phase~1 runs 22 iterations with compute + two Allreduce stages + Allgather; phase~2 performs a single large I/O write. This illustrates how phases chain different stage sequences within the same process group.
+
+\subsection{Combinatorial study}
+
+Variant fields in \texttt{GenConfig/examples/complex.example.json}:
+
+\begin{lstlisting}[language=json,caption={Variant fields in complex.example.json.},captionpos=b]
+"SDR": "500000:1000000",
+"ADR": "0:50",
+"Procs": "2:4",
+"FactorS": "1:1"
+\end{lstlisting}
+
+\textbf{Workflow:}
+\begin{enumerate}
+  \item Edit variants in GenConfig Multi mode (or edit the file directly).
+  \item Validate to see the predicted number of valid combinations.
+  \item Download as \texttt{complex.json}.
+  \item Expand: \texttt{python3 Exec/PythonCodes/read\_multiple\_json.py complex.json sweep\_}.
+  \item Run each \texttt{Desglosed-*/sweep\_N.json} with \texttt{singleRun.sh}, varying partition and output index as needed.
+\end{enumerate}
+
+\subsection{Conjugate-gradient-like profile}
+
+A CG-like iteration can be approximated with one compute stage plus several communication stages (see Listing~\ref{code:json-full-example} for structure). Use matrix--vector compute (\texttt{Stage\_Type}: 1), small Allreduce messages (\texttt{Stage\_Bytes}: 8), and a large Allgather (\texttt{Stage\_Bytes} set explicitly). Tune \texttt{Granularity} and \texttt{Stage\_Time} to match target iteration time on a reference process count, then set \texttt{FactorS} per group for scaling behaviour.
+
+\subsection{Error checking after a batch}
+
+After multiple runs sharing prefix \texttt{exp}:
+
+\begin{lstlisting}[style=bashstyle]
+bash Exec/CheckRun.sh exp 9 5 4 3 120
+\end{lstlisting}
+
+Checks indices~0 through~9, five repetitions each, expecting four stages and three groups, rejecting iterations longer than 120~seconds.

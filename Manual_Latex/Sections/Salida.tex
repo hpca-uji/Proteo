@@ -1,0 +1,42 @@
+\section{Output analysis}
+\label{section:analysis}
+
+Simulation runs produce intermediate text files (Section~\ref{subsection:intermediate_files}). This section describes the Python tooling available today for turning those files into structured data.
+
+\subsection{Analysis scripts}
+
+Post-processing is handled by scripts in \texttt{Analysis/}. The recommended pipeline is:
+
+\begin{enumerate}
+  \item \textbf{\texttt{MallTimes.py}}: primary entry point. Reads raw Proteo \texttt{.out} files and produces the base dataframe(s) / CSV used by downstream steps.
+  \item \textbf{\texttt{joinDf.py}}: when experiments were split into multiple dataframe files, merges them into one (\texttt{python3 joinDf.py df1.pkl df2.pkl outputName}).
+  \item \textbf{\texttt{CreateIterDataframe.py}}, \textbf{\texttt{CreateStageDataframe.py}}, \textbf{\texttt{CreateResizeDataframe.py}}: derive specialised views (per-iteration, per-stage, per-resize) from the MallTimes output.
+\end{enumerate}
+
+Example:
+
+\begin{lstlisting}[style=bashstyle,caption={Build base dataframe from result files.},captionpos=b]
+python3 Analysis/MallTimes.py R /path/to/results/ data_global.csv
+\end{lstlisting}
+
+\begin{description}
+  \item[\texttt{R}] Common prefix of Proteo output files (e.g.\ \texttt{R} matches \texttt{R0\_Global.out}, \texttt{R1\_Global.out}, \ldots).
+  \item[\texttt{/path/to/results/}] Directory containing result subdirectories or flat output files.
+  \item[\texttt{data\_global.csv}] Output path for the aggregated data.
+\end{description}
+
+\textbf{Requirements:} Python~3 with NumPy and Pandas.
+
+\subsection{Notebook analyser (WIP)}
+
+\texttt{Analysis/new\_analyser.ipynb} is a work-in-progress Jupyter notebook for statistical summaries and plots. It is \textbf{not yet suitable for general use} by other users (hard-coded paths, evolving API). Future manual revisions will document it once stabilised.
+
+\subsection{Recommended practice}
+
+\begin{itemize}
+  \item Run \texttt{CheckRun.sh} before analysis to filter or relaunch inconsistent repetitions.
+  \item Use at least five repetitions per configuration when comparing strategies statistically.
+  \item Keep \texttt{Rigid=1} when precise iteration timing matters; use \texttt{Rigid=0} for performance-oriented studies where barrier overhead should be avoided.
+\end{itemize}
+
+For column-level CSV documentation, see Appendix~\ref{appendix:csv}.

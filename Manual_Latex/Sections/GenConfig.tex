@@ -1,0 +1,126 @@
+\section{GenConfig}
+\label{section:genconfig}
+
+\textbf{GenConfig} is a lightweight web application in \texttt{GenConfig/} for creating, validating, and downloading Proteo JSON configuration files. It implements the same schema and validation rules documented in Section~\ref{section:json-config}.
+
+\subsection{Install and launch}
+
+\begin{lstlisting}[style=bashstyle,caption={Start GenConfig.},captionpos=b]
+cd GenConfig
+pip install -r requirements.txt
+python3 app.py
+\end{lstlisting}
+
+Open \url{http://127.0.0.1:5000} in a browser. Optional environment variables: \texttt{CONFIG\_GEN\_HOST}, \texttt{CONFIG\_GEN\_PORT}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.95\textwidth]{GenConfig.png}
+  \caption{GenConfig editor (Single mode).}
+  \label{fig:genconfig-ui}
+\end{figure}
+
+\subsection{Editor workflow}
+
+\begin{enumerate}
+  \item On start, the editor loads a \textbf{minimal blank} configuration (one phase, one stage, one group).
+  \item \textbf{New}: in Single mode loads a template from \texttt{Codes/test.json} when available; in Multi mode loads a blank complex scaffold.
+  \item Edit \textbf{General}, \textbf{Phases} (collapsible, with nested stages), and \textbf{Groups} sections.
+  \item Set \textbf{Config file name} for downloads (default \texttt{config.json} or \texttt{complex.json} in Multi mode).
+  \item \textbf{Validate}: runs structural, stage, and group checks; applies field cleanup (\textit{sanitization}).
+  \item \textbf{Download JSON}: saves the current configuration locally. Download is never blocked; validation messages are advisory.
+  \item \textbf{Open file\ldots}: load JSON from disk; auto-detects Multi mode when variant strings contain \texttt{:}.
+\end{enumerate}
+
+Counts stay synchronized automatically:
+\begin{itemize}
+  \item \texttt{Total\_Phases} = number of phase cards.
+  \item \texttt{Total\_Resizes} = number of groups $-$ 1.
+  \item Each phase's \texttt{Total\_Stages} = number of stages in that phase.
+\end{itemize}
+
+\subsection{Single vs Multi mode}
+
+Use the toolbar toggle \textbf{Single} | \textbf{Multi}:
+
+\begin{description}
+  \item[Single mode] Edit one concrete configuration. Numeric fields, select boxes for enums, and strategy arrays. Output is a ready-to-run JSON file for \texttt{singleRun.sh}.
+  \item[Multi mode] Edit a \textbf{complex} configuration with combinatorial variants. Scalar fields accept strings such as \texttt{"10:20"}. Strategy fields accept \texttt{"0,1:0"} syntax. Validate shows how many valid expanded outputs would be produced. Download saves the complex file for CLI expansion.
+\end{description}
+
+\subsection{Combinatorial variant syntax}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llp{6.5cm}@{}}
+\toprule
+\textbf{Delimiter} & \textbf{Meaning} & \textbf{Example} \\
+\midrule
+\texttt{:} & Cartesian alternative & e.g.\ \texttt{"500000:1000000"} yields two SDR element counts \\
+\texttt{,} & Values kept together & e.g.\ \texttt{"0,1:0"} yields \texttt{[0,1]} or \texttt{[0]} \\
+\bottomrule
+\end{tabular}
+\caption{Multi-mode variant syntax (INI-compatible convention).}
+\end{table}
+
+\textbf{Rules:}
+\begin{itemize}
+  \item Structural counts (\texttt{Total\_Phases}, \texttt{Total\_Resizes}, \texttt{Total\_Stages}) cannot use variants.
+  \item \texttt{ADR} values 0--100 with variant \texttt{SDR} are percentages (same as legacy INI \texttt{correct\_adr}).
+  \item Parallel \texttt{Procs} / \texttt{FactorS} pairs must have matching variant counts.
+  \item Expansion skips combinations with duplicate consecutive \texttt{Procs} across groups.
+\end{itemize}
+
+Example complex file: \texttt{GenConfig/examples/complex.example.json}.
+
+\subsection{Expanding complex JSON}
+
+From the repository root:
+
+\begin{lstlisting}[style=bashstyle,caption={CLI expansion.},captionpos=b]
+python3 Exec/PythonCodes/read_multiple_json.py \
+  GenConfig/examples/complex.example.json my_run_
+\end{lstlisting}
+
+Writes \texttt{Desglosed-<date>/my\_run\_0.json}, \texttt{my\_run\_1.json}, \ldots{} Each output passes structural and stage semantic validation.
+
+Then execute any concrete file inside an existing allocation:
+
+\begin{lstlisting}[style=bashstyle]
+bash Exec/singleRunCostum.sh Desglosed-2026-07-13/my_run_0.json 0 1 0
+\end{lstlisting}
+
+\subsection{Strategy legend in the UI}
+
+GenConfig shows spawn and redistribution strategy names (indices \textbf{1} and above; \textbf{0} means clear and is omitted from the legend):
+
+\textbf{Spawn:} 1=Pthread, 2=Single, 3=Intercomm, 4=Multiple, 5=Parallel.
+
+\textbf{Redistribution:} 1=Pthread, 2=Wait sources, 3=Wait targets.
+
+Leave a strategy field empty for the default clear value \texttt{[0]}. Strategy combination constraints apply when \texttt{ADR}~$>$~0 (Section~\ref{subsubsection:strategy-rules}).
+
+\subsection{Related files}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\texttt{app.py} & Flask server and API endpoints \\
+\texttt{schema.py} & Field metadata, enums, defaults \\
+\texttt{validator.py} & Structural validation \\
+\texttt{stage\_rules.py} & Stage sanitization and semantics \\
+\texttt{restrictions.py} & Group cross-field rules \\
+\texttt{expand\_multi.py} & Variant parsing and Cartesian expansion \\
+\texttt{static/app.js} & Browser UI logic \\
+\texttt{examples/complex.example.json} & Sample multi-config \\
+\bottomrule
+\end{tabular}
+\caption{GenConfig source files.}
+\end{table}
+
+See \texttt{GenConfig/README.md} for API details (\texttt{/api/validate}, \texttt{/api/multi/preview}, etc.).

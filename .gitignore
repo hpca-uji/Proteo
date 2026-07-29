@@ -20,9 +20,23 @@
 #Ignore tmp directory
 /Analysis/tmp/**
 
+#Ignore Others directory in Manual
+/tmp/**
+
 #Ignore pycache
 __pycache__/
 *.py[cod]
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+Manual_Latex/*.pdf
 
 #Ignore VS jsons
 .vscode/*.json

@@ -93,9 +93,9 @@ CAPTURE_METHOD_OPTIONS = {
 GENERAL_FIELDS = [
     ("Total_Resizes", "Number of resizes during execution. Groups count = this + 1."),
     ("Total_Phases", "Number of phases (must match phases array length)."),
-    ("SDR", "Total bytes redistributed synchronously on each resize."),
-    ("ADR", "Total bytes redistributed asynchronously on each resize."),
-    ("Datasize", "Size of each redistributed data element (bytes)."),
+    ("SDR", "Count of data elements redistributed synchronously on each resize."),
+    ("ADR", "Count of data elements redistributed asynchronously on each resize."),
+    ("Datasize", "Size in bytes of each redistributed data element (multiply by SDR/ADR for total bytes)."),
     ("Rigid", "If 1, MPI_Barrier is used between iterations for precise time recording; if 0, no barriers between iterations."),
     ("Capture_Method", "How stage times are captured in results (0=max, 1=mean, 2=median)."),
 ]
