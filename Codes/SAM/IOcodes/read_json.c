@@ -5,25 +5,37 @@
 #include "cJSON.h"
 #include "MAM.h"
 
-static char *read_file_contents(const char *file_name, long *out_len);
-static void free_config_partial(configuration *config);
-static cJSON *require_child(cJSON *parent, const char *key, int expect_array);
-static int require_size_t(cJSON *obj, const char *key, size_t *out);
-static int require_int(cJSON *obj, const char *key, int *out);
-static int optional_int(cJSON *obj, const char *key, int *out);
-static int require_double(cJSON *obj, const char *key, double *out);
-static int copy_int_array(cJSON *array, int **out, size_t *out_len);
-static int parse_general(cJSON *general, configuration *config, ext_functions_t *funcs);
-static int parse_phases(cJSON *phases, configuration *config, ext_functions_t *funcs);
-static int parse_groups(cJSON *groups, configuration *config);
-static int parse_stage(cJSON *stage_json, stage_t *stage);
+/**
+ * @file read_json.c
+ * @brief JSON configuration parser for Proteo (cJSON-based).
+ */
 
-static char *read_file_contents(const char *file_name, long *out_len) {
+static char *read_file_contents(const char *i_file_name, long *o_out_len);
+static void free_config_partial(configuration *io_config);
+static cJSON *require_child(cJSON *i_parent, const char *i_key, int i_expect_array);
+static int require_size_t(cJSON *i_obj, const char *i_key, size_t *o_out);
+static int require_int(cJSON *i_obj, const char *i_key, int *o_out);
+static int optional_int(cJSON *i_obj, const char *i_key, int *o_out);
+static int require_double(cJSON *i_obj, const char *i_key, double *o_out);
+static int copy_int_array(cJSON *i_array, int **o_out, size_t *o_out_len);
+static int parse_general(cJSON *i_general, configuration *io_config, ext_functions_t *i_funcs);
+static int parse_phases(cJSON *i_phases, configuration *io_config, ext_functions_t *i_funcs);
+static int parse_groups(cJSON *i_groups, configuration *io_config);
+static int parse_stage(cJSON *i_stage_json, stage_t *o_stage);
+
+/**
+ * @brief Read an entire file into a NUL-terminated buffer.
+ *
+ * @param[in]  i_file_name Path to the file.
+ * @param[out] o_out_len   Receives the byte length (excluding the NUL).
+ * @return Allocated buffer, or @c NULL on failure. Caller must @c free it.
+ */
+static char *read_file_contents(const char *i_file_name, long *o_out_len) {
   FILE *file;
   char *buffer;
   long length;
 
-  file = fopen(file_name, "rb");
+  file = fopen(i_file_name, "rb");
   if (file == NULL) {
     return NULL;
   }
@@ -58,235 +70,320 @@ static char *read_file_contents(const char *file_name, long *out_len) {
 
   buffer[length] = '\0';
   fclose(file);
-  *out_len = length;
+  *o_out_len = length;
   return buffer;
 }
 
-static void free_config_partial(configuration *config) {
+/**
+ * @brief Free a partially filled configuration after a parse error.
+ * @param[in,out] io_config Configuration to free (may be @c NULL).
+ */
+static void free_config_partial(configuration *io_config) {
   size_t i;
 
-  if (config == NULL) {
+  if (io_config == NULL) {
     return;
   }
 
-  if (config->phases != NULL) {
-    for (i = 0; i < config->n_phases; i++) {
-      free(config->phases[i].stages);
+  if (io_config->phases != NULL) {
+    for (i = 0; i < io_config->n_phases; i++) {
+      free(io_config->phases[i].stages);
     }
-    free(config->phases);
+    free(io_config->phases);
   }
 
-  if (config->groups != NULL) {
-    for (i = 0; i < config->n_groups; i++) {
-      free(config->groups[i].ss);
-      free(config->groups[i].rs);
+  if (io_config->groups != NULL) {
+    for (i = 0; i < io_config->n_groups; i++) {
+      free(io_config->groups[i].ss);
+      free(io_config->groups[i].rs);
     }
-    free(config->groups);
+    free(io_config->groups);
   }
 
-  free(config);
+  free(io_config);
 }
 
-static cJSON *require_child(cJSON *parent, const char *key, int expect_array) {
+/**
+ * @brief Require a named child object or array under a JSON parent.
+ *
+ * @param[in] i_parent       Parent JSON object.
+ * @param[in] i_key          Child key name.
+ * @param[in] i_expect_array Non-zero if the child must be an array; else object.
+ * @return Child node, or @c NULL (with an error message) on failure.
+ */
+static cJSON *require_child(cJSON *i_parent, const char *i_key, int i_expect_array) {
   cJSON *child;
 
-  child = cJSON_GetObjectItemCaseSensitive(parent, key);
+  child = cJSON_GetObjectItemCaseSensitive(i_parent, i_key);
   if (child == NULL) {
-    fprintf(stderr, "JSON config: missing '%s'\n", key);
+    fprintf(stderr, "JSON config: missing '%s'\n", i_key);
     return NULL;
   }
 
-  if (expect_array && !cJSON_IsArray(child)) {
-    fprintf(stderr, "JSON config: '%s' must be an array\n", key);
+  if (i_expect_array && !cJSON_IsArray(child)) {
+    fprintf(stderr, "JSON config: '%s' must be an array\n", i_key);
     return NULL;
   }
 
-  if (!expect_array && !cJSON_IsObject(child)) {
-    fprintf(stderr, "JSON config: '%s' must be an object\n", key);
+  if (!i_expect_array && !cJSON_IsObject(child)) {
+    fprintf(stderr, "JSON config: '%s' must be an object\n", i_key);
     return NULL;
   }
 
   return child;
 }
 
-static int require_size_t(cJSON *obj, const char *key, size_t *out) {
+/**
+ * @brief Require a numeric field and store it as @c size_t.
+ * @param[in]  i_obj Parent object.
+ * @param[in]  i_key Field name.
+ * @param[out] o_out Receives the value.
+ * @return 1 on success, 0 on missing/invalid field.
+ */
+static int require_size_t(cJSON *i_obj, const char *i_key, size_t *o_out) {
   cJSON *item;
 
-  item = cJSON_GetObjectItemCaseSensitive(obj, key);
+  item = cJSON_GetObjectItemCaseSensitive(i_obj, i_key);
   if (item == NULL || !cJSON_IsNumber(item)) {
-    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", key);
+    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", i_key);
     return 0;
   }
 
-  *out = (size_t)cJSON_GetNumberValue(item);
+  *o_out = (size_t)cJSON_GetNumberValue(item);
   return 1;
 }
 
-static int require_int(cJSON *obj, const char *key, int *out) {
+/**
+ * @brief Require a numeric field and store it as @c int.
+ * @param[in]  i_obj Parent object.
+ * @param[in]  i_key Field name.
+ * @param[out] o_out Receives the value.
+ * @return 1 on success, 0 on missing/invalid field.
+ */
+static int require_int(cJSON *i_obj, const char *i_key, int *o_out) {
   cJSON *item;
 
-  item = cJSON_GetObjectItemCaseSensitive(obj, key);
+  item = cJSON_GetObjectItemCaseSensitive(i_obj, i_key);
   if (item == NULL || !cJSON_IsNumber(item)) {
-    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", key);
+    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", i_key);
     return 0;
   }
 
-  *out = (int)cJSON_GetNumberValue(item);
+  *o_out = (int)cJSON_GetNumberValue(item);
   return 1;
 }
 
-static int optional_int(cJSON *obj, const char *key, int *out) {
+/**
+ * @brief Optionally read a numeric field as @c int.
+ *
+ * If @p i_key is absent, returns success without writing @p o_out (the
+ * caller must have initialised the destination).
+ *
+ * @param[in]  i_obj Parent object.
+ * @param[in]  i_key Field name.
+ * @param[out] o_out Receives the value when the key is present.
+ * @return 1 on success (missing or valid), 0 if present but not a number.
+ */
+static int optional_int(cJSON *i_obj, const char *i_key, int *o_out) {
   cJSON *item;
 
-  item = cJSON_GetObjectItemCaseSensitive(obj, key);
+  item = cJSON_GetObjectItemCaseSensitive(i_obj, i_key);
   if (item == NULL) {
     return 1;
   }
 
   if (!cJSON_IsNumber(item)) {
-    fprintf(stderr, "JSON config: invalid number '%s'\n", key);
+    fprintf(stderr, "JSON config: invalid number '%s'\n", i_key);
     return 0;
   }
 
-  *out = (int)cJSON_GetNumberValue(item);
+  *o_out = (int)cJSON_GetNumberValue(item);
   return 1;
 }
 
-static int require_double(cJSON *obj, const char *key, double *out) {
+/**
+ * @brief Require a numeric field and store it as @c double.
+ * @param[in]  i_obj Parent object.
+ * @param[in]  i_key Field name.
+ * @param[out] o_out Receives the value.
+ * @return 1 on success, 0 on missing/invalid field.
+ */
+static int require_double(cJSON *i_obj, const char *i_key, double *o_out) {
   cJSON *item;
 
-  item = cJSON_GetObjectItemCaseSensitive(obj, key);
+  item = cJSON_GetObjectItemCaseSensitive(i_obj, i_key);
   if (item == NULL || !cJSON_IsNumber(item)) {
-    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", key);
+    fprintf(stderr, "JSON config: missing or invalid number '%s'\n", i_key);
     return 0;
   }
 
-  *out = cJSON_GetNumberValue(item);
+  *o_out = cJSON_GetNumberValue(item);
   return 1;
 }
 
-static int copy_int_array(cJSON *array, int **out, size_t *out_len) {
+/**
+ * @brief Copy a non-empty JSON integer array into a new C array.
+ *
+ * @param[in]  i_array   JSON array of numbers.
+ * @param[out] o_out     Receives the allocated array (caller frees).
+ * @param[out] o_out_len Receives the element count.
+ * @return 1 on success, 0 on failure.
+ */
+static int copy_int_array(cJSON *i_array, int **o_out, size_t *o_out_len) {
   int i, count;
   cJSON *item;
 
-  if (!cJSON_IsArray(array)) {
+  if (!cJSON_IsArray(i_array)) {
     fprintf(stderr, "JSON config: expected integer array\n");
     return 0;
   }
 
-  count = cJSON_GetArraySize(array);
+  count = cJSON_GetArraySize(i_array);
   if (count == 0) {
     fprintf(stderr, "JSON config: integer array cannot be empty\n");
     return 0;
   }
 
-  *out = malloc((size_t)count * sizeof(int));
-  if (*out == NULL) {
+  *o_out = malloc((size_t)count * sizeof(int));
+  if (*o_out == NULL) {
     fprintf(stderr, "JSON config: memory allocation failed\n");
     return 0;
   }
 
   for (i = 0; i < count; i++) {
-    item = cJSON_GetArrayItem(array, i);
+    item = cJSON_GetArrayItem(i_array, i);
     if (item == NULL || !cJSON_IsNumber(item)) {
       fprintf(stderr, "JSON config: invalid integer at array index %d\n", i);
-      free(*out);
-      *out = NULL;
+      free(*o_out);
+      *o_out = NULL;
       return 0;
     }
-    (*out)[i] = (int)cJSON_GetNumberValue(item);
+    (*o_out)[i] = (int)cJSON_GetNumberValue(item);
   }
 
-  *out_len = (size_t)count;
+  *o_out_len = (size_t)count;
   return 1;
 }
 
-static int parse_general(cJSON *general, configuration *config, ext_functions_t *funcs) {
-  if (!require_size_t(general, "Total_Resizes", &config->n_resizes)) {
+/**
+ * @brief Parse the @c general object into global configuration fields.
+ *
+ * Sets @c Total_Resizes / @c Total_Phases and invokes allocation callbacks,
+ * then reads @c SDR, @c ADR, @c Datasize, @c Rigid, and @c Capture_Method.
+ *
+ * @param[in]     i_general JSON @c general object.
+ * @param[in,out] io_config Configuration being filled.
+ * @param[in]     i_funcs   Allocation callbacks.
+ * @return 1 on success, 0 on failure.
+ */
+static int parse_general(cJSON *i_general, configuration *io_config, ext_functions_t *i_funcs) {
+  if (!require_size_t(i_general, "Total_Resizes", &io_config->n_resizes)) {
     return 0;
   }
 
-  config->n_groups = config->n_resizes + 1;
-  funcs->resizes_f(config);
+  io_config->n_groups = io_config->n_resizes + 1;
+  i_funcs->resizes_f(io_config);
 
-  if (!require_size_t(general, "Total_Phases", &config->n_phases)) {
+  if (!require_size_t(i_general, "Total_Phases", &io_config->n_phases)) {
     return 0;
   }
-  funcs->phases_f(config);
+  i_funcs->phases_f(io_config);
 
-  if (!require_size_t(general, "SDR", &config->sdr)) {
+  if (!require_size_t(i_general, "SDR", &io_config->sdr)) {
     return 0;
   }
-  if (!require_size_t(general, "ADR", &config->adr)) {
+  if (!require_size_t(i_general, "ADR", &io_config->adr)) {
     return 0;
   }
-  if (!require_size_t(general, "Datasize", &config->datasize)) {
+  if (!require_size_t(i_general, "Datasize", &io_config->datasize)) {
     return 0;
   }
-  if (!require_int(general, "Rigid", &config->rigid_times)) {
+  if (!require_int(i_general, "Rigid", &io_config->rigid_times)) {
     return 0;
   }
-  if (!require_int(general, "Capture_Method", &config->capture_method)) {
+  if (!require_int(i_general, "Capture_Method", &io_config->capture_method)) {
     return 0;
   }
 
   return 1;
 }
 
-static int parse_stage(cJSON *stage_json, stage_t *stage) {
+/**
+ * @brief Parse one stage object into a ::stage_t.
+ *
+ * Required: @c Stage_Type, @c Stage_Bytes, @c Stage_Time.
+ * Optional: @c Granularity, @c Stage_Time_Capped, @c Stage_Identifier,
+ * @c Stage_Involved_Procs (missing keys leave the field unchanged).
+ *
+ * @param[in]  i_stage_json Stage JSON object.
+ * @param[out] o_stage      Stage structure to fill.
+ * @return 1 on success, 0 on failure.
+ */
+static int parse_stage(cJSON *i_stage_json, stage_t *o_stage) {
   double double_value;
 
-  if (!require_int(stage_json, "Stage_Type", &stage->pt)) {
+  if (!require_int(i_stage_json, "Stage_Type", &o_stage->pt)) {
     return 0;
   }
-  if (!require_int(stage_json, "Stage_Bytes", &stage->bytes)) {
+  if (!require_int(i_stage_json, "Stage_Bytes", &o_stage->bytes)) {
     return 0;
   }
-  if (!require_double(stage_json, "Stage_Time", &double_value)) {
+  if (!require_double(i_stage_json, "Stage_Time", &double_value)) {
     return 0;
   }
-  stage->t_stage = (float)double_value;
+  o_stage->t_stage = (float)double_value;
 
-  if (!optional_int(stage_json, "Granularity", &stage->granularity)) {
+  if (!optional_int(i_stage_json, "Granularity", &o_stage->granularity)) {
     return 0;
   }
-  if (!optional_int(stage_json, "Stage_Time_Capped", &stage->t_capped)) {
+  if (!optional_int(i_stage_json, "Stage_Time_Capped", &o_stage->t_capped)) {
     return 0;
   }
-  if (!optional_int(stage_json, "Stage_Identifier", &stage->id)) {
+  if (!optional_int(i_stage_json, "Stage_Identifier", &o_stage->id)) {
     return 0;
   }
-  if (!optional_int(stage_json, "Stage_Involved_Procs", &stage->involved_procs)) {
+  if (!optional_int(i_stage_json, "Stage_Involved_Procs", &o_stage->involved_procs)) {
     return 0;
   }
 
   return 1;
 }
 
-static int parse_phases(cJSON *phases, configuration *config, ext_functions_t *funcs) {
+/**
+ * @brief Parse the @c phases array into @p io_config.
+ *
+ * Array length must equal @c n_phases. For each phase, allocates stages via
+ * @p i_funcs and parses nested @c stages.
+ *
+ * @param[in]     i_phases  JSON phases array.
+ * @param[in,out] io_config Configuration being filled.
+ * @param[in]     i_funcs   Allocation callbacks.
+ * @return 1 on success, 0 on failure.
+ */
+static int parse_phases(cJSON *i_phases, configuration *io_config, ext_functions_t *i_funcs) {
   int phase_index, stage_index, phase_count, stage_count;
   cJSON *phase_json, *stages_json, *stage_json;
   phase_t *phase;
 
-  if (!cJSON_IsArray(phases)) {
+  if (!cJSON_IsArray(i_phases)) {
     fprintf(stderr, "JSON config: 'phases' must be an array\n");
     return 0;
   }
 
-  phase_count = cJSON_GetArraySize(phases);
-  if ((size_t)phase_count != config->n_phases) {
-    fprintf(stderr, "JSON config: expected %zu phases, found %d\n", config->n_phases, phase_count);
+  phase_count = cJSON_GetArraySize(i_phases);
+  if ((size_t)phase_count != io_config->n_phases) {
+    fprintf(stderr, "JSON config: expected %zu phases, found %d\n", io_config->n_phases, phase_count);
     return 0;
   }
 
   for (phase_index = 0; phase_index < phase_count; phase_index++) {
-    phase_json = cJSON_GetArrayItem(phases, phase_index);
+    phase_json = cJSON_GetArrayItem(i_phases, phase_index);
     if (phase_json == NULL || !cJSON_IsObject(phase_json)) {
       fprintf(stderr, "JSON config: invalid phase at index %d\n", phase_index);
       return 0;
     }
 
-    phase = config->phases + phase_index;
+    phase = io_config->phases + phase_index;
     if (!require_size_t(phase_json, "Total_Iters", &phase->qty_iters)) {
       return 0;
     }
@@ -294,7 +391,7 @@ static int parse_phases(cJSON *phases, configuration *config, ext_functions_t *f
       return 0;
     }
 
-    funcs->stages_f(config, (size_t)phase_index);
+    i_funcs->stages_f(io_config, (size_t)phase_index);
 
     stages_json = require_child(phase_json, "stages", 1);
     if (stages_json == NULL) {
@@ -325,32 +422,42 @@ static int parse_phases(cJSON *phases, configuration *config, ext_functions_t *f
   return 1;
 }
 
-static int parse_groups(cJSON *groups, configuration *config) {
+/**
+ * @brief Parse the @c groups array into @p io_config.
+ *
+ * Array length must equal @c n_groups. Reads process counts, spawn/redistribution
+ * methods and strategies, and physical distribution (@c compact / @c spread).
+ *
+ * @param[in]     i_groups  JSON groups array.
+ * @param[in,out] io_config Configuration being filled.
+ * @return 1 on success, 0 on failure.
+ */
+static int parse_groups(cJSON *i_groups, configuration *io_config) {
   int group_index, group_count;
   cJSON *group_json, *strategy_json;
   group_config_t *group;
   const char *dist_value;
   double factor_value;
 
-  if (!cJSON_IsArray(groups)) {
+  if (!cJSON_IsArray(i_groups)) {
     fprintf(stderr, "JSON config: 'groups' must be an array\n");
     return 0;
   }
 
-  group_count = cJSON_GetArraySize(groups);
-  if ((size_t)group_count != config->n_groups) {
-    fprintf(stderr, "JSON config: expected %zu groups, found %d\n", config->n_groups, group_count);
+  group_count = cJSON_GetArraySize(i_groups);
+  if ((size_t)group_count != io_config->n_groups) {
+    fprintf(stderr, "JSON config: expected %zu groups, found %d\n", io_config->n_groups, group_count);
     return 0;
   }
 
   for (group_index = 0; group_index < group_count; group_index++) {
-    group_json = cJSON_GetArrayItem(groups, group_index);
+    group_json = cJSON_GetArrayItem(i_groups, group_index);
     if (group_json == NULL || !cJSON_IsObject(group_json)) {
       fprintf(stderr, "JSON config: invalid group at index %d\n", group_index);
       return 0;
     }
 
-    group = config->groups + group_index;
+    group = io_config->groups + group_index;
     if (!require_int(group_json, "Iters", &group->iters)) {
       return 0;
     }
@@ -399,7 +506,7 @@ static int parse_groups(cJSON *groups, configuration *config) {
   return 1;
 }
 
-configuration *read_json_file(char *file_name, ext_functions_t init_functions) {
+configuration *read_json_file(char *i_file_name, ext_functions_t i_init_functions) {
   configuration *config;
   char *file_contents;
   long file_length;
@@ -425,9 +532,9 @@ configuration *read_json_file(char *file_name, ext_functions_t init_functions) {
   config->groups = NULL;
   config->phases = NULL;
 
-  file_contents = read_file_contents(file_name, &file_length);
+  file_contents = read_file_contents(i_file_name, &file_length);
   if (file_contents == NULL) {
-    printf("Can't load '%s'\n", file_name);
+    printf("Can't load '%s'\n", i_file_name);
     free(config);
     return NULL;
   }
@@ -439,7 +546,7 @@ configuration *read_json_file(char *file_name, ext_functions_t init_functions) {
     if (error_ptr != NULL) {
       fprintf(stderr, "JSON parse error before: %s\n", error_ptr);
     }
-    printf("Can't parse '%s'\n", file_name);
+    printf("Can't parse '%s'\n", i_file_name);
     free(config);
     return NULL;
   }
@@ -448,8 +555,8 @@ configuration *read_json_file(char *file_name, ext_functions_t init_functions) {
   phases = require_child(root, "phases", 1);
   groups = require_child(root, "groups", 1);
   if (general == NULL || phases == NULL || groups == NULL ||
-      !parse_general(general, config, &init_functions) ||
-      !parse_phases(phases, config, &init_functions) ||
+      !parse_general(general, config, &i_init_functions) ||
+      !parse_phases(phases, config, &i_init_functions) ||
       !parse_groups(groups, config)) {
     cJSON_Delete(root);
     free_config_partial(config);
