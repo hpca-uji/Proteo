@@ -8,20 +8,89 @@
 #include "MAM_RMS.h"
 #include "MAM_DataStructures.h"
 
+/**
+ * @file MAM_RMS.c
+ * @brief Implementation of physical resource (node/CPU) discovery for MaM.
+ *
+ * Discovers the current node list and per-node CPU counts, preferring the
+ * SLURM API when available, falling back to SLURM ENV variables, and
+ * finally to direct MPI-based discovery when SLURM is not available.
+ */
+
 #define MAM_HASH_KEY 21787
 
 #if MAM_USE_SLURM
 #include <slurm/slurm.h>
-int MAM_I_slurm_getenv_hosts_info();
-int MAM_I_slurm_getjob_hosts_info();
-void MAM_I_slurm_get_assigned_cpus();
+/**
+ * @brief Discover the current resource allocation using SLURM ENV variables.
+ *
+ * Obtains the node names and each process' physical placement using SLURM
+ * environment variables.
+ *
+ * @return 0 on success; non-zero if a required SLURM ENV variable is missing.
+ */
+int MAM_I_slurm_getenv_hosts_info(void);
+
+/**
+ * @brief Discover the current resource allocation using the SLURM API.
+ *
+ * Obtains the node names and each process' physical placement using the
+ * SLURM API.
+ *
+ * @return 0 on success; non-zero SLURM error code otherwise.
+ */
+int MAM_I_slurm_getjob_hosts_info(void);
+
+/**
+ * @brief Determine, per node, how many of this job's processes reside there.
+ *
+ * Determines where each process is located and fills the assigned CPUs
+ * vectors accordingly.
+ */
+void MAM_I_slurm_get_assigned_cpus(void);
 #endif
 
-int MAM_I_get_hosts_info();
-int GetCPUCount();
-unsigned long long hash64(const void *buf, size_t len, unsigned long long key);
+/**
+ * @brief Discover the current resource allocation via direct MPI communication.
+ *
+ * Obtains the total number of processes per node available to the
+ * application. It computes where all current processes are located and how
+ * many cores each node has. Used when SLURM is not an option; the idea is
+ * that the total number of processes may change without the total
+ * resources changing.
+ *
+ * @return 0 always.
+ *
+ * @note FIXME: Always returns 0... -- Perform error checking?
+ */
+int MAM_I_get_hosts_info(void);
 
-void MAM_check_hosts() {
+/**
+ * @brief Get the total number of CPUs available to the calling process.
+ * @return The total number of CPUs available to the process.
+ */
+int GetCPUCount(void);
+
+/**
+ * @brief Compute a 64-bit hash over a memory buffer.
+ *
+ * @param[in] i_buf Buffer whose bytes will be hashed.
+ * @param[in] i_len Length in bytes of @p i_buf.
+ * @param[in] i_key Seed key mixed into the hash.
+ * @return The resulting 64-bit hash value.
+ */
+unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_key);
+
+/**
+ * @brief Discover the node list and per-node CPU counts into ::mall fields.
+ *
+ * Checks the current resources (nodes) accessible to the application. It
+ * prefers the SLURM API when available. SLURM ENV variables only work for
+ * the first reconfiguration, since the total resources do not change, only
+ * the total number of processes. If SLURM is not available, the processes
+ * communicate with each other to discover which host they are running on.
+ */
+void MAM_check_hosts(void) {
   int not_filled = 1;
   
   #if MAM_USE_SLURM
@@ -72,17 +141,17 @@ void MAM_check_hosts() {
   #endif
 }
 
-/*
- * @brief Get if a group of processes uses an internode comunicator
+/**
+ * @brief Report whether the current job spans more than one node for at least one of their MPI_COMM_WORLD.
  *
- * This function checks the physical distribution of all ranks in the
- * original communicator passed to MaM. If all of them reside in the
- * same host, false is returned. True is returned otherwise.
+ * Checks the physical distribution of all ranks in the original
+ * communicator passed to MaM. If all of them reside on the same host,
+ * false is returned. True is returned otherwise.
  *
- * @return Integer indicating if more than one node is used by the
- * original communicator (>0) or only one (0).
+ * @return Non-zero indicating that more than one node is used by the
+ * original communicator, 0 if only one node is used.
  */
-int MAM_Is_internode_group() {
+int MAM_Is_internode_group(void) {
   int i, name_len, max_name_len, unique_count;
   int myId, numP;
   char *my_host, *all_hosts, *tested_host;
@@ -103,7 +172,7 @@ int MAM_Is_internode_group() {
   if(myId == MAM_ROOT) {
     all_hosts = (char *) malloc(numP * max_name_len * sizeof(char));
   }
-  //FIXME Should be a Gatherv as each host could have unitialised chars between name_len and max_name_len
+  // FIXME: Should be a Gatherv as each host could have unitialised chars between name_len and max_name_len
   MPI_Gather(my_host, max_name_len, MPI_CHAR, all_hosts, max_name_len, MPI_CHAR, MAM_ROOT, mall->original_comm);
 
   if(myId == MAM_ROOT) {
@@ -121,11 +190,20 @@ int MAM_Is_internode_group() {
   return unique_count;
 }
 
-/*
- * TODO
- * FIXME Always returns 0... -- Perform error checking?
+/**
+ * @brief Discover the current resource allocation via direct MPI communication.
+ *
+ * Obtains the total number of processes per node available to the
+ * application. It computes where all current processes are located and how
+ * many cores each node has. Used when SLURM is not an option; the idea is
+ * that the total number of processes may change without the total
+ * resources changing.
+ *
+ * @return 0 always.
+ *
+ * @note FIXME: Always returns 0... -- Perform error checking?
  */
-int MAM_I_get_hosts_info() {
+int MAM_I_get_hosts_info(void) {
   int i, j, name_len, max_name_len, unique_count, *unique_hosts;
   int hash, *procs_hashes, *hashes;
   int detected_cpus, *procs_cpus;
@@ -224,7 +302,7 @@ int MAM_I_get_hosts_info() {
   return 0;
 }
 
-/*
+/**
  * @brief Get the total number of CPUs available to the process.
  *
  * This function uses sched_getaffinity to obtain the CPU affinity of the current process
@@ -236,7 +314,7 @@ int MAM_I_get_hosts_info() {
  * Code obtained from: https://stackoverflow.com/questions/4586405/how-to-get-the-number-of-cpus-in-linux-using-c
  * The code has been slightly modified.
  */
-int GetCPUCount() {
+int GetCPUCount(void) {
   cpu_set_t cs;
   CPU_ZERO(&cs);
   sched_getaffinity(0, sizeof(cs), &cs);
@@ -254,14 +332,21 @@ int GetCPUCount() {
   return count;
 }
 
-/*
+/**
+ * @brief Compute a 64-bit hash over a memory buffer.
+ *
  * Hash function extracted from:
  * https://www.reddit.com/r/C_Programming/comments/i1oj5w/hash_functions/
+ *
+ * @param[in] i_buf Buffer whose bytes will be hashed.
+ * @param[in] i_len Length in bytes of @p i_buf.
+ * @param[in] i_key Seed key mixed into the hash.
+ * @return The resulting 64-bit hash value.
  */
-unsigned long long hash64(const void *buf, size_t len, unsigned long long key) {
-    unsigned long long h = key;
-    const unsigned char *p = buf;
-    for (size_t i = 0; i < len; i++) {
+unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_key) {
+    unsigned long long h = i_key;
+    const unsigned char *p = i_buf;
+    for (size_t i = 0; i < i_len; i++) {
         h ^= p[i];
         h *= 0xaea8d4541a5831df;
     }
@@ -274,10 +359,15 @@ unsigned long long hash64(const void *buf, size_t len, unsigned long long key) {
 }
 
 #if MAM_USE_SLURM
-/*
- * TODO
+/**
+ * @brief Discover the current resource allocation using SLURM ENV variables.
+ *
+ * Obtains the node names and each process' physical placement using SLURM
+ * environment variables.
+ *
+ * @return 0 on success; non-zero if a required SLURM ENV variable is missing.
  */
-int MAM_I_slurm_getenv_hosts_info() {
+int MAM_I_slurm_getenv_hosts_info(void) {
   char *tmp = NULL, *tmp_copy, *token;
   int cpus, count, i, j;
   //int i, *cpus_counts, *nodes_counts, *aux;
@@ -331,10 +421,15 @@ int MAM_I_slurm_getenv_hosts_info() {
   return 0;
 }
 
-/*
- * TODO
+/**
+ * @brief Discover the current resource allocation using the SLURM API.
+ *
+ * Obtains the node names and each process' physical placement using the
+ * SLURM API.
+ *
+ * @return 0 on success; non-zero SLURM error code otherwise.
  */
-int MAM_I_slurm_getjob_hosts_info() {
+int MAM_I_slurm_getjob_hosts_info(void) {
   int jobId, err;
   size_t i, j, t;
   char *tmp = NULL;
@@ -345,7 +440,7 @@ int MAM_I_slurm_getjob_hosts_info() {
   if(tmp == NULL) return 1;
   jobId = atoi(tmp);
 
-  err = slurm_load_job(&j_info, jobId, 1); // FIXME Valgrind Not freed
+  err = slurm_load_job(&j_info, jobId, 1); // FIXME: Valgrind Not freed
   if(err) return err;
   err = slurm_allocation_lookup(jobId, &alloc_msg);
   if(err) { return err; }
@@ -373,10 +468,13 @@ int MAM_I_slurm_getjob_hosts_info() {
   return 0;
 }
 
-/*
- * TODO
+/**
+ * @brief Determine, per node, how many of this job's processes reside there.
+ *
+ * Determines where each process is located and fills the assigned CPUs
+ * vectors accordingly.
  */
-void MAM_I_slurm_get_assigned_cpus() {
+void MAM_I_slurm_get_assigned_cpus(void) {
   int host_len, hash, *hashes, *procs_hashes;
   int i, j;
   char *my_host, *host;
