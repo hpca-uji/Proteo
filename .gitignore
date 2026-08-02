@@ -14,6 +14,10 @@
 /Codes/MaM/build
 /Codes/SAM/build
 
+#Ignore generated Doxygen HTML
+/Codes/MaM/docs/
+/Codes/SAM/docs/
+
 #Ignore Results files
 /Results/**/
 

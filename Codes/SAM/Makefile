@@ -31,7 +31,7 @@ OBJ = $(C_FILES:%.c=$(BUILD_DIR)/%.o)
 DEP = $(OBJ:%.o=%.d)
 
 # BASIC RULES
-.PHONY : clean clear install
+.PHONY : clean clear install docs docs-clean
 
 all: install
 
@@ -39,6 +39,12 @@ clean:
 	-rm $(BUILD_DIR)/$(BIN) $(BUILD_DIR)/$(CONFIG) $(OBJ) $(DEP)
 clear:
 	-rm -rf $(BUILD_DIR)
+
+docs:
+	doxygen Doxyfile
+
+docs-clean:
+	-rm -rf docs
 
 install: $(BIN) $(CONFIG)
 	echo "Done"

@@ -46,6 +46,14 @@ The following requisites are optional and only needed to process and analyse the
 
     This command compiles the code using the MPI (MPICH) library.
 
+    Optional: generate API HTML with [Doxygen](https://www.doxygen.nl/) (`doxygen` must be installed):
+
+    ```bash
+    $ make docs
+    ```
+
+    Then open `Codes/MaM/docs/html/index.html` and `Codes/SAM/docs/html/index.html`. Remove generated output with `make docs-clean`.
+
 3. Test the installation:
     ```bash
     $ cd ../Results

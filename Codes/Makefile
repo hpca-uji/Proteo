@@ -9,7 +9,8 @@ PROTEO_HOME := $(shell realpath -z $$(echo "$$(pwd)/..") | tr -d '\0')
 BUILD_DIR = ./build
 
 # BASIC RULES
-.PHONY : all install sam mam clean sam_clean mam_clean clear sam_clear mam_clear
+.PHONY : all install sam mam clean sam_clean mam_clean clear sam_clear mam_clear \
+	docs docs-clean sam_docs mam_docs sam_docs_clean mam_docs_clean
 
 all: install
 
@@ -55,4 +56,17 @@ mam_clear:
 	$(MAKE) -C MaM clear
 clear: sam_clear mam_clear
 	-rm -rf $(BUILD_DIR)
+
+# Doxygen HTML docs (not part of install)
+mam_docs:
+	$(MAKE) -C MaM docs
+sam_docs:
+	$(MAKE) -C SAM docs
+docs: mam_docs sam_docs
+
+mam_docs_clean:
+	$(MAKE) -C MaM docs-clean
+sam_docs_clean:
+	$(MAKE) -C SAM docs-clean
+docs-clean: mam_docs_clean sam_docs_clean
 
