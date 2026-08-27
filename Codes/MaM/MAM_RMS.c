@@ -4,9 +4,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sched.h>
+#include <math.h>
 #include <mpi.h>
 #include "MAM_RMS.h"
 #include "MAM_DataStructures.h"
+
+#define BINBASH "#!/bin/bash"
 
 /**
  * @file MAM_RMS.c
@@ -21,6 +24,8 @@
 
 #if MAM_USE_SLURM
 #include <slurm/slurm.h>
+//Next function should be in the slurm.h, but is instead in src/common/slurm_protocol_defs.h
+extern void slurm_free_will_run_response_msg(will_run_response_msg_t *msg);
 /**
  * @brief Discover the current resource allocation using SLURM ENV variables.
  *
@@ -39,7 +44,7 @@ int MAM_I_slurm_getenv_hosts_info(void);
  *
  * @return 0 on success; non-zero SLURM error code otherwise.
  */
-int MAM_I_slurm_getjob_hosts_info(void);
+int MAM_I_slurm_getjob_hosts_info(int jobId, int update);
 
 /**
  * @brief Determine, per node, how many of this job's processes reside there.
@@ -48,6 +53,14 @@ int MAM_I_slurm_getjob_hosts_info(void);
  * vectors accordingly.
  */
 void MAM_I_slurm_get_assigned_cpus(void);
+
+static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *service_name);
+
+int MAM_I_slurm_request_job(job_desc_msg_t *job_desc_msg, int *new_job_id);
+
+int MAM_I_slurm_prepare_job(int new_nodes, job_desc_msg_t *job_desc_msg);
+
+int MAM_I_slurm_check_job_status(int new_job_id);
 #endif
 
 /**
@@ -81,6 +94,9 @@ int GetCPUCount(void);
  */
 unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_key);
 
+void MAM_I_generate_service_name(char **service_name);
+void MAM_I_realloc_RMS_arrays(void);
+
 /**
  * @brief Discover the node list and per-node CPU counts into ::mall fields.
  *
@@ -92,19 +108,25 @@ unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_
  */
 void MAM_check_hosts(void) {
   int not_filled = 1;
+  int update = 0;
   
   #if MAM_USE_SLURM
-    not_filled = MAM_I_slurm_getjob_hosts_info();
+    char *tmp = NULL;
+    tmp = getenv("SLURM_JOB_ID");
+    if(tmp == NULL) return 1;
+    int jobId = atoi(tmp);
+
+    not_filled = MAM_I_slurm_getjob_hosts_info(jobId, update);
     if(not_filled) {
       #if MAM_DEBUG >= 2
         DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
       #endif
       if(mall->nodelist != NULL) {
         free(mall->nodelist);
-	mall->nodelist = NULL;
+	      mall->nodelist = NULL;
       }
 
-      not_filled = MAM_I_slurm_getenv_hosts_info();
+      not_filled = MAM_I_slurm_getenv_hosts_info(jobId);
     }
   #endif
   if(not_filled) {
@@ -134,6 +156,88 @@ void MAM_check_hosts(void) {
       printf("]\nASSSIGNED_CPUS: [");
       for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
         printf("%d ", mall->assigned_cpus[i_debug]);
+      }
+      printf("]\n");
+      fflush(stdout); 
+    }
+  #endif
+}
+
+// TODO: Does not consider how to ask for heterogeneous nodes (Diff number of cores per node)
+// MAM_DENIED if error, MAM_RMS_JOB_PENDING/MAM_RMS_JOB_STARTED if accepted, MAM_RMS_JOB_DENIED otherwise
+int MAM_Request_job(void) {
+  int i, sum, new_nodes, res;
+
+  // Check if more cpus are required
+  for(i = 0; i < mall->num_nodes; i++) { sum += mall->max_cpus[i]; }
+  new_nodes = ceil((mall->numC - sum) / mall->max_cpus[i]);
+  if(new_nodes <= 0) { return MAM_I_RMS_COMPLETED; }
+
+  //TODO: ADD Bcast to ensure all ranks know res
+#if MAM_USE_SLURM
+  job_desc_msg_t *job_desc_msg = malloc(sizeof *job_desc_msg); 
+  res = MAM_I_slurm_prepare_job(new_nodes, job_desc_msg);
+  if (res == MAM_OK) {
+    res = (MAM_I_slurm_request_job(job_desc_msg, &(mall->new_job_id)) == MAM_OK ? MAM_I_RMS_PENDING : MAM_DENIED);
+  }
+
+  free(job_desc_msg);
+#else
+  res = MAM_I_RMS_COMPLETED; // Without an RMS cannot ask for more resources
+#endif
+
+  return res;
+}
+
+// Check if new job is available
+int MAM_Check_pending_job(void) {
+  int res = MAM_DENIED; // Without an RMS cannot ask for more resources
+
+  //TODO: ADD Bcast to ensure all ranks know res
+#if MAM_USE_SLURM
+  res = MAM_I_slurm_check_job_status(mall->new_job_id); //TODO: Save on mall
+#endif
+  if (res == MAM_I_RMS_COMPLETED) { mall->num_expands += 1; }
+  return res;
+}
+
+void MAM_check_new_hosts(void) {
+  int not_filled = 1;
+  int update = 1;
+
+  if(mall->new_job_id == MAM_DENIED ) { return; }
+  
+  #if MAM_USE_SLURM
+
+    not_filled = MAM_I_slurm_getjob_hosts_info(mall->new_job_id, update);
+    if(not_filled) {
+      #if MAM_DEBUG >= 2
+        DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
+      #endif
+    }
+  #endif
+
+  if(not_filled) {
+    if(mall->myId == mall->root) printf("MAM FATAL ERROR: It has not been possible to update the nodelist\n");
+    fflush(stdout);
+    MPI_Abort(mall->comm, -50);
+  }
+
+  #if MAM_DEBUG >= 2
+    if(mall->myId == mall->root) {
+      DEBUG_FUNC("Obtained Nodelist", mall->myId, mall->numP); 
+      printf("NODELIST: %s\nNODE_COUNT: %d\n", mall->nodelist, mall->num_nodes);
+      printf("MAX_CPUS:       [");
+      for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
+        printf("%d ", mall->max_cpus[i_debug]);
+      }
+      printf("]\nASSSIGNED_CPUS: [");
+      for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
+        printf("%d ", mall->assigned_cpus[i_debug]);
+      }
+      printf("]\nSPAWNED_CPUS: [");
+      for(int i_debug=0; i_debug < mall->num_nodes; i_debug++) {
+        printf("%d ", mall->spawned_cpus[i_debug]);
       }
       printf("]\n");
       fflush(stdout); 
@@ -358,6 +462,58 @@ unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_
     return h;
 }
 
+void MAM_I_generate_service_name(char **service_name) {
+  int jid_count = 1;
+  int exp_count = 1;
+  int total;
+  int jid = 0;
+  char *name = NULL;
+
+  char *constant_name = "MAM_Expansion_J";
+  int constant_count = strlen(constant_name) + 2; //Addition of '_' and '\0'
+  exp_count = snprintf(NULL, 0, "%s", mall->num_expands);
+
+#if MAM_USE_SLURM
+  char *tmp = getenv("SLURM_JOB_ID");
+  if(tmp == NULL) return;
+  jobId = atoi(tmp);
+  jid_count = snprintf(NULL, 0, "%s", jid);
+#endif
+
+  total = jid_count + exp_count + constant_count;
+  name = malloc(total * sizeof *name);
+  snprintf(name, 0, "MAM_Expansion_J%d_%d", jid, mall->num_expands);
+
+  if(name != NULL) { *service_name = name; }
+}
+
+void MAM_I_realloc_RMS_arrays(void) {
+  char *nodelist_aux = NULL;
+  int *max_cpus_aux = NULL;
+  int *assigned_cpus_aux = NULL;
+  int *spawned_cpus_aux = NULL;
+
+  max_cpus_aux = realloc(mall->max_cpus, mall->num_nodes * sizeof *mall->max_cpus);
+  assigned_cpus_aux = realloc(mall->assigned_cpus, mall->num_nodes * sizeof *mall->assigned_cpus);
+  spawned_cpus_aux = realloc(mall->spawned_cpus, mall->num_nodes * sizeof *mall->spawned_cpus);
+  nodelist_aux = realloc(mall->nodelist, mall->nodelist_len * sizeof *mall->nodelist);
+
+  if(max_cpus_aux == NULL || assigned_cpus_aux == NULL || spawned_cpus_aux == NULL || nodelist_aux == NULL) {
+    fprintf(stderr, "Fatal error - The new allocation update has to reallocate memory\n");
+    MPI_Abort(MPI_COMM_WORLD, -50);
+  }
+
+  if(mall->max_cpus != max_cpus_aux && mall->max_cpus != NULL) free(mall->max_cpus);
+  if(mall->assigned_cpus != assigned_cpus_aux && mall->assigned_cpus != NULL) free(mall->assigned_cpus);
+  if(mall->spawned_cpus != spawned_cpus_aux && mall->spawned_cpus != NULL) free(mall->spawned_cpus);
+  if(mall->nodelist != nodelist_aux && mall->nodelist != NULL) free(mall->nodelist);
+
+  mall->max_cpus = max_cpus_aux;
+  mall->assigned_cpus = assigned_cpus_aux;
+  mall->spawned_cpus = spawned_cpus_aux;
+  mall->nodelist = nodelist_aux;
+}
+
 #if MAM_USE_SLURM
 /**
  * @brief Discover the current resource allocation using SLURM ENV variables.
@@ -429,27 +585,43 @@ int MAM_I_slurm_getenv_hosts_info(void) {
  *
  * @return 0 on success; non-zero SLURM error code otherwise.
  */
-int MAM_I_slurm_getjob_hosts_info(void) {
+int MAM_I_slurm_getjob_hosts_info(int jobId, int update) {
   int jobId, err;
+  char *nodelist_aux = NULL;
+  int *max_cpus_aux = NULL;
+  size_t prev_nodes, prev_nodelist_len;
   size_t i, j, t;
-  char *tmp = NULL;
   job_info_msg_t *j_info;
   resource_allocation_response_msg_t *alloc_msg;
-
-  tmp = getenv("SLURM_JOB_ID");
-  if(tmp == NULL) return 1;
-  jobId = atoi(tmp);
 
   err = slurm_load_job(&j_info, jobId, 1); // FIXME: Valgrind Not freed
   if(err) return err;
   err = slurm_allocation_lookup(jobId, &alloc_msg);
   if(err) { return err; }
 
-  mall->num_nodes = alloc_msg->node_cnt;
-  if(NULL != mall->max_cpus) { free(mall->max_cpus); }
-  mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
+  prev_nodes = mall->num_nodes;
+  mall->num_nodes += alloc_msg->node_cnt;
+  prev_nodelist_len = mall->nodelist_len;
+  mall->nodelist_len += strlen(alloc_msg->node_list)+1;
 
-  t = 0;
+  if(!update) { 
+    if(NULL != mall->max_cpus) { 
+      free(mall->max_cpus);
+    }
+    mall->max_cpus = malloc(mall->num_nodes * sizeof *mall->max_cpus);
+    mall->nodelist = malloc(mall->nodelist_len * sizeof *mall->nodelist); 
+    strcpy(mall->nodelist, alloc_msg->node_list);
+
+    MAM_I_slurm_get_assigned_cpus();
+  } else {
+    MAM_I_realloc_RMS_arrays();
+
+    mall->nodelist[prev_nodelist_len] = ',';
+    mall->nodelist[prev_nodelist_len+1] = '\0';
+    strcat(mall->nodelist, alloc_msg->node_list);
+  }
+
+  t = prev_nodes;
   for(i = 0; i < alloc_msg->num_cpu_groups; i++) {
     for(j = 0; j < alloc_msg->cpu_count_reps[i]; j++) {
       mall->max_cpus[t] = alloc_msg->cpus_per_node[i];
@@ -457,11 +629,11 @@ int MAM_I_slurm_getjob_hosts_info(void) {
     }
   }
 
-  mall->nodelist_len = strlen(alloc_msg->node_list)+1;
-  mall->nodelist = (char *) malloc(mall->nodelist_len * sizeof(char));
-  strcpy(mall->nodelist, alloc_msg->node_list);
-
-  MAM_I_slurm_get_assigned_cpus();
+  if(update) {  //FIXME: It is assumed when creating a new job, all cores spawn at least 1 rank
+    for(t = prev_nodes; t < mall->num_nodes ; t++) {
+      mall->spawned_cpus[t] = mall->max_cpus[t];
+    }
+  }
 
   slurm_free_job_info_msg(j_info);
   slurm_free_resource_allocation_response_msg(alloc_msg);
@@ -519,4 +691,166 @@ void MAM_I_slurm_get_assigned_cpus(void) {
   free(my_host);
   free(procs_hashes);
 }
+
+// TODO: Does not consider how to ask for heterogeneous nodes (Diff number of cores per node)
+// MAM_DENIED if error, MAM_RMS_JOB_PENDING/MAM_RMS_JOB_STARTED if accepted, MAM_RMS_JOB_DENIED otherwise
+int MAM_I_slurm_prepare_job(int new_nodes, job_desc_msg_t *job_desc_msg) {
+  int err, jobId, count;
+  char *tmp = NULL;
+  job_info_msg_t *prev_j_info;
+  slurm_job_info_t *prev_j_chars;
+  resource_allocation_response_msg_t *prev_alloc;
+
+  // Get data from this job
+  tmp = getenv("SLURM_JOB_ID");
+  if(tmp == NULL) return 1;
+  jobId = atoi(tmp);
+  err = slurm_load_job(&prev_j_info, jobId, 1); // FIXME: Valgrind Not freed
+  if(err) { return err; }
+  prev_j_chars = prev_j_info->job_array[prev_j_info->record_count - 1];
+  err = slurm_allocation_lookup(jobId, &prev_alloc);
+  if(err) { return err; }
+  
+  // Populate new job characteristics
+  slurm_init_job_desc_msg(job_desc_msg);
+
+  job_desc_msg->name = strdup("MAM_Expansion_JX_Y"); //TODO: Set a name
+  job_desc_msg->user_id = prev_alloc->uid;
+  job_desc_msg->group_id = prev_alloc->gid;
+  job_desc_msg->work_dir = prev_j_chars->work_dir;
+  job_desc_msg->partition = prev_alloc->partition;
+  job_desc_msg->shared = prev_alloc->shared;
+  job_desc_msg->min_nodes = new_nodes;
+  job_desc_msg->max_nodes = new_nodes;
+  job_desc_msg->end_time = prev_j_chars->end_time;
+  job_desc_msg->time_limit = prev_j_chars->time_limit;
+
+  // Set the script to execute the new job
+  count = strlen(BINBASH) + strlen(MAM_EXEC_SCRIPT) + 5;
+  job_desc_msg->script = malloc(count * sizeof(char));
+  snprintf(job_desc_msg->script, count, "%s\n./%s\n", BINBASH, MAM_EXEC_SCRIPT);
+
+  job_desc_msg->argc = 1;
+  job_desc_msg->argv = malloc(job_desc_msg->argc * sizeof *job_desc_msg->argv);
+  count = strlen(job_desc_msg->work_dir) + strlen(MAM_EXEC_SCRIPT) + 2;
+  job_desc_msg->argv[0] = malloc(count * sizeof(char));
+  snprintf(job_desc_msg->argv[0], count, "%s/%s", job_desc_msg->work_dir, MAM_EXEC_SCRIPT);
+
+  //Job environments may not be in the previous one. Copy manually
+  MAM_I_generate_service_name(&(mall->service_name));
+  if (MAM_I_slurm_copy_environ(job_desc_msg, mall->service_name) != MAM_OK) {
+    fprintf(stderr, "MAM Expand Error: Environment has not been found.\n");
+    free(job_desc_msg);
+    MPI_Abort(mall->comm, 1);
+    exit(1);
+  }
+
+#if MAM_DEBUG > 2
+  printf("Script length = %zu\n", strlen(job_desc_msg->script));
+  printf("----------\n%s\n----------\n", job_desc_msg->script);
+
+  printf("errno = %d\n", errno);
+  printf("env_size = %u\n", job_desc_msg->env_size);
+#endif
+
+  slurm_free_job_info_msg(prev_j_info);
+  slurm_free_resource_allocation_response_msg(prev_alloc);
+
+  return MAM_OK;
+}
+
+//Fills a Slurm job request with current environment plus the service name to connect
+static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *service_name) {
+  int count = 0, count_env, count_service;
+  int i, j;
+
+  if (!environ) { return -1; }
+
+  for (char **e = environ; *e; e++) { count++; }
+  if (port_name != NULL) { count++; }
+
+  job_desc_msg->environment = calloc(count + 1, sizeof(char *));
+  if (!job_desc_msg->environment) { return -1; }
+
+  job_desc_msg->env_size = count;
+  count_env = count - 1;
+  for (i = 0; i < count_env; i++) {
+    job_desc_msg->environment[i] = strdup(environ[i]);
+    if (!job_desc_msg->environment[i]) {
+      for (j = 0; j < i; j++)
+        free(job_desc_msg->environment[j]);
+      free(job_desc_msg->environment);
+      job_desc_msg->environment = NULL;
+      job_desc_msg->env_size = 0;
+      return -1;
+    }
+  }
+
+  if (service_name != NULL) {
+    count_service = strlen(MAM_ENV) + strlen(service_name) + 2;
+    job_desc_msg->environment[i] = malloc(count_service * sizeof(char));
+    snprintf(job_desc_msg->environment[i], count_service, "%s=%s", MAM_ENV, service_name);
+  }
+
+  return MAM_OK;
+}
+
+// Given a new job info, check it could be reasonably run.
+int MAM_I_slurm_request_job(job_desc_msg_t *job_desc_msg, int *new_job_id) {
+  int res = MAM_OK;
+  will_run_response_msg_t *resp = NULL;
+  submit_response_msg_t *res_alloc = NULL;
+
+  int rc = slurm_job_will_run2(&job_desc_msg, &resp);
+  if(rc != SLURM_SUCESS) {
+    // Job cannot run
+#if MAM_DEBUG
+    DEBUG_FUNC("MaM Expand. Job characteristics denied by SLURM", mall->myId, mall->numP);
+    fflush (stdout);
+#endif
+    res = MAM_DENIED;
+  }
+
+  // Deny job if it cannot start before maximum time limit of current
+  if(res != MAM_DENIED && job_desc_msg->end_time < resp->start_time && job_desc_msg->time_limit != INFINITE) { 
+#if MAM_DEBUG
+    DEBUG_FUNC("MaM Expand. Job would have started after current job time limit", mall->myId, mall->numP);
+#endif
+    res = MAM_DENIED;
+  }
+
+  //Launch job
+  if(res != MAM_DENIED) {
+    int rc = slurm_submit_batch_job(job_desc_msg, &res_alloc);
+    if(rc != SLURM_SUCESS) {
+#if MAM_DEBUG
+      DEBUG_FUNC("MaM Expand. Job characteristics denied by SLURM", mall->myId, mall->numP);
+      fflush (stdout);
+#endif
+      res = MAM_DENIED;
+    } else { *new_job_id = res_alloc->job_id; }
+    slurm_free_submit_response_response_msg(res_alloc);
+  }
+
+  return res;
+}
+
+int MAM_I_slurm_check_job_status(int new_job_id) {
+  int err, res = MAM_I_RMS_PENDING;
+  job_info_msg_t *job_info;
+  slurm_job_info_t *job_data;
+
+
+  err = slurm_load_job(&job_info, new_job_id, 1); // FIXME: Valgrind Not freed
+  if(err) { 
+    return MAM_DENIED; 
+  }
+  job_data = job_info->job_array[job_info->record_count - 1];
+
+  if (job_data->job_state == JOB_RUNNING) { res = MAM_I_RMS_COMPLETED; }
+
+  slurm_free_job_info_msg(job_info);
+  return res;
+}
+
 #endif

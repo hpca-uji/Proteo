@@ -123,9 +123,9 @@ enum mam_key_values {
 /** @brief ::MAM_Checkpoint: wait until the spawn/redistribution step completes. */
 #define MAM_WAIT_COMPLETION 1
 
-/** @brief Role flag: source / parent side of a reconfiguration. */
+/** @brief Role flag: source / parent side of a reconfiguration. Logical/Boolean of FALSE. */
 #define MAM_SOURCES 0
-/** @brief Role flag: target side of a reconfiguration. */
+/** @brief Role flag: target side of a reconfiguration. Logical/Boolean of TRUE. */
 #define MAM_TARGETS 1
 
 /** @name Data-registry selectors for ::MAM_Data_add / ::MAM_Data_get_* */

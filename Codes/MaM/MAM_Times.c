@@ -35,9 +35,9 @@ void init_malleability_times(void) {
  */
 void reset_malleability_times(void) {
   malleability_times_t *times = mall_conf->times;
-  times->spawn_start = 0; times->sync_start = 0; times->async_start = 0; times->user_start = 0; times->malleability_start = 0;
+  times->rms_start = 0; times->spawn_start = 0; times->sync_start = 0; times->async_start = 0; times->user_start = 0; times->malleability_start = 0;
   times->sync_end = 0; times->async_end = 0; times->user_end = 0; times->malleability_end = 0;
-  times->spawn_time = 0;
+  times->rms_time = 0; times->spawn_time = 0;
 }
 
 /**
@@ -62,14 +62,16 @@ void free_malleability_times(void) {
 /**
  * @brief Return durations (seconds) from the last completed reconfiguration.
  *
+ * @param[out] o_rms_time  RMS duration (or @c NULL).
  * @param[out] o_sp_time   Spawn duration (or @c NULL).
  * @param[out] o_sy_time   Synchronous redistribution duration (or @c NULL).
  * @param[out] o_asy_time  Asynchronous redistribution duration (or @c NULL).
  * @param[out] o_user_time User-callback phase duration (or @c NULL).
  * @param[out] o_mall_time Whole malleability operation duration (or @c NULL).
  */
-void MAM_Retrieve_times(double *o_sp_time, double *o_sy_time, double *o_asy_time, double *o_user_time, double *o_mall_time) {
+void MAM_Retrieve_times(double *o_rms_time, double *o_sp_time, double *o_sy_time, double *o_asy_time, double *o_user_time, double *o_mall_time) {
   malleability_times_t *times = mall_conf->times;
+  if (o_rms_time != NULL)   *o_rms_time = times->rms_time;
   if (o_sp_time != NULL)   *o_sp_time = times->spawn_time;
   if (o_sy_time != NULL)   *o_sy_time = times->sync_end - times->sync_start;
   if (o_asy_time != NULL)  *o_asy_time = times->async_end - times->async_start;
@@ -98,21 +100,22 @@ void malleability_times_broadcast(int i_root) {
  * @param[out] o_new_type Receives the committed datatype.
  */
 void def_malleability_times(MPI_Datatype *o_new_type) {
-  int i, counts = 5;
+  int i, counts = 6;
   int blocklengths[counts];
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
-  blocklengths[0] = blocklengths[1] = blocklengths[2] = blocklengths[3] = blocklengths[4] = 1;
-  types[0] = types[1] = types[2] = types[3] = types[4] = MPI_DOUBLE;
+  blocklengths[0] = blocklengths[1] = blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = 1;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = MPI_DOUBLE;
 
   MPI_Get_address(mall_conf->times, &dir);
 
-  MPI_Get_address(&(mall_conf->times->spawn_time), &displs[0]);
-  MPI_Get_address(&(mall_conf->times->sync_start), &displs[1]);
-  MPI_Get_address(&(mall_conf->times->async_start), &displs[2]);
-  MPI_Get_address(&(mall_conf->times->user_start), &displs[3]);
-  MPI_Get_address(&(mall_conf->times->malleability_start), &displs[4]);
+  MPI_Get_address(&(mall_conf->times->rms_time), &displs[0]);
+  MPI_Get_address(&(mall_conf->times->spawn_time), &displs[1]);
+  MPI_Get_address(&(mall_conf->times->sync_start), &displs[2]);
+  MPI_Get_address(&(mall_conf->times->async_start), &displs[3]);
+  MPI_Get_address(&(mall_conf->times->user_start), &displs[4]);
+  MPI_Get_address(&(mall_conf->times->malleability_start), &displs[5]);
 
   for (i = 0; i < counts; i++) displs[i] -= dir;
 

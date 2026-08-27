@@ -29,12 +29,16 @@
 enum mam_inner_states {
   MAM_I_UNRESERVED,
   MAM_I_NOT_STARTED,
+  MAM_I_RMS_PENDING,
   MAM_I_RMS_COMPLETED,
   MAM_I_SPAWN_PENDING,
   MAM_I_SPAWN_SINGLE_PENDING,
   MAM_I_SPAWN_SINGLE_COMPLETED,
   MAM_I_SPAWN_ADAPT_POSTPONE,
   MAM_I_SPAWN_COMPLETED,
+  MAM_I_JOB_CONNECTING,
+  MAM_I_JOB_CONNECTED,
+  MAM_I_DIST_START,
   MAM_I_DIST_PENDING,
   MAM_I_DIST_COMPLETED,
   MAM_I_SPAWN_ADAPT_PENDING,
@@ -52,6 +56,15 @@ enum mam_inner_states {
 
 #define MAM_VALGRIND_SCRIPT "./worker_valgrind.sh"
 #define MAM_EXTRAE_SCRIPT "./worker_extrae.sh"
+#define MAM_EXEC_SCRIPT "mam_expand.sh"
+
+// If this env is set, rank was created with a new dynamic job. Used by mam to connect jobs
+#define MAM_ENV "MAM_SERVICE_NAME"
+
+/** @brief Flag passed to send_data()/recv_data() to request blocking transfers. */
+#define MAM_USE_SYNCHRONOUS 0
+/** @brief Flag passed to send_data()/recv_data() to request non-blocking transfers. */
+#define MAM_USE_ASYNCHRONOUS 1
 
 /**
  * @brief Wall-clock timestamps and durations for one reconfiguration.
@@ -60,6 +73,8 @@ enum mam_inner_states {
  * scalars; the MPI datatype packs those durations (not every start/end).
  */
 typedef struct {
+  double rms_start;          /**< RMS phase start time */
+  double rms_time;         /**< RMS phase duration. */
   double spawn_start;        /**< Spawn phase start time. */
   double spawn_time;         /**< Spawn phase duration. */
   double sync_start;         /**< Sync redistribution start. */
@@ -106,7 +121,7 @@ typedef struct {
   MPI_Comm comm;          /**< Main MaM intracomm. */
   MPI_Comm thread_comm;   /**< Duplicate used by async threading paths. */
   MPI_Comm original_comm; /**< Application communicator saved at init. */
-  MPI_Comm intercomm;     /**< Parent–children intercommunicator when active. */
+  MPI_Comm intercomm;     /**< Parent-children intercommunicator when active. */
   MPI_Comm tmp_comm;      /**< Scratch communicator. */
   MPI_Comm *user_comm;    /**< Pointer to the application's communicator (updated in place). */
   MPI_Datatype struct_type; /**< Derived type packing config + key mall fields. */
@@ -114,11 +129,16 @@ typedef struct {
   int wait_targets_posted;  /**< Non-zero if @c WAIT_TARGETS request was posted. */
   MPI_Request wait_targets; /**< Outstanding wait-targets request. */
 
-  char *name_exec;   /**< Executable name for spawn. */
-  char *nodelist;    /**< Packed host/node list string. */
-  int num_nodes;     /**< Number of nodes in the allocation. */
-  int nodelist_len;  /**< Length of @c nodelist including NUL. */
-  int *max_cpus;     /**< Per-node core capacity. */
+  int new_job_id;     /**< Job Identifier of expanded job. Value is MAM_DENIED if not new job */
+  int num_expands;    /**< Amount of times a job expansion was issued */
+  char *service_name; /**< Service name to connect with new job */
+  char *port_name;    /**< Port name related to a service name */
+  
+  char *name_exec;    /**< Executable name for spawn. */
+  char *nodelist;     /**< Packed host/node list string. */
+  int num_nodes;      /**< Number of nodes in the allocation. */
+  int nodelist_len;   /**< Length of @c nodelist including NUL. */
+  int *max_cpus;      /**< Per-node core capacity. */
   int *assigned_cpus; /**< Per-node ranks already assigned (sources). */
   int *spawned_cpus;  /**< Per-node ranks to spawn / occupancy after mapping. */
   int internode_group; /**< Non-zero if the job spans multiple nodes. */

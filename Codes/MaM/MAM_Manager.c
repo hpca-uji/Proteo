@@ -29,11 +29,6 @@
 #include "GenericSpawn.h"
 #include "Distributed_CommDist.h"
 
-/** @brief Flag passed to send_data()/recv_data() to request blocking transfers. */
-#define MAM_USE_SYNCHRONOUS 0
-/** @brief Flag passed to send_data()/recv_data() to request non-blocking transfers. */
-#define MAM_USE_ASYNCHRONOUS 1
-
 void MAM_Commit(int *o_mam_state);
 
 /*
@@ -42,9 +37,13 @@ void MAM_Commit(int *o_mam_state);
  * are declared for symmetry with the internal states but have no definition here;
  * those states are handled by MAM_St_completed().
  */
-int MAM_St_rms(int *o_mam_state);
+int MAM_St_rms_start(int *o_mam_state);
+int MAM_St_rms_pending(void);
 int MAM_St_spawn_start(void);
 int MAM_St_spawn_pending(int i_wait_completed);
+int MAM_St_check_job_merge(void);
+int MAM_St_job_connect(void);
+int MAM_St_job_resources(void);
 int MAM_St_red_start(void);
 int MAM_St_red_pending(int i_wait_completed);
 int MAM_St_user_start(int *o_mam_state);
@@ -123,6 +122,7 @@ mam_user_reconf_t *user_reconf;
  * @return @c MAM_TARGETS when called by a spawned group, @c MAM_SOURCES otherwise.
  */
 int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_function)(void *), void *i_user_args) {
+  char *env_service_rms = NULL;
   MPI_Comm dup_comm, thread_comm, original_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
@@ -151,6 +151,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   mall->root = i_root;
   mall->root_parents = i_root;
   mall->zombie = 0;
+  mall->new_job_id = MAM_DENIED; //TODO: Should be reissued after a reconfiguration
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm;
   mall->original_comm = original_comm;
@@ -159,11 +160,14 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   mall->intercomm = MPI_COMM_NULL;
 
   mall->name_exec = i_name_exec;
+  mall->service_name = NULL;
+  mall->port_name = NULL;
   mall->nodelist = NULL;
   mall->max_cpus = NULL;
   mall->assigned_cpus = NULL;
   mall->spawned_cpus = NULL;
   mall->nodelist_len = 0;
+  mall->num_nodes = 0;
 
   rep_s_data->entries = 0;
   rep_a_data->entries = 0;
@@ -178,8 +182,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   MAM_Def_main_datatype();
 
   // Children obtain their data from the parents that spawned them
-  MPI_Comm_get_parent(&(mall->intercomm));
-  if(mall->intercomm != MPI_COMM_NULL) { 
+  if(MAM_Check_children_type() == MAM_TARGETS) { 
     Children_init(i_user_function, i_user_args);
     return MAM_TARGETS;
   }
@@ -268,12 +271,15 @@ int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_functio
       *o_mam_state = MAM_UNRESERVED;
       break;
     case MAM_I_NOT_STARTED:
-      call_checkpoint = MAM_St_rms(o_mam_state);
+      call_checkpoint = MAM_St_rms_start(o_mam_state);
       break;
+    case MAM_I_RMS_PENDING:
+      call_checkpoint = MAM_St_rms_pending();
+      break;
+
     case MAM_I_RMS_COMPLETED:
       call_checkpoint = MAM_St_spawn_start();
       break;
-
     case MAM_I_SPAWN_PENDING: // Check whether the spawn has finished
     case MAM_I_SPAWN_SINGLE_PENDING:
       call_checkpoint = MAM_St_spawn_pending(i_wait_completed);
@@ -281,9 +287,18 @@ int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_functio
 
     case MAM_I_SPAWN_ADAPT_POSTPONE:
     case MAM_I_SPAWN_COMPLETED:
-      call_checkpoint = MAM_St_red_start();
+      call_checkpoint = MAM_St_check_job_merge();
+
+    case MAM_I_JOB_CONNECTING:
+      call_checkpoint = MAM_St_job_connect();
+      break;
+    case MAM_I_JOB_CONNECTED:
+      call_checkpoint = MAM_St_job_resources();
       break;
 
+    case MAM_I_DIST_START:
+      call_checkpoint = MAM_St_red_start();
+      break;
     case MAM_I_DIST_PENDING:
       call_checkpoint = MAM_St_red_pending(i_wait_completed);
       break;
@@ -390,6 +405,7 @@ void MAM_Commit(int *o_mam_state) {
   MPI_Comm_size(mall->comm, &mall->numP);
   mall->root = mall_conf->spawn_method == MAM_SPAWN_BASELINE ? mall->root : mall->root_parents;
   mall->root_parents = mall->root;
+  mall->new_job_id = MAM_DENIED;
   state = MAM_I_NOT_STARTED;
   if(o_mam_state != NULL) *o_mam_state = MAM_COMPLETED;
 
@@ -598,19 +614,44 @@ int MAM_Get_Reconf_Info(mam_user_reconf_t *o_reconf_info) {
  * @param[out] o_mam_state Receives @c MAM_NOT_STARTED.
  * @return Always 1, so that the next stage is dispatched immediately.
  */
-int MAM_St_rms(int *o_mam_state) {
+int MAM_St_rms_start(int *o_mam_state) {
   reset_malleability_times();
   #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
+  mall_conf->times->rms_start = mall_conf->times->malleability_start; //TODO: Implement proper time
 
   MAM_Check_configuration();
-  *o_mam_state = MAM_NOT_STARTED;
-  state = MAM_I_RMS_COMPLETED;
+
+  int res = MAM_Request_job();
+  if(res == MAM_DENIED) {
+    *o_mam_state = MAM_NOT_STARTED;
+    state = MAM_I_NOT_STARTED;
+    return 0;
+  } 
+  *o_mam_state = MAM_PENDING;
+  state = res;
   mall->wait_targets_posted = 0;
 
-  //if(CHECK_RMS()) {return MAM_DENIED;}    
+  return 1;
+}
+
+//TODO: It may be done after spawn has been completed
+int MAM_St_rms_pending(void) {
+
+  int res = MAM_Check_pending_job();
+  if (res == MAM_DENIED) {
+    state = MAM_I_NOT_STARTED;
+    return 0;
+  } else if (res == MAM_I_RMS_PENDING) { return 0; }
+
+  state = res;  
+  #if MAM_USE_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->rms_time = MPI_Wtime() - mall_conf->times->rms_start;
+
   return 1;
 }
 
@@ -660,6 +701,48 @@ int MAM_St_spawn_pending(int i_wait_completed) {
     return 1;
   }
   return 0;
+}
+
+// Check if a job has to be merged
+int MAM_St_check_job_merge(void) {
+  if(mall->new_job_id != MAM_DENIED) {
+    #if MAM_USE_BARRIERS
+      MPI_Barrier(mall->comm);
+    #endif
+    mall_conf->times->rms_start = MPI_Wtime();
+
+    // Ensure correctness in COMMS
+    MAM_Prepare_job_comms(MAM_SOURCES);
+    state = MAM_I_JOB_CONNECTING;
+  } else { state = MAM_I_DIST_START; }
+
+  return 1;
+}
+
+int MAM_St_job_connect(void) {
+
+  state = MAM_Connect_jobs_as_source();
+  if(state != MAM_I_JOB_CONNECTED) { return 0; }
+ 
+  return 1;
+}
+
+int MAM_St_job_resources(void) {
+  // Check new job resources
+  MAM_check_new_hosts();
+
+  // Update all ranks with new info
+  MAM_Comm_main_structures(mall->intercomm, MAM_ROOT);
+  MAM_Repair_job_comms(MAM_SOURCES);
+
+  state = MAM_I_DIST_START;
+
+  #if MAM_USE_BARRIERS
+      MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->rms_time += MPI_Wtime() - mall_conf->times->rms_start;
+
+  return 1;
 }
 
 /**
@@ -867,129 +950,12 @@ int MAM_St_completed(int *o_mam_state) {
  * @param[in] i_user_function Optional user callback for the user redistribution phase.
  * @param[in] i_user_args     Opaque argument forwarded to @p i_user_function.
  */
-void Children_init(void (*i_user_function)(void *), void *i_user_args) {
-  size_t i;
-
+void MAM_I_Targets_work(void (*i_user_function)(void *), void *i_user_args) {
   #if MAM_DEBUG
-    DEBUG_FUNC("MaM will now initialize spawned processes", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
+    DEBUG_FUNC("MaM detected new ranks starts reconfiguration", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
   #endif
 
-  malleability_connect_children(&(mall->intercomm));
-  if(mall_conf->spawn_method == MAM_SPAWN_MERGE) { // For Merge Method, these processes will be added
-    MPI_Comm_rank(mall->intercomm, &mall->myId);
-    MPI_Comm_size(mall->intercomm, &mall->numP);
-  }
-  mall->root_collectives = mall->root_parents;
-
-  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_MULTIPLE, NULL)
-    || MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PARALLEL, NULL)) {
-    mall->internode_group = 0;
-  } else {
-    mall->internode_group = MAM_Is_internode_group();
-  }
-
-  #if MAM_DEBUG
-    DEBUG_FUNC("Spawned have completed spawn step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  #endif
-
-  comm_data_info(rep_a_data, dist_a_data, MAM_TARGETS);
-  if(dist_a_data->entries || rep_a_data->entries) { // Receive asynchronous data
-    #if MAM_DEBUG >= 2
-      DEBUG_FUNC("Spawned start asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-    #endif
-    #if MAM_USE_BARRIERS
-      MPI_Barrier(mall->intercomm);
-    #endif
-
-    if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_PTHREAD, NULL)) {
-      recv_data(mall->num_parents, dist_a_data, MAM_USE_SYNCHRONOUS);
-      for(i=0; i<rep_a_data->entries; i++) {
-        MPI_Bcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm);
-      } 
-    } else {
-      recv_data(mall->num_parents, dist_a_data, MAM_USE_ASYNCHRONOUS); 
-
-      for(i=0; i<rep_a_data->entries; i++) {
-        MPI_Ibcast(rep_a_data->arrays[i], rep_a_data->qty[i], rep_a_data->types[i], mall->root_collectives, mall->intercomm, &(rep_a_data->requests[i][0]));
-      } 
-      #if MAM_DEBUG >= 2
-        DEBUG_FUNC("Spawned started asynchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-      #endif
-
-      for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_wait(rep_a_data->requests[i], rep_a_data->request_qty[i]);
-      }
-      for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_wait(dist_a_data->requests[i], dist_a_data->request_qty[i]);
-      }
-      if(MAM_Contains_strat(MAM_RED_STRATEGIES, MAM_STRAT_RED_WAIT_TARGETS, NULL)) {
-        MPI_Ibarrier(mall->intercomm, &mall->wait_targets);
-        mall->wait_targets_posted = 1;
-        MPI_Wait(&mall->wait_targets, MPI_STATUS_IGNORE);
-      }
-
-      #if MAM_DEBUG >= 2
-        DEBUG_FUNC("Spawned waited for all asynchronous redistributions", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-      #endif
-      for(i=0; i<dist_a_data->entries; i++) {
-        async_communication_end(dist_a_data->requests[i], dist_a_data->request_qty[i], &(dist_a_data->windows[i]), &dist_a_data->idS[i*2]);
-      }
-      free(dist_a_data->idS); dist_a_data->idS = NULL;
-      for(i=0; i<rep_a_data->entries; i++) {
-        async_communication_end(rep_a_data->requests[i], rep_a_data->request_qty[i], &(rep_a_data->windows[i]), &rep_a_data->idS[i*2]);
-      }
-    }
-
-    #if MAM_USE_BARRIERS
-      MPI_Barrier(mall->intercomm);
-    #endif
-    mall_conf->times->async_end= MPI_Wtime(); // Timestamp of when the asynchronous communication ends
-  }
-  #if MAM_DEBUG
-    DEBUG_FUNC("Spawned have completed asynchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  #endif
-
-  #if MAM_USE_BARRIERS
-    MPI_Barrier(mall->intercomm);
-  #endif
-  if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
-    MPI_Intercomm_merge(mall->intercomm, MAM_TARGETS, &mall->tmp_comm); //The group passing 0 is placed first
-  } else {
-    MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
-  }
-  MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
-  if(i_user_function != NULL) {
-    state = MAM_I_USER_PENDING;
-    MAM_I_create_user_struct(MAM_TARGETS);
-    i_user_function(i_user_args);
-  }
-  #if MAM_USE_BARRIERS
-    MPI_Barrier(mall->intercomm);
-  #endif
-  mall_conf->times->user_end = MPI_Wtime(); // Timestamp of when the user redistribution ends
-
-  #if MAM_DEBUG >= 2
-      DEBUG_FUNC("Spawned start synchronous redistribution", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-    #endif
-  comm_data_info(rep_s_data, dist_s_data, MAM_TARGETS);
-  if(dist_s_data->entries || rep_s_data->entries) { // Receive synchronous data
-    #if MAM_USE_BARRIERS
-      MPI_Barrier(mall->intercomm);
-    #endif
-    recv_data(mall->num_parents, dist_s_data, MAM_USE_SYNCHRONOUS);
-
-    for(i=0; i<rep_s_data->entries; i++) {
-      MPI_Bcast(rep_s_data->arrays[i], rep_s_data->qty[i], rep_s_data->types[i], mall->root_collectives, mall->intercomm);
-    } 
-    #if MAM_USE_BARRIERS
-      MPI_Barrier(mall->intercomm);
-    #endif
-    mall_conf->times->sync_end = MPI_Wtime(); // Timestamp of when the synchronous communication ends
-  }
-  #if MAM_DEBUG
-    DEBUG_FUNC("Targets have completed synchronous data redistribution step", mall->myId, mall->numP); fflush(stdout); MPI_Barrier(MPI_COMM_WORLD);
-  #endif
-
+  MAM_Children_init(i_user_function, i_user_args, rep_s_data, dist_s_data, rep_a_data, dist_a_data);
   MAM_Commit(NULL);
 
   #if MAM_DEBUG

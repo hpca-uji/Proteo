@@ -13,6 +13,11 @@
  */
 void MAM_check_hosts(void);
 
+void MAM_check_new_hosts(void);
+
+int MAM_Request_job(void);
+int MAM_Check_pending_job(void);
+
 /**
  * @brief Report whether the current job spans more than one node for at least one of their MPI_COMM_WORLD.
  * @return Non-zero if inter-node, 0 otherwise.

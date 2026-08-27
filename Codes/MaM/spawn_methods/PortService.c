@@ -51,14 +51,14 @@ void open_port(Spawn_ports *io_spawn_port, int i_open_port, int i_open_service)
         io_spawn_port->port_name = (char *)malloc(MPI_MAX_PORT_NAME * sizeof(char));
         MPI_Open_port(MPI_INFO_NULL, io_spawn_port->port_name);
         if (i_open_service != MAM_SERVICE_UNNEEDED) {
-            io_spawn_port->service_name = (char *)malloc((MAM_SERVICE_NAME_SIZE) * sizeof(char));
+          io_spawn_port->service_name = (char *)malloc((MAM_SERVICE_NAME_SIZE) * sizeof(char));
 #if MAM_USE_SLURM
-      char *tmp = getenv("SLURM_JOB_ID");
-      if (tmp != NULL) { job_id = atoi(tmp) % 1000; }
+          char *tmp = getenv("SLURM_JOB_ID");
+          if (tmp != NULL) { job_id = atoi(tmp) % 1000; }
 #endif
-      snprintf(io_spawn_port->service_name, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, i_open_service);
-      MPI_Publish_name(io_spawn_port->service_name, MPI_INFO_NULL, io_spawn_port->port_name);
-    }
+          snprintf(io_spawn_port->service_name, MAM_SERVICE_NAME_SIZE, "mam_service_jid%04d_gr%03d", job_id, i_open_service);
+          MPI_Publish_name(io_spawn_port->service_name, MPI_INFO_NULL, io_spawn_port->port_name);
+        }
   } else {
     io_spawn_port->port_name = malloc(1);
     io_spawn_port->port_name[0] = '\0';
