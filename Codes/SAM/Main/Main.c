@@ -4,48 +4,66 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "process_stage.h"
+#include "process_phase.h"
 #include "Main_datatypes.h"
 #include "configuration.h"
-#include "../IOcodes/results.h"
+#include "results.h"
 #include "../MaM/distribution_methods/Distributed_CommDist.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
+/**
+ * @file Main.c
+ * @brief SAM entry point: initialise MaM, run phases, and print results.
+ */
+
+/** @brief Maximum elements per MaM data chunk when splitting SDR/ADR payloads. */
 #define DR_MAX_SIZE 1000000000
 
-int work();
-double iterate(int async_comm);
-double iterate_relaxed(double *time, double *times_stages);
-double iterate_rigid(double *time, double *times_stages);
+void init_group_struct(char *i_argv[], int i_argc, int i_myId, int i_numP);
+void init_application(void);
+void free_application_data(void);
+void free_zombie_process(void);
 
-void init_group_struct(char *argv[], int argc, int myId, int numP);
-void init_application();
-void obtain_op_times();
-void free_application_data();
-void free_zombie_process();
+void print_general_info(int i_myId, int i_grp, int i_numP);
+int print_local_results(void);
+int print_final_results(void);
+int create_out_file(char *i_name, int *o_ptr, int i_newstdout);
 
-void print_general_info(int myId, int grp, int numP);
-int print_local_results();
-int print_final_results();
-int create_out_file(char *nombre, int *ptr, int newstdout);
+void modify_configuration(void);
+void init_originals(void);
+void init_targets(void);
+void update_surviving_targets(void);
+void update_targets(void);
+void user_redistribution(void *i_args);
 
-
-void init_originals();
-void init_targets();
-void update_targets();
-void user_redistribution(void *args);
-
+/** @brief Loaded Proteo configuration for this run. */
 configuration *config_file;
+/** @brief Current process-group runtime state. */
 group_data *group;
+/** @brief Aggregated timing results. */
 results_data *results;
-MPI_Comm comm, new_comm;
-int run_id = 0; // Utilizado para diferenciar más fácilmente ejecuciones en el análisis
+/** @brief Active application communicator (may change after resize). */
+MPI_Comm comm;
+/** @brief Communicator used during user redistribution / target init. */
+MPI_Comm new_comm;
+/** @brief Optional run id (argv[2]) to distinguish analysis outputs. */
+int run_id = 0;
 
+/**
+ * @brief SAM main: initialise MPI/MaM, emulate phases with resizes, print, finalize.
+ *
+ * Originals load the config and register redistribution data; spawned children
+ * attach via MaM and call ::update_targets. The loop alternates ::phase_normal
+ * and ::phase_reconf until all groups complete.
+ *
+ * @param[in] argc Argument count.
+ * @param[in] argv Arguments (@c argv[1] = config path; optional @c argv[2] = run id).
+ * @return 0 on success.
+ */
 int main(int argc, char *argv[]) {
-    int numP, myId, res;
+    int numP, myId;
     int req;
     int im_child;
-    size_t i;
 
     MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &req);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
@@ -53,7 +71,7 @@ int main(int argc, char *argv[]) {
     comm = MPI_COMM_WORLD;
     new_comm = MPI_COMM_NULL;
 
-    if(req != MPI_THREAD_MULTIPLE) {
+    if (req != MPI_THREAD_MULTIPLE) {
       printf("No se ha obtenido la configuración de hilos necesaria\nSolicitada %d -- Devuelta %d\n", req, MPI_THREAD_MULTIPLE);
       fflush(stdout);
       MPI_Abort(MPI_COMM_WORLD, -50);
@@ -64,7 +82,7 @@ int main(int argc, char *argv[]) {
 
     //MAM_Use_valgrind(1);
 
-    if(im_child) {
+    if (im_child) {
       update_targets();
 
     } else {
@@ -76,55 +94,37 @@ int main(int argc, char *argv[]) {
     }
 
     //
-    // EMPIEZA LA EJECUCION-------------------------------
+    // START EXECUTION -------------------------------
     //
     do {
       MPI_Comm_size(comm, &(group->numP));
       MPI_Comm_rank(comm, &(group->myId));
-
-      if(group->grp != 0) {
-        obtain_op_times(0); //Obtener los nuevos valores de tiempo para el computo
+      if (group->grp != 0) {
+        init_phases(group, config_file, results, 0, comm);  // Refresh compute timings for the new group
         MAM_Retrieve_times(&results->spawn_time[group->grp - 1], &results->sync_time[group->grp - 1], &results->async_time[group->grp - 1], &results->user_time[group->grp - 1], &results->malleability_time[group->grp - 1]);
       }
+      modify_configuration();
 
-      if(config_file->n_groups != group->grp + 1) { //TODO Llevar a otra funcion
-        MAM_Set_configuration(config_file->groups[group->grp+1].sm, MAM_STRAT_SPAWN_CLEAR, 
-			config_file->groups[group->grp+1].phy_dist, config_file->groups[group->grp+1].rm, MAM_STRAT_RED_CLEAR);
-	      for(i=0; i<config_file->groups[group->grp+1].ss_len; i++) {
-	        MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp+1].ss[i], &req);
-	      }
-	      for(i=0; i<config_file->groups[group->grp+1].rs_len; i++) {
-	        MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp+1].rs[i], &req);
-	      }
-        MAM_Set_target_number(config_file->groups[group->grp+1].procs); // TODO TO BE DEPRECATED
-
-        if(group->grp != 0) {
-          MAM_Data_modify(&(group->grp), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-          MAM_Data_modify(&(group->iter_start), 0, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-        }
-      }
-    
-      res = work();
-
-      if(res==1) { // Se ha llegado al final de la aplicacion
-        MPI_Barrier(comm);
-        results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
-        print_local_results();
-      }
-      
-
-      reset_results_index(results);
-
-      group->grp = group->grp + 1;
-    } while(config_file->n_groups > group->grp);
-
+      phase_normal(group, config_file, results, comm); // TODO: The return value can simplify the next if?
+      if (config_file->n_groups != group->grp + 1) { // FIXME: What if there are more groups but the app ended?
+        phase_reconf(group, config_file, results, user_redistribution, comm);
+        reset_results_index(results, group->actual_phase);
+        update_targets();
+      } else if (group->actual_phase == config_file->n_phases) { group->grp++; } // ENDING clause
+    } while (config_file->n_groups != group->grp);
     //
-    // TERMINA LA EJECUCION ----------------------------------------------------------
-    // 
-    print_final_results(); // Pasado este punto ya no pueden escribir los procesos
+    // END EXECUTION ----------------------------------------------------------
+    //
 
     MPI_Barrier(comm);
-    if(comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
+    results->exec_time = MPI_Wtime() - results->exec_start - results->wasted_time;
+    group->grp = group->grp - 1; // Adapt to real grp that ends the execution
+    print_local_results();
+    group->grp = group->grp + 1;
+    print_final_results(); // After this point processes must not write results again
+
+    MPI_Barrier(comm);
+    if (comm != MPI_COMM_WORLD && comm != MPI_COMM_NULL) {
       MPI_Comm_free(&comm);
     }
     free_application_data();
@@ -133,216 +133,96 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-/*
- * Función de trabajo principal.
- *
- * Incializa los datos para realizar el computo y a continuacion
- * pasa a realizar "maxiter" iteraciones de computo.
- *
- * Terminadas las iteraciones realiza el redimensionado de procesos.
- * Si el redimensionado se realiza de forma asincrona se 
- * siguen realizando iteraciones de computo hasta que termine la 
- * comunicacion asincrona y realizar entonces la sincrona.
- *
- * Si el grupo de procesos es el ultimo que va a ejecutar, se devuelve
- * el valor 1 para indicar que no se va a seguir trabajando con nuevos grupos
- * de procesos. En caso contrario se devuelve 0.
- */
-int work() {
-  int iter, maxiter, state, res;
-  int wait_completed = MAM_CHECK_COMPLETION;
-
-  maxiter = config_file->groups[group->grp].iters;
-  state = MAM_NOT_STARTED;
-  res = 0;
-
-  for(iter=group->iter_start; iter < maxiter; iter++) {
-    iterate(state);
-  }
-
-  if(config_file->n_groups != group->grp + 1)
-    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
-
-  iter = 0;
-  while(state == MAM_PENDING || state == MAM_USER_PENDING) {
-    if(group->grp+1 < config_file->n_groups && iter < config_file->groups[group->grp+1].iters) {
-      iterate(state);
-      iter++;
-      group->iter_start = iter;
-    } else { wait_completed = MAM_WAIT_COMPLETION; }
-    MAM_Checkpoint(&state, wait_completed, user_redistribution, NULL);
-  }
-
-  //if(state == MAM_COMPLETED) {}
-  if(config_file->n_groups == group->grp + 1) { res=1; }
-  return res;
-}
-
-
-/////////////////////////////////////////
-/////////////////////////////////////////
-//COMPUTE FUNCTIONS
-/////////////////////////////////////////
-/////////////////////////////////////////
-
-
-/*
- * Simula la ejecucción de una iteración de computo en la aplicación
- * que dura al menos un tiempo determinado por la suma de todas las
- * etapas definidas en la configuracion.
- */
-double iterate(int async_comm) {
-  double time, *times_stages_aux;
-  size_t i;
-  double aux = 0;
-
-  times_stages_aux = malloc(config_file->n_stages * sizeof(double));
-
-  if(config_file->rigid_times) {
-    aux = iterate_rigid(&time, times_stages_aux);
-  } else {
-    aux = iterate_relaxed(&time, times_stages_aux);
-  }
-
-  // Se esta realizando una redistribucion de datos asincrona
-  if(async_comm == MAM_PENDING || async_comm == MAM_USER_PENDING) { 
-    // TODO Que diferencie entre tipo de partes asincronas?
-    results->iters_async += 1;
-  }
-
-  // TODO Pasar el resto de este código a results.c
-  if(results->iter_index == results->iters_size) { // Aumentar tamaño de ambos vectores de resultados
-    realloc_results_iters(results, config_file->n_stages, results->iters_size + 100);
-  }
-  results->iters_time[results->iter_index] = time;
-  for(i=0; i < config_file->n_stages; i++) {
-    results->stage_times[i][results->iter_index] = times_stages_aux[i];
-  }
-  results->iter_index = results->iter_index + 1;
-  // TODO Pasar hasta aqui
-
-  free(times_stages_aux);
-
-  return aux;
-}
-
-
-/*
- * Performs an iteration. The gathered times for iterations
- * and stages could be IMPRECISE in order to ensure the 
- * global execution time is precise.
- */
-double iterate_relaxed(double *time, double *times_stages) {
-  size_t i;
-  double start_time, start_time_stage, aux=0;
-  start_time = MPI_Wtime(); // Imprecise timings
-
-  for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime(); 
-    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    times_stages[i] = MPI_Wtime() - start_time_stage;
-  }
-
-  *time = MPI_Wtime() - start_time; // Guardar tiempos
-  return aux;
-}
-
-/*
- * Performs an iteration. The gathered times for iterations
- * and stages are ensured to be precise but the global 
- * execution time could be imprecise.
- */
-double iterate_rigid(double *time, double *times_stages) {
-  size_t i;
-  double start_time, start_time_stage, aux=0;
-
-  MPI_Barrier(comm);
-  start_time = MPI_Wtime();
-
-  for(i=0; i < config_file->n_stages; i++) {
-    start_time_stage = MPI_Wtime();
-    aux+= process_stage(*config_file, config_file->stages[i], *group, comm);
-    MPI_Barrier(comm);
-    times_stages[i] = MPI_Wtime() - start_time_stage;
-  }
-
-  MPI_Barrier(comm);
-  *time = MPI_Wtime() - start_time; // Guardar tiempos
-  return aux;
-}
-
 //======================================================||
 //======================================================||
 //=============INIT/FREE/PRINT FUNCTIONS================||
 //======================================================||
 //======================================================||
 
-/*
- * Muestra datos generales sobre los procesos, su grupo,
- * en que nodo residen y la version de MPI utilizada.
+/**
+ * @brief Print rank, group, host name, and PID for diagnostics.
+ * @param[in] i_myId Local MPI rank.
+ * @param[in] i_grp  Group index.
+ * @param[in] i_numP Communicator size.
  */
-void print_general_info(int myId, int grp, int numP) {
+void print_general_info(int i_myId, int i_grp, int i_numP) {
   int len;
   char *name = malloc(MPI_MAX_PROCESSOR_NAME * sizeof(char));
   char *version = malloc(MPI_MAX_LIBRARY_VERSION_STRING * sizeof(char));
   MPI_Get_processor_name(name, &len);
   MPI_Get_library_version(version, &len);
-  //printf("P%d Nuevo GRUPO %d de %d procs en nodo %s con %s\n", myId, grp, numP, name, version);
-  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s -- PID=%d\n", myId, grp, numP, name, getpid());
+  printf("P%d Nuevo GRUPO %d de %d procs en nodo %s -- PID=%d\n", i_myId, i_grp, i_numP, name, getpid());
 
   free(name);
   free(version);
 }
 
-
-/*
- * Pide al proceso raiz imprimir los datos sobre las iteraciones realizadas por el grupo de procesos.
+/**
+ * @brief On root, write per-group iteration/stage results to an output file.
+ *
+ * Reduces per-iteration times first. Redirects stdout to
+ * @c R{run_id}_G{grp}NP{numP}ID{rank}.out while printing.
+ *
+ * @retval  0 Success.
+ * @retval -1 Allocation failure.
+ * @retval -2 File-name formatting failure.
+ * @retval -3 Failed to restore stdout.
  */
-int print_local_results() {
+int print_local_results(void) {
   int ptr_local, ptr_out, err;
+  size_t i;
   char *file_name;
 
   // This function causes an overhead in the recorded time for last group
-  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_stages, config_file->capture_method, comm);
-  if(group->myId == ROOT) {
+  compute_results_iter(results, group->myId, group->numP, ROOT, config_file->n_phases, group->actual_phase, config_file->capture_method, comm);
+  if (group->myId == ROOT) {
     ptr_out = dup(1);
 
     file_name = NULL;
     file_name = malloc(40 * sizeof(char));
-    if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+    if (file_name == NULL) return -1; // Could not allocate memory
     err = snprintf(file_name, 40, "R%d_G%dNP%dID%d.out", run_id, group->grp, group->numP, group->myId);
-    if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+    if (err < 0) return -2; // Could not build the file name
     create_out_file(file_name, &ptr_local, 1);
-  
+
     print_config_group(config_file, group->grp);
-    print_iter_results(*results);
-    print_stage_results(*results, config_file->n_stages);
+    for (i = group->start_phase; i < group->actual_phase; i++) {
+      print_iter_results(*results, i);
+      print_stage_results(*results, i);
+    }
     free(file_name);
 
     fflush(stdout);
     close(1);
-    dup(ptr_out);
+    err = dup(ptr_out);
+    if (err < 0) { return -3; } // Could not restore stdout
     close(ptr_out);
   }
   return 0;
 }
 
-/*
- * Si es el ultimo grupo de procesos, pide al proceso raiz mostrar los datos obtenidos de tiempo de ejecucion, creacion de procesos
- * y las comunicaciones.
+/**
+ * @brief On root of the last group, write global config and timing summary.
+ *
+ * Output file: @c R{run_id}_Global.out.
+ *
+ * @retval  0 Success (or nothing to print).
+ * @retval -1 Allocation failure.
+ * @retval -2 File-name formatting failure.
+ * @retval -3 Failed to restore stdout.
  */
-int print_final_results() {
+int print_final_results(void) {
   int ptr_global, err, ptr_out;
   char *file_name;
 
-  if(group->myId == ROOT) {
+  if (group->myId == ROOT) {
 
-    if(config_file->n_groups == group->grp) {
+    if (config_file->n_groups == group->grp) {
       file_name = NULL;
       file_name = malloc(20 * sizeof(char));
-      if(file_name == NULL) return -1; // No ha sido posible alojar la memoria
+      if (file_name == NULL) return -1; // Could not allocate memory
       err = snprintf(file_name, 20, "R%d_Global.out", run_id);
-      if(err < 0) return -2; // No ha sido posible obtener el nombre de fichero
+      if (err < 0) return -2; // Could not build the file name
 
       ptr_out = dup(1);
       create_out_file(file_name, &ptr_global, 1);
@@ -352,174 +232,179 @@ int print_final_results() {
       free(file_name);
 
       close(1);
-      dup(ptr_out);
+      err = dup(ptr_out);
+      if (err < 0) { return -3; } // Could not restore stdout
     }
   }
   return 0;
 }
 
-/*
- * Inicializa la estructura group
+/**
+ * @brief Allocate and initialise the global ::group structure.
+ *
+ * @param[in] i_argv Process arguments.
+ * @param[in] i_argc Argument count.
+ * @param[in] i_myId Local MPI rank.
+ * @param[in] i_numP Communicator size.
  */
-void init_group_struct(char *argv[], int argc, int myId, int numP) {
-  group = malloc(sizeof(group_data)); // Valgrind not freed
-  group->myId        = myId;
-  group->numP        = numP;
-  group->grp         = 0;
-  group->iter_start  = 0;
-  group->argc        = argc;
-  group->argv        = argv;
+void init_group_struct(char *i_argv[], int i_argc, int i_myId, int i_numP) {
+  group = malloc(sizeof(group_data)); // FIXME: Valgrind not freed
+  group->myId          = i_myId;
+  group->numP          = i_numP;
+  group->grp           = 0;
+  group->actual_iter   = 0;
+  group->actual_phase  = 0;
+  group->start_phase   = 0;
+  group->exec_iters    = 0;
+  group->argc          = i_argc;
+  group->argv          = i_argv;
+  group->sync_array    = NULL;
+  group->async_array   = NULL;
+  group->sync_qty      = NULL;
+  group->async_qty     = NULL;
 }
 
-/*
- * Inicializa los datos para este grupo de procesos.
+/**
+ * @brief Initialise the first (original) process group.
  *
- * En caso de ser el primer grupo de procesos, lee el fichero de configuracion
- * e inicializa los vectores de comunicacion.
- *
- * En caso de ser otro grupo de procesos entra a la funcion "Sons_init()" donde
- * se comunican con los padres para inicializar sus datos.
+ * Loads the configuration from @c argv[1], optional @c run_id from @c argv[2],
+ * allocates results and SDR/ADR redistribution buffers, then calibrates stages
+ * via ::init_phases. Spawned children do not call this; they receive state
+ * through MaM / ::user_redistribution → ::init_targets.
  */
-void init_application() {
+void init_application(void) {
   int i, last_index;
+  int init_array = 0;
+  size_t index, *array_iters_aux, *array_stages_aux;
 
-  if(group->argc < 2) {
-    printf("Falta el fichero de configuracion. Uso:\n./programa config.ini id\nEl argumento numerico id es opcional\n");
+  if (group->argc < 2) {
+    printf("Falta el fichero de configuracion. Uso:\n./programa config.ini|config.json id\nEl argumento numerico id es opcional\n");
     MPI_Abort(MPI_COMM_WORLD, -1);
   }
-  if(group->argc > 2) {
+  if (group->argc > 2) {
     run_id = atoi(group->argv[2]);
   }
-
   init_config(group->argv[1], &config_file);
+  group->grp_config = config_file->groups[group->grp];
+
+  // Init results
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
-  if(config_file->sdr) {
-    group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr/DR_MAX_SIZE+1 : config_file->sdr/DR_MAX_SIZE;
-    group->sync_qty = (int *) malloc(group->sync_data_groups * sizeof(int)); // FIXME Valgrind not freed
-    group->sync_array = (char **) malloc(group->sync_data_groups * sizeof(char *)); // Valgrind not freed
-    last_index = group->sync_data_groups-1; 
-    for(i=0; i<last_index; i++) {
+  array_iters_aux = malloc(config_file->n_phases * sizeof *array_iters_aux);
+  array_stages_aux = malloc(config_file->n_phases * sizeof *array_stages_aux);
+  for (index = 0; index < config_file->n_phases; index++) {
+    array_iters_aux[index] = config_file->phases[index].qty_iters;
+    array_stages_aux[index] = config_file->phases[index].qty_stages;
+  }
+  init_results_data(results, config_file->n_resizes, config_file->n_phases, array_stages_aux, array_iters_aux);
+  free(array_iters_aux);
+  free(array_stages_aux);
+
+  // Init distribution arrays for reconfigurations
+  if (config_file->sdr) {
+    group->sync_data_groups = config_file->sdr % DR_MAX_SIZE ? config_file->sdr / DR_MAX_SIZE + 1 : config_file->sdr / DR_MAX_SIZE;
+    group->sync_qty = (size_t *)malloc(group->sync_data_groups * sizeof(size_t)); // FIXME: Valgrind not freed
+    group->sync_array = (void **)malloc(group->sync_data_groups * sizeof(void *)); // FIXME: Valgrind not freed
+    last_index = group->sync_data_groups - 1;
+    for (i = 0; i < last_index; i++) {
       group->sync_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], group->myId, group->numP);
+      malloc_comm_array(&(group->sync_array[i]), group->sync_qty[i], config_file->datasize, group->myId, group->numP, init_array);
     }
     group->sync_qty[last_index] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], group->myId, group->numP); // Valgrind not freed
+    malloc_comm_array(&(group->sync_array[last_index]), group->sync_qty[last_index], config_file->datasize, group->myId, group->numP, init_array); // FIXME: Valgrind not freed
   }
 
-  if(config_file->adr) {
-    group->async_data_groups = config_file->adr % DR_MAX_SIZE ? config_file->adr/DR_MAX_SIZE+1 : config_file->adr/DR_MAX_SIZE;
-    group->async_qty = (int *) malloc(group->async_data_groups * sizeof(int));
-    group->async_array = (char **) malloc(group->async_data_groups * sizeof(char *));
-    last_index = group->async_data_groups-1; 
-    for(i=0; i<last_index; i++) {
+  if (config_file->adr) {
+    group->async_data_groups = config_file->adr % DR_MAX_SIZE ? config_file->adr / DR_MAX_SIZE + 1 : config_file->adr / DR_MAX_SIZE;
+    group->async_qty = (size_t *)malloc(group->async_data_groups * sizeof(size_t));
+    group->async_array = (void **)malloc(group->async_data_groups * sizeof(void *));
+    last_index = group->async_data_groups - 1;
+    for (i = 0; i < last_index; i++) {
       group->async_qty[i] = DR_MAX_SIZE;
-      malloc_comm_array(&(group->async_array[i]), group->async_qty[i], group->myId, group->numP);
+      malloc_comm_array(&(group->async_array[i]), group->async_qty[i], config_file->datasize, group->myId, group->numP, init_array);
     }
     group->async_qty[last_index] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
-    malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], group->myId, group->numP);
+    malloc_comm_array(&(group->async_array[last_index]), group->async_qty[last_index], config_file->datasize, group->myId, group->numP, init_array);
   }
 
-  obtain_op_times(1);
+  init_phases(group, config_file, results, 1, comm);
 }
 
-/*
- * Obtiene cuanto tiempo es necesario para realizar una operacion de PI
- *
- * Si compute esta a 1 se considera que se esta inicializando el entorno
- * y realizará trabajo extra.
- *
- * Si compute esta a 0 se considera un entorno inicializado y solo hay que
- * realizar algunos cambios de reserva de memoria. Si es necesario recalcular
- * algo se obtiene el total de tiempo utilizado en dichas tareas y se resta
- * al tiempo total de ejecucion.
+/**
+ * @brief Free redistribution buffers, finalise MaM, then free zombie state.
  */
-void obtain_op_times(int compute) {
-  size_t i;
-  double time = 0;
-  for(i=0; i<config_file->n_stages; i++) {
-    time+=init_stage(config_file, i, *group, comm, compute);
-  }
-  if(!compute) {results->wasted_time += time;}
-}
-
-/*
- * Libera toda la memoria asociada con la aplicacion
- */
-void free_application_data() {
+void free_application_data(void) {
   int abort_needed;
   size_t i;
 
-  if(config_file->sdr && group->sync_array != NULL) {
-    for(i=0; i<group->sync_data_groups; i++) {
-      free(group->sync_array[i]);
-      group->sync_array[i] = NULL;
+  if (config_file->sdr && group->sync_array != NULL) {
+    for (i = 0; i < group->sync_data_groups; i++) {
+      if (group->sync_array[i] != NULL) {
+        free(group->sync_array[i]);
+        group->sync_array[i] = NULL;
+      }
     }
+  }
+  if (config_file->adr && group->async_array != NULL) {
+    for (i = 0; i < group->async_data_groups; i++) {
+      if (group->async_array[i] != NULL) {
+        free(group->async_array[i]);
+        group->async_array[i] = NULL;
+      }
+    }
+  }
+
+  abort_needed = MAM_Finalize();
+  free_zombie_process();
+  if (abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
+}
+
+/**
+ * @brief Free config/results/group owned by a process that becomes a MaM zombie.
+ */
+void free_zombie_process(void) {
+
+  if (config_file->sdr && group->sync_array != NULL) {
     free(group->sync_qty);
     group->sync_qty = NULL;
     free(group->sync_array);
     group->sync_array = NULL;
-
   }
-  if(config_file->adr && group->async_array != NULL) {
-    for(i=0; i<group->async_data_groups; i++) {
-      free(group->async_array[i]);
-      group->async_array[i] = NULL;
-    }
+
+  if (config_file->adr && group->async_array != NULL) {
     free(group->async_qty);
     group->async_qty = NULL;
     free(group->async_array);
     group->async_array = NULL;
   }
-  abort_needed = MAM_Finalize();
-  free_zombie_process();
-  free(group);
-  if(abort_needed) { MPI_Abort(MPI_COMM_WORLD, -100); }
-}
 
-
-/*
- * Libera la memoria asociada a un proceso Zombie
- */
-void free_zombie_process() {
-  free_results_data(results, config_file->n_stages);
+  free_results_data(results, config_file->n_phases);
   free(results);
-  
-  size_t i;
-  if(config_file->adr && group->async_array != NULL) {
-    for(i=0; i<group->async_data_groups; i++) {
-      free(group->async_array[i]);
-      group->async_array[i] = NULL;
-    }
-    free(group->async_qty);
-    group->async_qty = NULL;
-    free(group->async_array);
-    group->async_array = NULL;
-  }
-
   free_config(config_file);
+  free(group);
 }
 
-
-/* 
- * Función para crear un fichero con el nombre pasado como argumento.
- * Si el nombre ya existe, se escribe la informacion a continuacion.
+/**
+ * @brief Create or append to an output file; optionally redirect stdout to it.
  *
- * El proceso que llama a la función pasa a tener como salida estandar
- * dicho fichero si el valor "newstdout" es verdadero.
- *
+ * @param[in]  i_name      File path.
+ * @param[out] o_ptr       Receives the opened file descriptor.
+ * @param[in]  i_newstdout Non-zero to make the file the process stdout.
+ * @retval  0 Success.
+ * @retval -1 Could not open/create the file.
+ * @retval -2 Could not close stdout before redirect.
+ * @retval -3 Could not dup the new descriptor onto stdout.
  */
-int create_out_file(char *nombre, int *ptr, int newstdout) {
+int create_out_file(char *i_name, int *o_ptr, int i_newstdout) {
   int err;
 
-  *ptr = open(nombre, O_WRONLY | O_CREAT | O_APPEND, 0644);
-  if(*ptr < 0) return -1; // No ha sido posible crear el fichero
+  *o_ptr = open(i_name, O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if (*o_ptr < 0) return -1; // Could not create the file
 
-  if(newstdout) {
+  if (i_newstdout) {
     err = close(1);
-    if(err < 0) return -2; // No es posible modificar la salida estandar
-    err = dup(*ptr);
-    if(err < 0) return -3; // No es posible modificar la salida estandar
+    if (err < 0) return -2; // Could not modify stdout
+    err = dup(*o_ptr);
+    if (err < 0) return -3; // Could not modify stdout
   }
 
   return 0;
@@ -531,96 +416,195 @@ int create_out_file(char *nombre, int *ptr, int newstdout) {
 //================ INIT MALLEABILITY ===================||
 //======================================================||
 //======================================================||
-//FIXME TENER EN CUENTA QUE ADR PUEDE SER 0
 
-void init_originals() {
+/**
+ * @brief Load MaM spawn/redistribution settings for the upcoming resize.
+ *
+ * Reads the next group's methods and strategies from @c config_file and
+ * applies them via MaM configuration APIs.
+ */
+void modify_configuration(void) {
+  int req;
   size_t i;
+  if (config_file->n_groups != group->grp + 1) {
+    MAM_Set_configuration(config_file->groups[group->grp + 1].sm, MAM_STRAT_SPAWN_CLEAR,
+      config_file->groups[group->grp + 1].phy_dist, config_file->groups[group->grp + 1].rm, MAM_STRAT_RED_CLEAR);
+    for (i = 0; i < config_file->groups[group->grp + 1].ss_len; i++) {
+      MAM_Set_key_configuration(MAM_SPAWN_STRATEGIES, config_file->groups[group->grp + 1].ss[i], &req);
+    }
+    for (i = 0; i < config_file->groups[group->grp + 1].rs_len; i++) {
+      MAM_Set_key_configuration(MAM_RED_STRATEGIES, config_file->groups[group->grp + 1].rs[i], &req);
+    }
+    MAM_Set_target_number(config_file->groups[group->grp + 1].procs); // TODO: TO BE DEPRECATED
+  }
+}
 
-  if(config_file->n_groups > 1) {
-    MAM_Data_add(&(group->grp), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-    MAM_Data_add(&(group->iter_start), NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-    MAM_Data_add(&run_id, NULL, 1, MPI_INT, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
+/**
+ * @brief Register the first group's SDR/ADR buffers with MaM for redistribution.
+ */
+void init_originals(void) {
+  size_t i;
+  MPI_Datatype dist_type;
 
-    if(config_file->sdr) {
-      for(i=0; i<group->sync_data_groups; i++) {
-        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
+  if (config_file->n_groups > 1) {
+    MPI_Type_match_size(MPI_TYPECLASS_INTEGER, config_file->datasize, &dist_type);
+    if (config_file->sdr) {
+      for (i = 0; i < group->sync_data_groups; i++) {
+        MAM_Data_add(group->sync_array[i], NULL, group->sync_qty[i], dist_type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
       }
     }
-    if(config_file->adr) {
-      for(i=0; i<group->async_data_groups; i++) {
-        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], MPI_CHAR, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
+    if (config_file->adr) {
+      for (i = 0; i < group->async_data_groups; i++) {
+        MAM_Data_add(group->async_array[i], NULL, group->async_qty[i], dist_type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
       }
     }
   }
 }
 
-void init_targets() {
-  size_t total_qty;
-  void *value = NULL;
-  MPI_Datatype type;
+/**
+ * @brief Initialise a newly spawned target: receive config, progress, and results.
+ *
+ * Broadcasts group/phase/iter/@c run_id from root over @c new_comm, then
+ * receives the configuration and results via ::recv_config_file / ::results_comm.
+ * Not required for sources that survive into the target group.
+ */
+void init_targets(void) {
+  size_t index, *array_iters_aux, *array_stages_aux;
+  MPI_Datatype type_size_t;
 
-  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_CONSTANT);
-  group->grp = *((int *)value);
-  group->grp = group->grp + 1;
+  MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
+  MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
+  MPI_Bcast(&group->actual_iter, 1, type_size_t, ROOT, new_comm);
+  MPI_Bcast(&group->actual_phase, 1, type_size_t, ROOT, new_comm);
+  MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
 
   recv_config_file(ROOT, new_comm, &config_file);
+
   results = malloc(sizeof(results_data));
-  init_results_data(results, config_file->n_resizes, config_file->n_stages, config_file->groups[group->grp].iters);
+  array_iters_aux = malloc(config_file->n_phases * sizeof *array_iters_aux);
+  array_stages_aux = malloc(config_file->n_phases * sizeof *array_stages_aux);
+  for (index = 0; index < config_file->n_phases; index++) {
+    array_iters_aux[index] = config_file->phases[index].qty_iters;
+    array_stages_aux[index] = config_file->phases[index].qty_stages;
+  }
+  init_results_data(results, config_file->n_resizes, config_file->n_phases, array_stages_aux, array_iters_aux);
   results_comm(results, ROOT, config_file->n_resizes, new_comm);
+
+  free(array_iters_aux);
+  free(array_stages_aux);
 }
 
-void update_targets() { //FIXME Should not be needed after redist -- Declarar antes
+/**
+ * @brief Advance to the next group and refresh local pointers into MaM data.
+ *
+ * Increments @c grp, copies the new group config, clears surviving-source
+ * buffers via ::update_surviving_targets, then obtains SDR/ADR entry pointers
+ * from MaM.
+ */
+void update_targets(void) {
   size_t i, entries, total_qty;
   void *value = NULL;
   MPI_Datatype type;
 
-  MAM_Data_get_pointer(&value, 0, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-  group->iter_start = *((int *)value);
+  group->grp = group->grp + 1;
+  group->grp_config = config_file->groups[group->grp];
+  group->start_phase = group->actual_phase;
 
-  MAM_Data_get_pointer(&value, 1, &total_qty, &type, MAM_DATA_REPLICATED, MAM_DATA_VARIABLE);
-  run_id = *((int *)value);
-
-  if(config_file->sdr) {
+  update_surviving_targets();
+  if (config_file->sdr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE, &entries);
-    group->sync_qty = (int *) malloc(entries * sizeof(int));
-    group->sync_array = (char **) malloc(entries * sizeof(char *));
-    for(i=0; i<entries; i++) {
+    group->sync_qty = (size_t *)malloc(entries * sizeof(size_t));
+    group->sync_array = (void **)malloc(entries * sizeof(void *));
+    for (i = 0; i < entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_VARIABLE);
-      group->sync_array[i] = (char *)value;
+      group->sync_array[i] = value;
       group->sync_qty[i] = DR_MAX_SIZE;
     }
-    group->sync_qty[entries-1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->sync_qty[entries - 1] = config_file->sdr % DR_MAX_SIZE ? config_file->sdr % DR_MAX_SIZE : DR_MAX_SIZE;
     group->sync_data_groups = entries;
   }
 
-  if(config_file->adr) {
+  if (config_file->adr) {
     MAM_Data_get_entries(MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT, &entries);
-    group->async_qty = (int *) malloc(entries * sizeof(int));
-    group->async_array = (char **) malloc(entries * sizeof(char *));
-    for(i=0; i<entries; i++) {
+    group->async_qty = (size_t *)malloc(entries * sizeof(size_t));
+    group->async_array = (void **)malloc(entries * sizeof(void *));
+    for (i = 0; i < entries; i++) {
       MAM_Data_get_pointer(&value, i, &total_qty, &type, MAM_DATA_DISTRIBUTED, MAM_DATA_CONSTANT);
-      group->async_array[i] = (char *)value;
+      group->async_array[i] = value;
       group->async_qty[i] = DR_MAX_SIZE;
     }
-    group->async_qty[entries-1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
+    group->async_qty[entries - 1] = config_file->adr % DR_MAX_SIZE ? config_file->adr % DR_MAX_SIZE : DR_MAX_SIZE;
     group->async_data_groups = entries;
   }
 }
 
-void user_redistribution(void *args) {
+/**
+ * @brief Drop old SDR/ADR buffers for sources that survive into the target group.
+ *
+ * Resets @c exec_iters and frees previous sync/async arrays so
+ * ::update_targets can install the post-redistribution pointers.
+ */
+void update_surviving_targets(void) {
+  size_t i;
+  group->exec_iters = 0;
+
+  if (config_file->sdr && group->sync_array != NULL) {
+    for (i = 0; i < group->sync_data_groups; i++) {
+      free(group->sync_array[i]);
+      group->sync_array[i] = NULL;
+    }
+    free(group->sync_qty);
+    group->sync_qty = NULL;
+    free(group->sync_array);
+    group->sync_array = NULL;
+  }
+
+  if (config_file->adr && group->async_array != NULL) {
+    for (i = 0; i < group->async_data_groups; i++) {
+      free(group->async_array[i]);
+      group->async_array[i] = NULL;
+    }
+    free(group->async_qty);
+    group->async_qty = NULL;
+    free(group->async_array);
+    group->async_array = NULL;
+  }
+}
+
+/**
+ * @brief MaM user-redistribution callback for non-MaM-managed application state.
+ *
+ * New ranks call ::init_targets. Sources broadcast progress, send config and
+ * results over @c new_comm, print local results, and zombies call
+ * ::free_zombie_process. Always ends with @c MAM_Resume_redistribution.
+ *
+ * @param[in] i_args Unused MaM callback argument.
+ */
+void user_redistribution(void *i_args) {
   int commited;
+  MPI_Datatype type_size_t;
   mam_user_reconf_t user_reconf;
 
+  (void)i_args;
   MAM_Get_Reconf_Info(&user_reconf);
   new_comm = user_reconf.comm;
-  if(user_reconf.rank_state == MAM_PROC_NEW_RANK) {
+  if (user_reconf.rank_state == MAM_PROC_NEW_RANK) {
     init_targets();
   } else {
+    MPI_Type_match_size(MPI_TYPECLASS_INTEGER, sizeof(size_t), &type_size_t);
+    MPI_Bcast(&group->grp, 1, MPI_INT, ROOT, new_comm);
+    MPI_Bcast(&group->actual_iter, 1, type_size_t, ROOT, new_comm);
+    MPI_Bcast(&group->actual_phase, 1, type_size_t, ROOT, new_comm);
+    MPI_Bcast(&run_id, 1, MPI_INT, ROOT, new_comm);
+
     send_config_file(config_file, ROOT, new_comm);
     results_comm(results, ROOT, config_file->n_resizes, new_comm);
 
+    group->actual_phase++;
     print_local_results();
-    if(user_reconf.rank_state == MAM_PROC_ZOMBIE) {
+    group->actual_phase--;
+
+    if (user_reconf.rank_state == MAM_PROC_ZOMBIE) {
       free_zombie_process();
     }
   }

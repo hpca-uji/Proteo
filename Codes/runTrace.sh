@@ -4,14 +4,20 @@
 #SBATCH -N 1
 #SBATCH --exclude=c01,c00,c02
 
+# Parameter 1: Configuration file (.ini or .json).
+# Parameter 2: Output file index.
+
 scriptDir="$(dirname "$0")"
 source $scriptDir/build/config.txt
+source $PROTEO_HOME$execDir/BashScripts/validate_config_ext.sh
 resultsDir="/Results"
 
 nodelist=$SLURM_JOB_NODELIST
 nodes=$SLURM_JOB_NUM_NODES
 configFile=$1
 outIndex=$2
+
+validate_config_ext "$configFile" || exit 1
 
 echo "MPICH"
 

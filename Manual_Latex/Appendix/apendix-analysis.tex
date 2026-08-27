@@ -1,0 +1,149 @@
+\section{Output CSV files format}
+\label{appendix:csv}
+
+In this appendix is described the format of each final output file, in order to allow users to analyze by themselves the obtained results.
+
+Each of the rows of file \textit{data\_global.csv} represents a complete execution of a malleable application. Columns can be grouped according to their meaning. On the one hand, there are those showing information on the resizing, on the computation in each iteration and the results obtained.
+%The first data set \textit{data\_global.csv}, where each row represents a whole execution, has the next columns types:
+\begin{itemize}
+    \item Columns related to resize configuration:
+    \begin{itemize}
+        \item Total\_Resizes: It is an integer that indicates number of performed resizes (\texttt{Total\_Resizes} in configuration file). %Integer.
+        \item Total\_Groups: It is an integer indicating the number of processes groups for the malleable execution. It is equal to \texttt{Total\_Resizes}$+1$.% Integer.
+        Each of the following six columns is a list of data showing the concrete information for each group in a resize. They are a ordered array of integers with size \textit{Total\_Groups}.  
+        \item Groups: Number of processes in a group. %of executed processes group during the execution of malleable application. Array of integers with size \textit{Total\_Groups}.
+        \item Dist: Physical distribution of processes in a group. %Array of integers with size \textit{Total\_Groups}. 
+        Its possible values are Compact(0) and Spread(1).
+        \item Spawn\_Method: Spawn method for a resize.% Array of integers with size \textit{Total\_Resizes}. 
+        Its possible values are Baseline(0) and Merge(1).
+        \item Spawn\_Strategy: Spawn strategy for a resize. %Array of integers with size \textit{Total\_Resizes}. 
+        Its possible values are None(1), Single(3), Asynchronous(2) and All(6).
+        \item Redistribution\_Method: Redistribution method for each resize. Array of integers with size \textit{Total\_Groups}. Its possible values are Alltoall (0), Point-to-point(1), RMA-Lock(2) or RMA-LockAll(3).
+        \item Redistribution\_Strategy: Redistribution strategy for each resize. Array of integers with size \textit{Total\_Groups}. Its possible values are None(1), Threads(2).
+        \item SDR: Number of data elements redistributed synchronously in each redistribution stage. Integer. Multiply by \texttt{Datasize} for bytes moved.
+        \item ADR: Number of data elements redistributed asynchronously in each redistribution stage. Integer. Multiply by \texttt{Datasize} for bytes moved.
+        \item DR: Total elements redistributed in each redistribution stage. Is equal to $SDR + ADR$. Integer.
+    \end{itemize}
+    
+    \item Columns related to application type: %compute configuration:
+    \begin{itemize}
+        \item Granularity: It is an integer that indicates problem size for computation stages. %Integer.
+        \item FactorS: Speedup factor to emulate how the performance of computation stages are affected by the number of processes. Ordered array of Integers of size \textit{Total\_Groups}.
+        \item Total\_Stages: It is an integer that represents number of stages in an iteration. The three following columns contain concrete information about each of stages. They will be an ordered array of size \textit{Total\_Stages}.
+        \item Stage\_Types: Each element indicates stage type (computation/communication). %Ordered array of stage types for each stage of the iterations. Array of integers with size \textit{Total\_Stages}.
+        Its possible values are PI\_Computation(0), Matrix\_Computation(1), Point\_communication(2), Bcast\_communication(3), Allgatherv\_communication(4), Reduce\_communication(5) and Allreduce\_communication(6).
+        \item Stage\_Times: Each element represents the stage time. %for each stage of the iterations. Array of integers with size \textit{Total\_Stages}.
+        \item Stage\_Bytes: Each element indicates bytes communicated in this stage. %for each stage of the iterations. Array of integers with size \textit{Total\_Stages}.
+        For computation stages is always 0.
+        %\item $Latency_{net}$: Latency of the used network.
+        %\item $Bw_{net}$: Bandwidth of the used network.
+        %\item $Latency_{shm}$: Latency of the used shared memory.
+        %\item $Bw_{shm}$: Bandwidth of the used shared memory.
+    \end{itemize}
+    
+    \item Results columns:
+    \begin{itemize}
+        \item Iters:  It is an  ordered array of integers with size \textit{Total\_Groups} that contains  executed iterations by each group. % Is the sum of \textit{Asynch\_Iters} and synchronous iterations. %Array of integers with size \textit{Total\_Groups}.
+        \item Asynch\_Iters: It is an ordered array of integers with size \textit{Total\_Groups} that represents the total iterations executed  by the parents while an asynchronous resize was taking place. %Array of integers with size \textit{Total\_Resizes}.
+        \item $T_{iter}$: Array of arrays (2 levels) which contains the times of each  iteration. The upper array refers to the iterations of each group and has a size of \textit{Total\_Groups}. The inner array contains floats, and the size of the array with index \textit{i} is \textit{Iters[i]}, where \textit{i} refers to a group of processes. 
+        Therefore, to check the iteration time of the last iteration in the first group of processes it will be accessed as $T_{iter}[0][Iters[0]-1]$.
+        \item $T_{stages}$: Array of 3 levels which contains the times of each performed stage in the execution. The first level contains arrays of groups and is of size \textit{Total\_Groups}. The second level contains an array of iterations, and the size of the array with index \textit{i} is \textit{Iters[i]}, where \textit{i} refers to a group of processes. Lastly, the third level stores for a specific iteration, an array of floats values where each one represents the time of a stage in the iteration. Has a size of \textit{Total\_Stages}.
+        Therefore, to check the stage time of the last stage in the last iteration of the first group of processes it will be accessed as $T_{iter}[0][Iters[0]-1][Total\_Stages-1]$.
+        
+        \item $T_{spawn}$: Ordered array of spawn times for each resize. Refers to the time $T_{spawn}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Array of floats with size \textit{Total\_Resizes}. 
+        \item $T_{spawn\_real}$: Ordered array of real spawn times for each resize. Refers to the time $T_{spawn\_real}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Array of floats with size \textit{Total\_Resizes}.
+        \item $T_{SR}$: Ordered array of synchronous data redistribution times for each resize. Refers to the time $T_{SR}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Array of floats with size \textit{Total\_Resizes}. 
+        \item $T_{AR}$: Ordered array of asynchronous data redistributions times for each resize. Refers to the time $T_{AR}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Array of floats with size \textit{Total\_Resizes}. 
+        \item $T_{total}$: Total execution time of the application. Float value.
+    \end{itemize}
+    
+\end{itemize}
+The other two files generated by \textit{analyser.sh} script, \textit{data\_malleability.csv} and \textit{data\_iterations.csv}, are focused on helping the analysis of behaviour of malleable application   while resizing is being performed above  when it is carried out asynchronously. In both files, each row represents a different malleable running and its columns are a subset of those described in the previous file.
+
+The second data set \textit{data\_malleability.csv}, is intended to facilitate the analysis of different configurations in malleability only, where all the execution data is not needed. Each row represents a single resize.
+This data set has the next columns:
+\begin{itemize}
+    \item Resize configuration columns:
+    \begin{itemize}
+        \item NP: Number of parent processes before the resize. Integer.
+        \item NC: Number of children processes after the resize. Integer.
+        \item Dist: Physical distribution of processes for the parents and children. Array of two integers. Its possible values are Compact(0) and Spread(1).
+        \item Spawn\_Method: Spawn method used for the resize. Integer. Its possible values are Baseline(0) and Merge(1).
+        \item Spawn\_Strategy: Spawn strategy used for the resize. Integer. Its possible values are None(0), Asynchronous(1), Single(2), All(3).
+        \item Redistribution\_Method: Redistribution method for each resize. Integer. Its possible values are Alltoall (0), Point-to-point(1), RMA-Lock(2) or RMA-LockAll(3).
+        \item Redistribution\_Strategy: Redistribution strategy for each resize. Integer. Its possible values are None(1), Threads(2).
+        \item SDR: Number of data elements redistributed synchronously in the redistribution stage. Integer. Multiply by \texttt{Datasize} for bytes moved.
+        \item ADR: Number of data elements redistributed asynchronously in the redistribution stage. Integer. Multiply by \texttt{Datasize} for bytes moved.
+        \item DR: Total elements redistributed in the redistribution stage. Is equal to $SDR + ADR$. Integer.
+    \end{itemize}
+    
+    \item Compute configuration columns:
+    \begin{itemize}
+        \item Total\_Stages: Number of stages. Integer.
+        \item Granularity: Problem size for computation stages. Integer.
+        \item FactorS: Speedup factor to emulate how the performance of computation stages are affected by the number of processes at column \textit{NP}. Integer.
+        \item Stage\_Type: Ordered array of stages types for each stage of the iterations. Array of integer with size \textit{Total\_Stages}. Its possible values are PI\_Computation(0), Matrix\_Computation(1), Point\_communication(2), Bcast\_communication(3), Allgatherv\_communication(4), Reduce\_communication(5) and Allreduce\_communication(6).
+        \item Stage\_Time: Ordered array of stage times for each stage of the iterations. Array of integer with size \textit{Total\_Stages}.
+        \item Stage\_Bytes: Ordered array of bytes communicated for each stage of the iterations. Array of integer with size \textit{Total\_Stages}.
+        %\item $Latency_{net}$: Latency of the used network.
+        %\item $Bw_{net}$: Bandwidth of the used network.
+        %\item $Latency_{shm}$: Latency of the used shared memory.
+        %\item $Bw_{shm}$: Bandwidth of the used shared memory.
+    \end{itemize}
+    
+    \item Results columns:
+    \begin{itemize}
+        \item Iters: Quantity of performed iterations by the parents. Is the sum of \textit{Asynch\_Iters} and synchronous iterations. Integer.
+        \item Asynch\_Iters: Quantity of performed iterations by the parents while an asynchronous resize was taking place. Integer.
+        \item $T_{iter}$: Array of times for each performed iteration in this group. The array contains floats and has a size of \textit{Iters} elements. 
+        Therefore, to check the iteration time of the last iteration it will be accessed as $T_{iter}[Iters-1]$.
+        \item $T_{stages}$: Array of 2 levels which contains the times of each performed stage by the group. The first level contains an array of iterations, with an array size of \textit{Iters}. On the other hand, the second level stores for a specific iteration, an array of floats values where each one represents the time of a stage in the iteration. Has a size of \textit{Total\_Stages}.
+        Therefore, to check the stage time of the last stage in the last iteration it will be accessed as $T_{stages}[Iters-1][Total\_Stages-1]$.
+        
+        \item $T_{spawn}$: Spawn times for the resize. Refers to the time $T_{spawn}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Float value.
+        \item $T_{spawn\_real}$: Real spawn times for the resize. Refers to the time $T_{spawn\_real}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Float value.
+        \item $T_{SR}$: Synchronous data redistribution time for the resize. Refers to the time $T_{SR}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Float value.
+        \item $T_{AR}$: Asynchronous data redistribution time for the resize. Refers to the time $T_{AR}$ in the monitoring module (Subsection \ref{subsection:monitoring}). Float value.
+    \end{itemize}
+\end{itemize}
+
+The final data set \textit{data\_iterations.csv} is a simplification of the previous data sets to focus an analysis on how each iteration has been performed. Each row represents a single iteration.
+This data set has the next columns:
+\begin{itemize}
+    \item NP: Number of processes. Integer.
+    \item Is\_Dynamic: Whether the group of processes is the first one (False) or has been spawned during execution (True). Boolean.
+    
+    \item The next values should be ignored if $Asynch\_Iters$ is False. Resize configuration columns:
+    \begin{itemize}
+        \item NC: Number of children processes after the resize. Integer. Default value is \textit{None} if $Asynch\_Iters$ is False.
+        \item Dist: Physical distribution of processes for the parents and children. Array of two integers. Its valid values are Compact(0) and Spread(1). Default value for second element is (-1) if $Asynch\_Iters$ is False.
+        \item Spawn\_Method: Spawn method used for this group and the next one. Array of two integers. Its possible values are Baseline(0) and Merge(1). Default value for first element is (0) if $Is\_Dynamic$ is False. Default value for second element is (-1) if $Asynch\_Iters$ is False.
+        \item Spawn\_Strategies: Spawn strategy used for this group and the next one. Array of two integers. Its possible values are None(0), Asynchronous(1), Single(2), All(3). Default value for first element is (1) if $Is\_Dynamic$ is False. Default value for second element is (-1) if $Asynch\_Iters$ is False.
+        \item Redistribution\_Method: Redistribution method used for this group and the next one. Array of two integers. Its possible values are Alltoall (0), Point-to-point(1), RMA-Lock(2) or RMA-LockAll(3). Default value for first element is (0) if $Is\_Dynamic$ is False. Default value for second element is (-1) if $Asynch\_Iters$ is False.
+        \item Redistribution\_Strategy: Redistribution strategy used for this group and the next one. Array of two integers. Its possible values are None(1), Threads(2). Default value for first element is (1) if $Is\_Dynamic$ is False. Default value for second element is (-1) if $Asynch\_Iters$ is False.
+        \item SDR: Number of data elements redistributed synchronously in the redistribution stage. Integer. Default value is (-1) if $Asynch\_Iters$ is False.
+        \item ADR: Number of data elements redistributed asynchronously in the redistribution stage. Integer. Default value is (-1) if $Asynch\_Iters$ is False.
+        \item DR: Total elements redistributed in the redistribution stage. Integer. Is equal to $SDR + ADR$. Default value is (-1) if $Asynch\_Iters$ is False.
+    \end{itemize}
+    
+    \item Compute configuration columns:
+    \begin{itemize}
+        \item Total\_Stages: Number of stages. Integer.
+        \item Granularity: Problem size for computation stages. Integer.
+        \item FactorS: Speedup factor to emulate how the performance of computation stages are affected by the number of processes at column \textit{NP}. Integer.
+        \item Stages\_Type: Ordered array of stage types for each stage of the iterations. Array of integer with size \textit{Total\_Stages}. Its possible values are PI\_Computation(0), Matrix\_Computation(1), Point\_communication(2), Bcast\_communication(3), Allgatherv\_communication(4), Reduce\_communication(5) and Allreduce\_communication(6).
+        \item Stage\_Time: Ordered array of stage times for each stage of the iterations. Array of integer with size \textit{Total\_Stages}.
+        \item Stage\_Bytes: Ordered array of bytes communicated for each stage of the iterations. Array of integer with size \textit{Total\_Stages}.
+        %\item $Latency_{net}$: Latency of the used network.
+        %\item $Bw_{net}$: Bandwidth of the used network.
+        %\item $Latency_{shm}$: Latency of the shared memory.
+        %\item $Bw_{shm}$: Bandwidth of the used shared memory.
+    \end{itemize}
+    
+    \item Results columns:
+    \begin{itemize}
+        \item $Asynch\_Iters$: Indicates whether this iteration has been performed normally (False) or during an asynchronous resize (True). Boolean.
+        \item $T_{iter}$: Iteration time. Float value
+        \item $T_{stage}$: Array of each stage time in the iteration. Array of floats with size \textit{Total\_Stages}. Therefore, to check the stage time of the last stage in the iteration it will be accessed as $T_{stages}[Total\_Stages-1]$.
+    \end{itemize}
+\end{itemize}

@@ -5,7 +5,7 @@
 #====== Do not modify these values =======
 partition=$1
 
-hostlist=$(sinfo -hs --partition $partition | sed 's/  */:/g' | cut -d ':' -f5)
+hostlist=$(sinfo -hs --partition $partition | sed 's/  */:/g' | rev | cut -d ':' -f1 | rev)
 basic_node=$(scontrol show hostname $hostlist | paste -d, -s | cut -d ',' -f1)
 cores=$(scontrol show node $basic_node | grep CPUTot | cut -d '=' -f3 | cut -d ' ' -f1)
 echo "$cores"

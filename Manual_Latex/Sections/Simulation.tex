@@ -1,0 +1,172 @@
+\section{Simulation}
+This section describes the steps to install this tool and execute the synthetic application with a configuration file simulating a malleable application. We also show the output files obtaines that allow to analyse the its behaviour and performance. First of all, the requirements for installation and use are explained, followed by a description of how the simulations are carried out and measurements are stored. 
+%Its usage requires the following steps:
+%\begin{enumerate}
+%    \item Installation of the synthetic application. % Navigate to \textit{/path/to/malleability\_benchmark/Codes} and use the commands \texttt{Make} and \texttt{Make install}. %This will compile the application and create the files needed for execution.
+%    \item Execution of the simulation and  obtaining results. %: Navigate to \textit{/path/to/malleability\_benchmark/Exec} to choose an script that allows to execute the application according to a certain conditions.
+    %\item Analysis performance.  %: Navigate to \textit{/path/to/malleability\_benchmark/Analysis}. It is separated from the execution as a Python3 interpreter with some modules are used for this phase and they may be not available in the computing facility.
+%\end{enumerate}
+
+\subsection{Installation}
+The installation of this tool requires the following dependencies to be taken into account:
+\begin{itemize}
+    \item GNU compiler.
+    \item MPICH 3.x.y. or 4.0.3 Nemesis or OFI netmod. Is not possible to use UCX to create processes dynamically with the current versions of MPICH.
+    \item Python3 interpreter. Only needed to perform multiple executions with different configurations with one submission.
+    \item Slurm Workload manager. Tested with Slurm-wlm 19.05.5. It is optional, but if is not installed, some limitations apply.
+\end{itemize}
+
+Next, you have to install the synthetic application. 
+The files needed to  download it can be obtained  by cloning from the public repository, which is located at \url{http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git}.
+
+Then, you can install by going to the directory \textit{/path/to/malleability\_benchmark/Codes} and use \texttt{Make} or \texttt{Make install\_slurm} command. Use the second command to install the application with Slurm support.
+After installation the following directory tree can be observed: % with the following:
+\begin{itemize}
+    \item \textit{Codes}: Contains the binary and source codes.
+    \item \textit{Exec}: Holds execution scripts for the simulations.
+    \item \textit{Results}: Stores output files obtained from simulation.
+    \item \textit{Analysis}: Includes scripts for analyzing output files.
+\end{itemize}
+
+Also, optional modules for the Python3 interpreter are needed in order to analyse the output files. They are not mandatory and can be installed in a personal computer without needing to reinstall our tool. These are:
+\begin{itemize}
+    \item Numpy module.
+    \item Pandas module.
+    \item Seaborn module.
+    \item Scipy module.
+    \item scikit\_posthocs module.
+    \item Matplot module.
+\end{itemize}
+
+\subsection{Execution}
+\label{subsection:execution}
+\subsubsection{Execution scripts}
+The directory \textit{Exec} contains two scripts that allow executing the synthetic application from a configuration file and simulate a malleable application. %One focused on a single simulation (defined by a configuration file) and another several ones by defining a set of values for the same parameter in the configuration file.
+%The first focuses on the execution of a single simulation (defined by a configuration file) and the other on several simulations by defining a set of values for the same parameter in the configuration file.
+
+The first script is called \textit{singleRun.sh} (Listing \ref{code:singleRun-example}), and requires the following parameters:
+\begin{enumerate}
+    \item Configuration file name. This file contains every parameter needed to simulate the application behaviour and its resizing. It is mandatory.
+    \item Identifier of execution (\textit{ID}). It is an integer number that identifies this simulation. Executions with an identical configuration file should have the same \textit{ID}. This parameter is optional with a default value to 0.
+    \item Total number of executions. It is an integer number indicating how many times the simulations will be run. A minimum of $5$ is recommended to ensure  a proper statistical analysis. It is also optional with a default value to $1$.
+    \item Use Extrae. It is an integer to indicate whether to use Extrae ($1$) or not ($0$).
+    \item Path where the output file should be saved. It is optional and has a default value to current directory.  Nevertheless, if a path is given by the user but it does not exist, the script fails and the simulation is not run. 
+\end{enumerate}
+An example to execute this script is shown at Listing \ref{code:singleRun-example}, where the simulation has a configuration file named \textit{configuration.ini}, an \textit{ID} of $5$ and it  is executed $20$ times.
+
+\begin{lstlisting}[float,caption=Script \textit{singleRun.sh} example of use., label=code:singleRun-example, captionpos=b]
+    bash singleRun.sh configuration-file.ini ID Repetitions
+                        Use_Extrae Output_path
+            
+    bash singleRun.sh configuration.ini 5 20 0
+\end{lstlisting}
+
+By default, the script \textit{singleRun.sh} allocates the nodes required for the job using Slurm commands. It should be called with the command \textit{bash}. 
+
+Instead, if the user wants his own allocation, the script \textit{singleRunCostum.sh} is provided to be called with the command \textit{sbatch} or \textit{srun}. On the other hand, if no allocation is needed is should use \textit{bash} command. This script has the same parameters that \textit{singleRun.sh} uses. 
+
+Use the script \textit{singleRunCostum.sh} with the bash command if the installation is performed without Slurm support.
+
+The script \textit{multipleRuns.sh} (Listing \ref{code:multipleRuns-example}) allows multiple simulations to be run. Different values represented as a comma-separated list can be defined for certain parameters in the configuration file. This script will create as many configuration files as different configurations can be obtained from the original configuration file.
+As a result, a directory is created and contains the configuration files of all simulations. This script requires the following 2 parameters:
+\begin{enumerate}
+    \item Configuration file name. It is mandatory.
+    \item Common output configuration file names(CON). All resulting configuration files will have as name "CON+i+.ini", where \textit{CON} is the common name, \textit{i} is an increasing index for each file, and ".ini" is the format file.
+  %  \item Path where the output files should be created. If the path does not exist, the script fails. Optional with default value to directory \textit{/path/to/malleability-benchmark/Results/}.
+   %\item Subdirectory name. This script creates a new directory in the\textit{ Results} path where all the output files from all simulations will be stored. 
+    %It is optional, but if any value is provided it has a default name  \textit{malleability-\%m-\%d-\%H-\%M}. The parameters \textit{m}, \textit{d}, \textit{H} and \textit{M} refers to month, day, hour and minute respectively.
+   
+\end{enumerate}
+An example to execute this script is shown at Listing \ref{code:multipleRuns-example}. %, where the simulations are obtained from the configuration file \textit{array-configuration-file.ini} and each configuration is executed $20$ times. %Each configuration file is created from the file \textit{array-configuration-file.ini}. 
+
+\begin{lstlisting}[float,caption=Script \textit{multipleRuns.sh} example of use., label=code:multipleRuns-example, captionpos=b]
+    bash multipleRuns.sh array-configuration-file.ini OutputhName
+
+    bash multipleRuns.sh configuration_array.ini config
+\end{lstlisting}
+
+The parameters in the configuration file that can be set as a list of values are: $SDR$, $ADR$, $Procs$, $FactorS$, $Dist$, $Redistribution\_Method$, $Redistribution\_Strategy$, $Spawn\_Method$, $Spawn\_Strategy$. An example is shown in Listing \ref{code:config-file-array} where parameters used as arrays are shown. From this example, 24 different configurations are created.
+
+If an array is used for $Procs$, its related $FactorS$ parameter must also hold an array with equal size. This is because each value of $Procs$ should have a unique value for $FactorS$.
+
+\begin{lstlisting}[float,caption=Configuration file using value list in parameters., label=code:config-file-array, captionpos=b]
+[general]
+...
+ADR=0,100    
+;end [general]
+......
+[resize0]
+....
+Procs=2,4,8    
+FactorS=0.5,0.3,0.2
+Dist=spread,compact 
+...
+;end [resize0]
+[resize1]
+....
+Procs=10,20   
+FactorS=0.18,0.1
+...
+;end [resize1]
+\end{lstlisting}
+
+Lastly, the script
+
+\subsubsection{Error check}
+ The script \textit{CheckRun.sh} (Listing \ref{code:Checkrun}) in directory \textit{Exec} checks the consistency of the measurements obtained in the simulations and stored in the output files. % in every intermediate files of a given directory. 
+ %those experiments where it detects that the results are not consistent.
+It is recommended to perform this check before analyzing the results, % obtained in a simulation, 
+so those simulations that have not been executed correctly are launched again.% This tool provides the possibility to review the results obtained in the simulations to check if they are consistent.
+
+The script expects the following 5 parameters:
+\begin{enumerate}
+  \item Maximum index of the runs.
+  \item Amount of repetitions per index/run.
+  \item Total stages in all runs.
+  \item Total groups of processes in all runs.
+  \item Maximum valid iteration time across all runs. If an iteration time is higher, that particular repetition inside the run is cleaned and launched again.
+\end{enumerate}
+
+\begin{lstlisting}[float,caption=Script \textit{CheckRun.sh} example of use., label=code:Checkrun, captionpos=b]
+    bash CheckRun.sh FilesPath
+\end{lstlisting}
+
+%We have detected that the usage of \texttt{MPI\_Wtime} does not ensure the times are gathered correctly when using dynamic processes and in rare occasions a negative time is obtained in the parameter $T_{total}$.
+%As for the standard, the function \texttt{MPI\_Wtime} provides the time passed in seconds since "some time in the past" and this "some time in the past" does not change during the process lifetime. Nevertheless for a dynamic process they could have a different "some time in the past" from their parents even if they are in the same node.
+
+
+\subsubsection{Intermediate output files}
+\label{subsection:intermediate_files}
+A simulation %using this tool
+generates two types of output files where the mesurements are stored. One of them is a global file containing general information of the simulations. The remainder files are related to resizes (one for each processes group in which the application is to be resized). The files follow the following name format: %The files name format are as follows:
+\begin{itemize}
+    \item R\textit{X}\_Global.out for global file. 
+    \item R\textit{X}\_G\textit{Y}NP\textit{Z}.out. For resize files.
+\end{itemize}
+
+Where the variables mean:
+\begin{itemize}
+    \item \textit{X}: \textit{ID} of the execution. Selected when the execution script is launched.
+    \item \textit{Y}: It is the identification of a group of processes in a resize. For a given simulation, it  starts at 0 and for each new group is incremented by 1.
+    \item \textit{Z}: Number of processes for the group $Y$.
+\end{itemize}
+
+The names from the execution in \ref{code:singleRun-example} will be the global file R\textit{5\_Global.out}, while the group ones are R\textit{5}\_G\textit{0}NP\textit{2}.out, R\textit{5}\_G\textit{1}NP\textit{10}.out.
+
+Both types of files show first the configuration parameters used for the execution, and then the gathered times of the simulation.
+Global file  contains: % shown in order the following:
+\begin{itemize}
+    \item Configuration parameters.
+    \item Times: $T_{spawn}$, $T_{spawn\_real}$, $T_{SR}$, $T_{AR}$ and $T_{total}$.
+\end{itemize}
+
+On the other hand, other files contain the following:
+\begin{itemize}
+    \item Configuration parameters.
+    \item Stage parameters.
+    \item Resize parameters of the group $Y$.
+    \item Measured times $T_{iter}$ and $T_{stages}$.
+    \item Total iterations executed while an asynchronous resize was being performed ($Async_{iters}$).
+\end{itemize}
+
+Examples of output for these intermediate files can be found at section \ref{subsection:intermediate_files_examples}.

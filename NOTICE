@@ -1,0 +1,19 @@
+Third-Party Notices
+===================
+
+This repository includes third-party software that is not authored by
+Iker Martín-Álvarez. Those components remain under their original licenses.
+Their copyright and license notices in the source files must be preserved.
+
+cJSON
+-----
+Copyright (c) 2009-2017 Dave Gamble and cJSON contributors
+License: MIT
+Location: Codes/SAM/IOcodes/cJSON.c, Codes/SAM/IOcodes/cJSON.h
+
+inih
+----
+Copyright (C) 2009-2020, Ben Hoyt
+License: BSD-3-Clause
+Location: Codes/SAM/IOcodes/ini.c, Codes/SAM/IOcodes/ini.h
+Homepage: https://github.com/benhoyt/inih

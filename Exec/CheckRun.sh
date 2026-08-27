@@ -1,7 +1,5 @@
 #!/bin/bash
 
-partition="P1"
-
 # Checks if all the runs in the current working directory performed under a 
 # Slurm manager have been performed correctly and if some runs can be corrected 
 # they are launched again
@@ -19,7 +17,6 @@ partition="P1"
 
 scriptDir="$(dirname "$0")"
 source $scriptDir/../Codes/build/config.txt
-cores=$(bash $PROTEO_HOME$execDir/BashScripts/getCores.sh $partition)
 
 if [ "$#" -lt "6" ]
 then
@@ -41,8 +38,8 @@ then
 fi
 
 limit_time=0
-exec_lines_basic=6
-iter_lines_basic=3
+exec_lines_basic=7 # 1 Config + 6 Times
+iter_lines_basic=3 # 1 Config + 1 Group + AsynchIters
 exec_total_lines=$(($exec_lines_basic+$total_stages+$total_groups))
 iter_total_lines=$(($iter_lines_basic+$total_stages*2+1))
 exec_remove=$(($exec_lines_basic+$total_stages+$total_groups-1))
@@ -191,11 +188,44 @@ do
     fi
 
     #2 - Obtain number of nodes needed
-    config_file="$common_name$run.ini"
-    node_qty=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $cores)
+    if [ -f "${common_name}${run}.json" ]; then
+      config_file="${common_name}${run}.json"
+    elif [ -f "${common_name}${run}.ini" ]; then
+      config_file="${common_name}${run}.ini"
+    else
+      echo "Config not found: ${common_name}${run}.ini or ${common_name}${run}.json" >&2
+      continue
+    fi
+    slurm_file=$(grep $config_file slurm*.out | cut -d ':' -f1)
+
+    #2.1 - Get partition name, default otherwise (Avoid duplicates)
+    if [ -e "$slurm_file" ]; then
+      partition=$(grep "START TEST P=" $slurm_file | cut -d '=' -f2)
+      partition=$(echo $partition | cut -d ' ' -f1)
+      if [ -z "$partition" ];
+      then
+        partition='P1'
+        echo "Partition not found in file $slurm_file. Falling to P1 partition."
+      fi
+    else
+      partition='P1'
+      echo "The slurm file does not exist. Falling to P1 partition."
+    fi
+    res=$(scontrol show partition $partition)
+    if [[ "$res" =~ "not found" ]]; 
+    then    
+      echo "Partition $partition does not exist. Falling to P1 partition."
+      partition='P1'
+    fi
+
+    #2.2 - Get nodes
+    result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+    node_qty=$(echo $result | cut -d ',' -f1)
+    constraint=$(echo $result | cut -d ',' -f2)
 
     #3 - Launch execution
-    sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $cores $config_file $use_extrae $run $diff
+    sbatch -p $partition -N $node_qty --constraint="$constraint" -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff
+    echo "sbatch -p $partition -N $node_qty -t $limit_time $PROTEO_HOME$execDir/generalRun.sh $config_file $use_extrae $run $diff"
   fi
 done
 

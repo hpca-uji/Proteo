@@ -1,0 +1,126 @@
+\section{Running Proteo}
+\label{section:usage}
+
+Proteo is launched through shell scripts in \texttt{Exec/}. All scripts accept \textbf{JSON} configuration files (extension \texttt{.json}). SAM selects the reader based on file extension.
+
+\subsection{Single execution with automatic allocation}
+
+\texttt{singleRun.sh} submits a Slurm job, computes the required node count from the JSON file, and runs the emulation.
+
+\begin{lstlisting}[style=bashstyle,caption={singleRun.sh usage.},captionpos=b,label=code:singleRun-usage]
+bash singleRun.sh config.json partition [outIndex] [repetitions]
+                   [valgrind/extrae] [timeLimitSec] [outputDir]
+
+bash singleRun.sh Codes/test.json mypartition 0 1 0
+\end{lstlisting}
+
+\begin{description}
+  \item[\texttt{config.json}] Mandatory. Path to the JSON configuration.
+  \item[\texttt{partition}] Mandatory. Slurm partition name.
+  \item[\texttt{outIndex}] Optional (default~0). Prefix \texttt{R\{index\}} for output files.
+  \item[\texttt{repetitions}] Optional (default~1). Number of runs with the same configuration.
+  \item[\texttt{valgrind/extrae}] Optional (default~0). \texttt{0} = none, \texttt{1} = Valgrind, \texttt{2} = Extrae tracing.
+  \item[\texttt{timeLimitSec}] Optional (default~0). Maximum time in \textbf{seconds} for a \textbf{single} execution. The script converts this to a Slurm wall-time limit as $(\texttt{timeLimitSec} \times \texttt{repetitions}) / 60 + 1$ minutes. \texttt{0} leaves the limit unset.
+  \item[\texttt{outputDir}] Optional. Move \texttt{R\{index\}\_*} files to this directory after completion.
+\end{description}
+
+\subsection{Execution with singleRunCostum.sh}
+\label{subsection:single-run-costum}
+
+\texttt{singleRunCostum.sh} does \textbf{not} allocate resources itself. It launches Proteo with \texttt{mpirun} using the hosts available in the current environment. Parameters match \texttt{singleRun.sh} except there is no partition argument. Typical deployment modes:
+
+\subsubsection{Local or personal computer}
+
+On a single machine (no cluster), invoke the script directly after compiling. Without Slurm, the launcher falls back to the local hostname:
+
+\begin{lstlisting}[style=bashstyle,caption={Local run without Slurm.},captionpos=b]
+bash Exec/singleRunCostum.sh Codes/test.json 0 1 0
+bash Exec/singleRunCostum.sh my_config.json 5 10 0 $HOME/results
+\end{lstlisting}
+
+This is the simplest way to try Proteo on a laptop or workstation.
+
+\subsubsection{Cluster with Slurm}
+
+Obtain an allocation first (\texttt{sbatch} or \texttt{srun}), then run the script \textbf{inside} that allocation so \texttt{SLURM\_JOB\_NODELIST} is set:
+
+\begin{lstlisting}[style=bashstyle,caption={singleRunCostum.sh inside a Slurm allocation.},captionpos=b]
+# Batch job that wraps the script
+sbatch -N 2 -p mypartition --wrap \
+  "bash Exec/singleRunCostum.sh Codes/test.json 0 1 0"
+
+# Or interactively after srun / salloc:
+bash Exec/singleRunCostum.sh Codes/test.json 0 1 0
+\end{lstlisting}
+
+\subsubsection{Multiple machines without an RMS}
+
+When several hosts are available but no resource manager is used, MPI must be able to reach every machine (shared filesystem, SSH keys or equivalent). Either:
+
+\begin{itemize}
+  \item Export a comma-separated host list that the launcher can pass to \texttt{mpirun -hosts} (the script reads \texttt{SLURM\_JOB\_NODELIST} when set; without Slurm you can still export a host list in that variable), then call \texttt{singleRunCostum.sh}; or
+  \item Source \texttt{Codes/build/config.txt} and call \texttt{mpirun} yourself with an explicit host list.
+\end{itemize}
+
+\begin{lstlisting}[style=bashstyle,caption={Multi-machine launch without Slurm.},captionpos=b]
+# Option A: host list via environment, then the wrapper script
+export SLURM_JOB_NODELIST=host1,host2,host3
+bash Exec/singleRunCostum.sh Codes/test.json 0 1 0
+
+# Option B: direct mpirun after sourcing paths
+source Codes/build/config.txt
+numP=$(bash Exec/BashScripts/getNumPNeeded.sh Codes/test.json 0)
+mpirun -hosts host1,host2,host3 -np $numP $PROTEO_BIN Codes/test.json 0
+\end{lstlisting}
+
+\subsection{Combinatorial JSON expansion}
+
+To run many concrete configurations from one \textbf{complex} JSON file (colon-separated variants), expand first:
+
+\begin{lstlisting}[style=bashstyle,caption={Expand complex JSON into concrete files.},captionpos=b]
+python3 Exec/PythonCodes/read_multiple_json.py \
+  GenConfig/examples/complex.example.json my_run_
+\end{lstlisting}
+
+This writes \texttt{my\_run\_0.json}, \texttt{my\_run\_1.json}, \ldots{} into \texttt{Desglosed-<date>/} under the current working directory. Each file is sanitized and validated. Then run any expanded file with \texttt{singleRun.sh} or \texttt{singleRunCostum.sh}.
+
+See Section~\ref{section:genconfig} for variant syntax and GenConfig multi-mode editing.
+
+\subsection{Error checking}
+
+\texttt{CheckRun.sh} verifies that output files for a batch of runs are complete and consistent; it can relaunch failed repetitions.
+
+\begin{lstlisting}[style=bashstyle,caption={CheckRun.sh usage.},captionpos=b,label=code:Checkrun-usage]
+bash CheckRun.sh commonName maxIndex repetitions totalStages totalGroups maxIterTime
+
+bash CheckRun.sh test 0 1 4 3 100
+\end{lstlisting}
+
+\begin{description}
+  \item[\texttt{commonName}] Prefix shared by output files (e.g.\ \texttt{test} for \texttt{R0\_*} when index is~0).
+  \item[\texttt{maxIndex}] Highest run index included in the check.
+  \item[\texttt{repetitions}] Repetitions per index.
+  \item[\texttt{totalStages}] Stage count (must be consistent across checked runs).
+  \item[\texttt{totalGroups}] Process groups per run ($=$ \texttt{Total\_Resizes}~$+~1$).
+  \item[\texttt{maxIterTime}] Maximum valid iteration time (seconds); longer iterations trigger a re-run.
+\end{description}
+
+\subsection{Intermediate output files}
+\label{subsection:intermediate_files}
+
+Each run produces:
+
+\begin{itemize}
+  \item \texttt{R\textit{X}\_Global.out}: global resize and timing summary.
+  \item \texttt{R\textit{X}\_G\textit{Y}NP\textit{Z}.out}: per-group stage and iteration data.
+\end{itemize}
+
+where \textit{X} is the run index, \textit{Y} the group id (0-based), and \textit{Z} the process count in that group.
+
+\textbf{Global file} contains configuration echo, $T_{spawn}$, $T_{spawn\_real}$, $T_{SR}$, $T_{AR}$, and $T_{total}$.
+
+\textbf{Group files} contain configuration echo, stage parameters, group resize settings, per-iteration times $T_{iter}$ and $T_{stages}$, and $Async\_iters$ (iterations completed while an asynchronous resize was in progress).
+
+Slurm stdout/stderr is stored separately (e.g.\ \texttt{slurm-12345.out}).
+
+Example for run index~5 with resize from 2 to 10 processes: \texttt{R5\_Global.out}, \texttt{R5\_G0NP2.out}, \texttt{R5\_G1NP10.out}.
