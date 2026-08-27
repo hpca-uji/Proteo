@@ -20,8 +20,10 @@ get_procs_from_ini() {
 get_procs_from_json() {
   local procs_line numP
 
-  procs_line=$(sed -n '/"groups"/,/]/p' "$config_file" \
-    | grep '"Procs"' \
+#  procs_line=$(sed -n '/"groups"/,/]/p' "$config_file" \
+#    | grep '"Procs"' \
+#    | sed -n "$((group_index + 1))p")
+  procs_line=$(grep -E '^[[:space:]]*"Procs"[[:space:]]*:' "$config_file" \
     | sed -n "$((group_index + 1))p")
 
   if [ -z "$procs_line" ]; then
