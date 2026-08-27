@@ -3,177 +3,230 @@
 #include <string.h>
 #include "read_ini.h"
 #include "ini.h"
-#include "../MaM/MAM.h"
+#include "MAM.h"
 
-
-ext_functions_t *user_functions;
-void get_numbers_from_string(const char *input, size_t *res_len, int **res);
-
-/*
- * Funcion utilizada para leer el fichero de configuracion
- * y guardarlo en una estructura para utilizarlo en el futuro.
- *
- * Primero lee la seccion "general" y a continuacion cada una
- * de las secciones "resize%d".
+/**
+ * @file read_ini.c
+ * @brief INI configuration parser for Proteo (inih callback-based).
  */
-static int handler(void* user, const char* section, const char* name,
-                   const char* value) {
-    int ret_value=1;
+
+/** @brief Next group (resize section) index while parsing. */
+size_t actual_group;
+/** @brief Next phase index while parsing. */
+size_t actual_phase;
+/** @brief Next stage index within the current phase while parsing. */
+size_t actual_stage;
+/** @brief Allocation callbacks supplied to ::read_ini_file. */
+ext_functions_t *user_functions;
+
+void get_numbers_from_string(const char *i_input, size_t *o_res_len, int **o_res);
+
+/**
+ * @brief inih handler that maps INI keys into a ::configuration.
+ *
+ * Reads the @c general section first, then @c phaseN / @c phaseN.stageM and
+ * @c resizeN sections. Stops accepting new keys once all groups and phases
+ * have been filled.
+ *
+ * @param[in,out] io_user    Pointer to the ::configuration being filled.
+ * @param[in]     i_section  Current INI section name.
+ * @param[in]     i_name     Current key name.
+ * @param[in]     i_value    Current value string.
+ * @return 1 on success, 0 if the section/key is unknown.
+ */
+static int handler(void *io_user, const char *i_section, const char *i_name,
+                   const char *i_value) {
+    int ret_value = 1;
     int *aux;
     size_t aux_len;
-    configuration* pconfig = (configuration*)user;
+    phase_t *phase;
+    stage_t *stage;
+    configuration *pconfig = (configuration *)io_user;
 
-    if(pconfig->actual_group >= pconfig->n_groups && pconfig->actual_stage >= pconfig->n_stages) {
+    if (actual_group >= pconfig->n_groups && actual_phase >= pconfig->n_phases) {
       return 1; // There is no more work to perform
     }
 
     char *resize_name = malloc(10 * sizeof(char));
-    snprintf(resize_name, 10, "resize%zu", pconfig->actual_group);
+    snprintf(resize_name, 10, "resize%zu", actual_group);
 
-    char *stage_name = malloc(10 * sizeof(char));
-    snprintf(stage_name, 10, "stage%zu", pconfig->actual_stage);
+    char *phase_name = malloc(10 * sizeof(char));
+    snprintf(phase_name, 10, "phase%zu", actual_phase);
 
-    #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+    char *stage_name = malloc(20 * sizeof(char));
+    snprintf(stage_name, 20, "phase%zu.stage%zu", actual_phase, actual_stage);
+
+    #define MATCH(s, n) strcmp(i_section, s) == 0 && strcmp(i_name, n) == 0
     #define LAST(iter, total) iter < total
     if (MATCH("general", "Total_Resizes")) {
-        pconfig->n_resizes = strtoul(value, NULL, 10);
-        pconfig->n_groups = pconfig->n_resizes+1;
+        pconfig->n_resizes = strtoul(i_value, NULL, 10);
+        pconfig->n_groups = pconfig->n_resizes + 1;
         user_functions->resizes_f(pconfig);
-    } else if (MATCH("general", "Total_Stages")) {
-        pconfig->n_stages = strtoul(value, NULL, 10);
-        user_functions->stages_f(pconfig); 
-    } else if (MATCH("general", "Granularity")) {
-        pconfig->granularity = atoi(value);
-    } else if (MATCH("general", "SDR")) { // TODO Refactor a nombre manual
-        pconfig->sdr = strtoul(value, NULL, 10);
-    } else if (MATCH("general", "ADR")) { // TODO Refactor a nombre manual
-        pconfig->adr = strtoul(value, NULL, 10);
+    } else if (MATCH("general", "Total_Phases")) {
+        pconfig->n_phases = strtoul(i_value, NULL, 10);
+        user_functions->phases_f(pconfig);
+    } else if (MATCH("general", "SDR")) { // TODO: Refactor to the manual name
+        pconfig->sdr = strtoul(i_value, NULL, 10);
+    } else if (MATCH("general", "ADR")) { // TODO: Refactor to the manual name
+        pconfig->adr = strtoul(i_value, NULL, 10);
+    } else if (MATCH("general", "Datasize")) { // TODO: Refactor to the manual name
+        pconfig->datasize = strtoul(i_value, NULL, 10);
     } else if (MATCH("general", "Rigid")) {
-        pconfig->rigid_times = atoi(value);
+        pconfig->rigid_times = atoi(i_value);
     } else if (MATCH("general", "Capture_Method")) {
-        pconfig->capture_method = atoi(value);
+        pconfig->capture_method = atoi(i_value);
 
-    // Iter stage
-    } else if (MATCH(stage_name, "Stage_Type") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].pt = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_capped = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].bytes = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].id = atoi(value);
-    } else if (MATCH(stage_name, "Stage_Time") && LAST(pconfig->actual_stage, pconfig->n_stages)) {
-        pconfig->stages[pconfig->actual_stage].t_stage = (float) atof(value);
-        pconfig->actual_stage = pconfig->actual_stage+1; // Ultimo elemento del grupo
+    // Phase
+    } else if (MATCH(phase_name, "Total_Iters") && LAST(actual_phase, pconfig->n_phases)) {
+        pconfig->phases[actual_phase].qty_iters = strtoul(i_value, NULL, 10);
+    } else if (MATCH(phase_name, "Total_Stages") && LAST(actual_phase, pconfig->n_phases)) {
+        phase = pconfig->phases + actual_phase;
+        phase->qty_stages = strtoul(i_value, NULL, 10);
+        user_functions->stages_f(pconfig, actual_phase);
+        actual_stage = 0;
 
-    // Resize stage
-    } else if (MATCH(resize_name, "Iters") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].iters = atoi(value);
-    } else if (MATCH(resize_name, "Procs") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].procs = atoi(value);
-    } else if (MATCH(resize_name, "FactorS") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].factor =(float) atof(value);
-    } else if (MATCH(resize_name, "Dist") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-	int aux_value = MAM_PHY_DIST_COMPACT;
-        if (strcmp(value, "spread") == 0) {
+    // Stage
+    } else if (MATCH(stage_name, "Stage_Type") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->pt = atoi(i_value);
+    } else if (MATCH(stage_name, "Granularity") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->granularity = atoi(i_value);
+    } else if (MATCH(stage_name, "Stage_Time_Capped") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->t_capped = atoi(i_value);
+    } else if (MATCH(stage_name, "Stage_Bytes") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->bytes = atoi(i_value);
+    } else if (MATCH(stage_name, "Stage_Identifier") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->id = atoi(i_value);
+    } else if (MATCH(stage_name, "Stage_Involved_Procs") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->involved_procs = atoi(i_value);
+    } else if (MATCH(stage_name, "Stage_Time") && LAST(actual_stage, pconfig->phases[actual_phase].qty_stages)) {
+        phase = pconfig->phases + actual_phase;
+        stage = phase->stages + actual_stage;
+        stage->t_stage = (float)atof(i_value);
+        actual_stage++; // Last element of the stage
+        if (actual_stage == pconfig->phases[actual_phase].qty_stages) { // Last stage of the phase
+            actual_phase++;
+        }
+
+    // Resize / group
+    } else if (MATCH(resize_name, "Iters") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].iters = atoi(i_value);
+    } else if (MATCH(resize_name, "Procs") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].procs = atoi(i_value);
+    } else if (MATCH(resize_name, "FactorS") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].factor = (float)atof(i_value);
+    } else if (MATCH(resize_name, "Dist") && LAST(actual_group, pconfig->n_groups)) {
+        int aux_value = MAM_PHY_DIST_COMPACT;
+        if (strcmp(i_value, "spread") == 0) {
           aux_value = MAM_PHY_DIST_SPREAD;
-  	}
-        pconfig->groups[pconfig->actual_group].phy_dist = aux_value;
-    } else if (MATCH(resize_name, "Redistribution_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].rm = atoi(value);
-    } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        get_numbers_from_string(value, &aux_len, &aux);
-        pconfig->groups[pconfig->actual_group].rs = aux;
-        pconfig->groups[pconfig->actual_group].rs_len = aux_len;
-    } else if (MATCH(resize_name, "Spawn_Method") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        pconfig->groups[pconfig->actual_group].sm = atoi(value);
-    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(pconfig->actual_group, pconfig->n_groups)) {
-        get_numbers_from_string(value, &aux_len, &aux);
-        pconfig->groups[pconfig->actual_group].ss = aux;
-        pconfig->groups[pconfig->actual_group].ss_len = aux_len;
-        pconfig->actual_group = pconfig->actual_group+1; // Ultimo elemento de la estructura
+        }
+        pconfig->groups[actual_group].phy_dist = aux_value;
+    } else if (MATCH(resize_name, "Redistribution_Method") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].rm = atoi(i_value);
+    } else if (MATCH(resize_name, "Redistribution_Strategy") && LAST(actual_group, pconfig->n_groups)) {
+        get_numbers_from_string(i_value, &aux_len, &aux);
+        pconfig->groups[actual_group].rs = aux;
+        pconfig->groups[actual_group].rs_len = aux_len;
+    } else if (MATCH(resize_name, "Spawn_Method") && LAST(actual_group, pconfig->n_groups)) {
+        pconfig->groups[actual_group].sm = atoi(i_value);
+    } else if (MATCH(resize_name, "Spawn_Strategy") && LAST(actual_group, pconfig->n_groups)) {
+        get_numbers_from_string(i_value, &aux_len, &aux);
+        pconfig->groups[actual_group].ss = aux;
+        pconfig->groups[actual_group].ss_len = aux_len;
+        actual_group++; // Last element of the group structure
 
-    // Unkown case
+    // Unknown case
     } else {
         ret_value = 0;  /* unknown section or name, error */
     }
- 
+
     free(resize_name);
+    free(phase_name);
     free(stage_name);
     return ret_value;
 }
 
 /**
- * @brief Extracts numbers from a comma-separated string and stores them in an array.
+ * @brief Extracts numbers from a comma-separated string into a new array.
  *
- * This function takes a string containing a sequence of numbers separated by commas,
- * converts each number to an integer, and stores them in a dynamically allocated array.
+ * Converts each token to an integer and stores them in a dynamically
+ * allocated array. The caller must free @p o_res.
  *
- * @param input The input string containing comma-separated numbers.
- * @param res_len Pointer to an integer that will hold the length of the resulting array.
- *            Note: Null can be passed if the caller does not need it.
- * @param res Pointer to an integer array where the extracted numbers will be stored.
- *            Note: The memory for this array is dynamically allocated and should be freed by the caller.
+ * @param[in]  i_input   Input string with comma-separated numbers.
+ * @param[out] o_res_len Length of the resulting array, or ignored if @c NULL.
+ * @param[out] o_res     Receives the allocated integer array.
  */
-void get_numbers_from_string(const char *input, size_t *res_len, int **res) {
+void get_numbers_from_string(const char *i_input, size_t *o_res_len, int **o_res) {
   char *aux, *token;
   int num;
   size_t len, malloc_len;
   len = 0;
   malloc_len = 10;
-  *res = (int *) malloc(malloc_len * sizeof(int));
-  aux = (char *) malloc((strlen(input)+1) * sizeof(char));
-  strcpy(aux, input);
+  *o_res = (int *)malloc(malloc_len * sizeof(int));
+  aux = (char *)malloc((strlen(i_input) + 1) * sizeof(char));
+  strcpy(aux, i_input);
 
   token = strtok(aux, ",");
   while (token != NULL) {
     num = atoi(token);
 
-    if(len == malloc_len) {
+    if (len == malloc_len) {
       malloc_len += 10;
-      *res = (int *) realloc(*res, malloc_len * sizeof(int));
+      *o_res = (int *)realloc(*o_res, malloc_len * sizeof(int));
     }
-    (*res)[len] = num;
+    (*o_res)[len] = num;
     len++;
 
     token = strtok(NULL, ",");
-    }
+  }
 
-  if(res_len != NULL) *res_len = len;
-  if(len != malloc_len) {
-    *res = (int *) realloc(*res, len * sizeof(int));
+  if (o_res_len != NULL) *o_res_len = len;
+  if (len != malloc_len) {
+    *o_res = (int *)realloc(*o_res, len * sizeof(int));
   }
 
   free(aux);
 }
 
-/*
- * Crea y devuelve una estructura de configuracion a traves
- * de un nombre de fichero dado.
- *
- * La memoria de la estructura se reserva en la funcion y es conveniente
- * liberarla con la funcion "free_config()"
- */
-configuration *read_ini_file(char *file_name, ext_functions_t init_functions) {
+configuration *read_ini_file(char *i_file_name, ext_functions_t i_init_functions) {
     configuration *config = NULL;
 
     config = malloc(sizeof(configuration));
-    if(config == NULL) {
+    if (config == NULL) {
         printf("Error when reserving configuration structure\n");
-	return NULL;
+        return NULL;
     }
+
+    config->config_type = MPI_DATATYPE_NULL;
+    config->group_type = MPI_DATATYPE_NULL;
+    config->group_strats_type = MPI_DATATYPE_NULL;
+    config->phase_type = MPI_DATATYPE_NULL;
+    config->stage_type = MPI_DATATYPE_NULL;
     config->capture_method = 0;
     config->rigid_times = 0;
     config->n_resizes = 0;
     config->n_groups = 1;
-    config->n_stages = 1;
-    config->actual_group=0;
-    config->actual_stage=0;
+    config->n_phases = 1;
 
-    user_functions = &init_functions;
+    actual_group = 0;
+    actual_phase = 0;
+    actual_stage = 0;
 
-    if(ini_parse(file_name, handler, config) < 0) { // Obtener configuracion
-        printf("Can't load '%s'\n", file_name);
+    user_functions = &i_init_functions;
+
+    if (ini_parse(i_file_name, handler, config) < 0) { // Load configuration
+        printf("Can't load '%s'\n", i_file_name);
         return NULL;
     }
     return config;

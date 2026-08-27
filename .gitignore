@@ -1,10 +1,46 @@
 #Ignore ini files
 *.ini
+#Ignore json files
+*.json
+#Ignore pkl files
+*.pkl
+#Ignore out files
+*.out
+#Ignore tmp files
+*.tmp
 
 #Ignore build files
 /Codes/build/
 /Codes/MaM/build
 /Codes/SAM/build
 
+#Ignore generated Doxygen HTML
+/Codes/MaM/docs/
+/Codes/SAM/docs/
+
 #Ignore Results files
-/Results/*
+/Results/**/
+
+#Ignore tmp directory
+/Analysis/tmp/**
+
+#Ignore Others directory in Manual
+/tmp/**
+
+#Ignore pycache
+__pycache__/
+*.py[cod]
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+Manual_Latex/*.pdf
+
+#Ignore VS jsons
+.vscode/*.json

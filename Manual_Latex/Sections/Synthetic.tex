@@ -1,0 +1,150 @@
+\section{Architecture}
+\label{section:architecture}
+
+Proteo emulates a malleable MPI application through five cooperating modules inside SAM, backed by MaM for resize operations.
+
+\subsection{SAM modules}
+\label{subsection:sam-modules}
+
+\begin{enumerate}
+  \item \textbf{Initialization}: Rank~0 of the first group reads the JSON configuration from disk and builds the in-memory \texttt{configuration} structure. That structure is broadcast to every rank in the group and, after each resize, from the source root to target ranks. During initialization SAM also calibrates derived parameters (per-stage operation counts, communication volumes, I/O sizes) from the JSON values and the hardware where the job runs. This module runs once at job start and again for each target group after spawn and data redistribution.
+
+  \item \textbf{Application emulation}: SAM executes the configured \textbf{phases} in order. For each phase it repeats \texttt{Total\_Iters} iterations; within each iteration every \textbf{stage} runs sequentially. Stages may emulate CPU-bound or memory-bound computation, blocking or non-blocking MPI communication, or parallel I/O. Timings are recorded per stage and per iteration for later output.
+
+  \item \textbf{Resize}: When a non-final group completes its allotted work, MaM is invoked to spawn or merge target processes and redistribute application state from sources to targets. Depending on spawn strategy, sources may continue executing iterations while spawn or asynchronous redistribution proceeds in the background.
+
+  \item \textbf{Monitoring}\label{subsection:monitoring}: Every stage, iteration, spawn, and redistribution interval is measured with \texttt{MPI\_Wtime}. Optional barriers (JSON \texttt{Rigid} and compile-time \texttt{MAM\_USE\_BARRIERS}) tighten timing accuracy at the cost of overhead.
+
+  \item \textbf{Completion}: When a group finishes its role in the emulation, SAM writes intermediate result files containing configuration echo, per-stage timings, and malleability metrics ($T_{spawn}$, $T_{SR}$, $T_{AR}$, etc.).
+\end{enumerate}
+
+Figure~\ref{fig:flowchart} shows the overall control flow. Listing~\ref{code:basic-struct2} sketches the corresponding program structure.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{NewFig1-EstructApp.jpeg}
+  \caption{Flowchart of the synthetic application modules.}
+  \label{fig:flowchart}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{Fig2-PhaseBasedIter.png}
+  \caption{Phase-based iteration model: each phase defines its own stage sequence and iteration count.}
+  \label{fig:phase-model}
+\end{figure}
+
+Each \textbf{phase} contributes \texttt{Total\_Iters} iterations; within each iteration all \texttt{stages} of that phase execute sequentially. When all phases of a group finish, a resize occurs unless this is the last group (see Section~\ref{subsection:group-termination}).
+
+\subsection{Computation stages}
+\label{subsection:compute-stages}
+
+Compute stages drive CPU or memory workload without MPI messaging:
+
+\begin{itemize}
+  \item \textbf{Type 0 (Monte Carlo $\pi$)}: Repeated pseudo-random sampling to estimate $\pi$. The kernel is CPU-bound and does not perform large memory traversals. \texttt{Granularity} controls the sample count per operation; SAM repeats operations until the configured \texttt{Stage\_Time} is reached under the current \texttt{FactorS} and process count.
+
+  \item \textbf{Type 1 (matrix--vector)}: Column-major matrix--vector multiplication. The kernel is memory-bandwidth bound. As with type~0, \texttt{Granularity} sets the problem size and \texttt{Stage\_Time} sets the target duration after scaling.
+\end{itemize}
+
+For both types, \texttt{Stage\_Bytes} is unused. SAM derives an internal operation count from the measured baseline time $T_{op}$ at the current \texttt{Granularity}, the configured \texttt{Stage\_Time}, and the group \texttt{FactorS}. After a resize, $T_{op}$ and the operation count are recomputed if \texttt{FactorS} or \texttt{Procs} changes (Section~\ref{subsection:factors}).
+
+\subsection{Communication stages}
+\label{subsection:comm-stages}
+
+Communication stages exercise MPI patterns among ranks in the active group:
+
+\begin{itemize}
+  \item \textbf{Point-to-point (2)}: \texttt{MPI\_Sendrecv} between ranks on neighbouring nodes following a ring-like neighbour assignment.
+  \item \textbf{IPoint-to-point (3)}: Non-blocking send/receive posted with \texttt{Stage\_Identifier}. Must be paired with a Wait stage (type~4) that completes the outstanding requests.
+  \item \textbf{MPI\_Wait (4)}: Completes non-blocking operations for a given \texttt{Stage\_Identifier}. One Wait stage may complete \textbf{multiple} IPoint stages that share the same identifier.
+  \item \textbf{Bcast (5)}, \textbf{Allgather (6)}, \textbf{Reduce (7)}, \textbf{Allreduce (8)}: Standard MPI collectives over the group communicator.
+\end{itemize}
+
+Each communication stage must specify either \texttt{Stage\_Bytes}~$>$~0 (preferred: explicit message volume) or \texttt{Stage\_Time}~$>$~0 (timed emulation from which SAM derives bytes using network calibration). Non-compute granularity rules apply when bytes are absent or when time-capping is enabled; see Section~\ref{subsubsection:stage-validation}.
+
+\subsection{I/O stages}
+\label{subsection:io-stages}
+
+\begin{itemize}
+  \item \textbf{Write (9)} and \textbf{Read (10)}: Emulated parallel I/O. Each stage requires \texttt{Stage\_Bytes}~$>$~0 or \texttt{Stage\_Time}~$>$~0, plus \texttt{Stage\_Involved\_Procs} ($0$ means all ranks participate). These stages let Proteo model applications whose iterations include checkpointing, restart, or dataset movement alongside compute and MPI traffic.
+\end{itemize}
+
+\subsection{MaM resize pipeline}
+\label{subsection:mam-resize}
+
+A resize involves three steps:
+
+\begin{enumerate}
+  \item Signal availability to the resource manager (simulated via configuration when Slurm integration is enabled).
+  \item Create the target MPI process group (\textit{spawn}).
+  \item Redistribute data from sources to targets (\textit{redistribution}).
+\end{enumerate}
+
+\textbf{Spawn methods:}
+\begin{itemize}
+  \item \textbf{Baseline (0)}: Create $Y$ target processes and remove the $X$ sources (\texttt{MPI\_Spawn}).
+  \item \textbf{Merge (1)}: Create or remove $|Y-X|$ processes and merge communicators where possible.
+\end{itemize}
+
+\textbf{Spawn strategies} (combinable indices in \texttt{Spawn\_Strategy}, except where noted):
+\begin{itemize}
+  \item \textbf{1 Pthread}: asynchronous spawn in a background thread.
+  \item \textbf{2 Single}: only rank~0 spawns.
+  \item \textbf{3 Intercomm}: intercommunicator-based spawn.
+  \item \textbf{4 Multiple} / \textbf{5 Parallel}: multi-source strategies; \textbf{mutually exclusive} with each other. \textbf{Parallel} coordinates process creation with the RMS so expand and shrink operations keep allocations consistent with RMS rules (jobs do not violate resource-manager constraints when resizing).
+\end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{Fig3-ParallelSpawn-Spawn-Poster.png}
+  \caption{Overview of parallel spawn strategies in MaM.}
+  \label{fig:parallel-spawn}
+\end{figure}
+
+\textbf{Physical mapping} (\texttt{Dist}):
+\begin{itemize}
+  \item \texttt{spread}: spread processes across as many nodes as possible.
+  \item \texttt{compact}: fill nodes before using the next node.
+\end{itemize}
+
+\textbf{Data redistribution} splits the payload into synchronous (\texttt{SDR}) and asynchronous (\texttt{ADR}) \textbf{element counts}. The actual byte volume moved is \texttt{SDR}~$\times$~\texttt{Datasize} and \texttt{ADR}~$\times$~\texttt{Datasize}. Constant data may be sent asynchronously while sources continue computing; variable data is sent synchronously. Methods include all-to-all among sources (0), point-to-point (1), and RMA Lock / LockAll (2--3). Spawn and redistribution \textbf{strategy combination rules apply when ADR~$>$~0} (Section~\ref{subsubsection:strategy-rules}).
+
+\subsection{General working}
+\label{subsection:working}
+
+Listing~\ref{code:basic-struct2} shows a simplified view of SAM's main control flow. Source ranks read and broadcast the configuration, then derive stage parameters. Target ranks receive the configuration from sources and complete data redistribution. All ranks then walk phases, iterations, and stages. If more groups remain, MaM spawns targets and redistributes state; otherwise the group writes its output files and finishes.
+
+\begin{lstlisting}[style=mamstyle, numbers=none, float, caption={Basic skeleton of the synthetic application.}, label=code:basic-struct2, captionpos=b]
+int main() {
+  if (init) {
+    if (rank == 0) read_config();
+    broadcast_config();
+    calculate_derived_parameters();
+  } else {
+    receive_config_from_sources();
+    redistribute_data();
+  }
+  for (phase = 0; phase < n_phases; phase++)
+    for (iter = 0; iter < phase_iters; iter++)
+      for (stage = 0; stage < n_stages; stage++)
+        process_stage(stages[stage]);
+  if (!last_group) {
+    spawn_targets();
+    redistribute_data_to_targets();
+  }
+  write_output_files();
+}
+\end{lstlisting}
+
+\subsection{FactorS and scalability}
+\label{subsection:factors}
+
+\texttt{FactorS} emulates how compute-stage duration scales with the process count. Values above~1 increase effective stage time; values below~1 decrease it. For an ideal speedup from 2 to 4 processes with sequential \texttt{Stage\_Time}~$=$~4~s, \texttt{FactorS} would be $0.5$ and $0.25$ respectively.
+
+Non-direct parameters \texttt{$T_{op}$} (time per operation at current granularity) and \texttt{operations} (repeat count to reach the configured \texttt{Stage\_Time} under \texttt{FactorS}) are recomputed after each resize when \texttt{FactorS} changes.
+
+\subsection{MaM as a standalone library}
+\label{subsection:mam-library}
+
+MaM can be linked into \textbf{other MPI applications} to add malleability (spawn, shrink, redistribution) without using SAM. Its public interface, configuration keys, and integration workflow will be documented in a \textbf{separate MaM manual}. This Proteo manual covers only the SAM+MaM benchmark path.

@@ -1,7 +1,7 @@
-# Proteo - Master branch
+# Proteo - Dev branch
 
 ## Overview
-This branch contains the codebase used for Proteo. 
+This branch contains the codebase used the Master branch of Proteo.
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
@@ -9,6 +9,7 @@ This branch is divided into the following 4 directories:
 - **Codes**: Contains all the codes used to compile Proteo.
 - **Exec**: Contains the scripts to execute Proteo in different ways and check if the runs have completed successfully.
 - **Results**: Contains the configuration files used to emulate the malleable emulation of the CG.
+- **Config-Gen**: Web UI to create JSON configuration files (optional; see `Config-Gen/README.md`).
 
 ## Installation
 
@@ -24,6 +25,7 @@ The following requisites are optional and only needed to process and analyse the
 - Matplotlib 3.7.1(Optional). Only if you want to analyse the data.
 - Scipy 1.10.1(Optional). Only if you want to analyse the data.
 - scikit-posthocs 0.7.0(Optional). Only if you want to analyse the data.
+- Flask 3(Optional). Only if you want to use the JSON configuration builder in `Config-Gen/`.
 
 
 ### Steps
@@ -32,6 +34,7 @@ The following requisites are optional and only needed to process and analyse the
     ```bash
     $ git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
     $ cd malleability_benchmark
+    $ git checkout dev
     ```
 
 2. Compile the code using the `make` command:
@@ -42,6 +45,14 @@ The following requisites are optional and only needed to process and analyse the
     ```
 
     This command compiles the code using the MPI (MPICH) library.
+
+    Optional: generate API HTML with [Doxygen](https://www.doxygen.nl/) (`doxygen` must be installed):
+
+    ```bash
+    $ make docs
+    ```
+
+    Then open `Codes/MaM/docs/html/index.html` and `Codes/SAM/docs/html/index.html`. Remove generated output with `make docs-clean`.
 
 3. Test the installation:
     ```bash

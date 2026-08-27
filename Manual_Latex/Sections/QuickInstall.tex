@@ -1,0 +1,23 @@
+\section*{Quick Install}
+\addcontentsline{toc}{section}{Quick Install}
+
+This page summarizes the shortest path from clone to a first run. See Section~\ref{section:installation} for prerequisites and build options.
+
+\begin{lstlisting}[style=bashstyle,caption={Minimal Proteo setup and smoke test.},captionpos=b]
+git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
+cd malleability_benchmark
+
+cd Codes
+make MAM_USE_SLURM=1
+
+cd ../Results
+bash ../Exec/singleRun.sh ../Codes/test.json mypartition 0 1 0
+\end{lstlisting}
+
+Replace \texttt{mypartition} with a valid Slurm partition. On success, output files such as \texttt{R0\_Global.out} appear in the current directory.
+
+\begin{itemize}
+  \item JSON parameter reference: Section~\ref{section:json-config}
+  \item Web editor for JSON files: Section~\ref{section:genconfig}
+  \item Execution scripts and outputs: Section~\ref{section:usage}
+\end{itemize}

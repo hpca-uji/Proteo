@@ -1,14 +1,35 @@
 #ifndef MAM_TIMES_H
 #define MAM_TIMES_H
 
+/**
+ * @file MAM_Times.h
+ * @brief Internal timing buffer init/reset/free and broadcast helpers.
+ */
+
 #include <mpi.h>
 
-void init_malleability_times();
-void reset_malleability_times();
-void free_malleability_times();
+/**
+ * @brief Allocate ::mall_conf->times, reset fields, and commit the MPI datatype.
+ */
+void init_malleability_times(void);
 
-void malleability_times_broadcast(int root);
+/**
+ * @brief Zero timing scalars before a reconfiguration.
+ */
+void reset_malleability_times(void);
 
-void MAM_I_retrieve_times(double *sp_time, double *sy_time, double *asy_time, double *user_time, double *mall_time);
+/**
+ * @brief Free the timing structure and its MPI datatype.
+ */
+void free_malleability_times(void);
+
+/**
+ * @brief Broadcast packed timing fields over @c mall->intercomm.
+ *
+ * Useful when Baseline sources will not survive and targets must retrieve times.
+ *
+ * @param[in] i_root Bcast root (@c MPI_ROOT / @c MPI_PROC_NULL on intercomm).
+ */
+void malleability_times_broadcast(int i_root);
 
 #endif

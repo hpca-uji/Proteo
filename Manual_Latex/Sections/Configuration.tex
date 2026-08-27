@@ -1,0 +1,142 @@
+\section{Configuration}
+\label{subsection:configuration}
+%The features of different jobs of a scientific data center to be simulated, as well as the parameters for a possible resizing, are defined in a configuration file. This file must be created before running the application and will be read by rank 0 in the first processes group (see Listing~\ref{code:basic-struct2}).
+%This tool allows us to simulate the execution of an application by setting parameters that define its behavior according to the characteristics of the system where it is going to be executed. On the other hand, this file also includes the necessary parameters for resizing %This parameters are stored in a configuration file. This one are also involved the set of parameters for a or several resizing during its running.
+This tool has two main functionalities. On the one hand, it simulates the  application behaviour with certain characteristics  and, on the other, it allows performing different resizing during its execution simulating a malleable application. A configuration file containing the necessary parameters to define these simulation is described in this section. %Thus, the characteristics of the application execution and the resizing are described in a configuration file   containing these two types of parameters. %So, two set of  parameters are contained in a configuration file to define the simulation.
+
+%Both the application to be simulated and the resizing characteristics are defined by two set of  parameters contained in a configuration file. 
+
+The general parameters dedicated to emulate the execution behaviour of an application are the following:
+\begin{itemize}
+    \item \texttt{Total\_Stages}: Total number of different stages (processing stages) that executes a application during each iteration. Any application is broken down into a sequence of computation  and\textbackslash or communication stages. The sum of all of them will be this value. It will always be equal  or greater than 1.
+     \item \texttt{Granularity}: Problem size for  computation stages.% Does not affect the iteration time. %It will total number of stages of calculation and  communication that performs application during its execution. 
+  %  \item \texttt{$T_{it}$}: Serial time of an iteration in the simulated application in one core. Each iteration will execute the selected computation procedure multiple times until $T_{it}$ is reached. %The time is expected as the sequential time.
+\end{itemize}
+
+The following general parameters are dedicated for  resizing in malleable application:
+\begin{itemize}
+    \item \texttt{Total\_Resizes}: Number of resizes to perform during application execution. A value of zero indicates that none will be executed. Each resize is composed by a processes group.
+    \item \texttt{SDR}: Number of bytes to redistribute in each resize.
+    \item \texttt{ADR}: Number of bytes to redistribute asynchronously. Is also possible to indicate percentage of \texttt{SDR} that will be distributed asynchronously with a value from 0 to 100. The latter only works when using the script multipleRuns.sh.
+    %\item \texttt{ADR}: Percentage of \texttt{Total\_Data\_Redis-tribution} that will be distributed asynchronously. It will be a float value from $0$ to $100$. Other data will be distributed synchronously.
+    %Note \texttt{Total\_Data\_Redistribution} and \texttt{Asynch\_Percentage\_Redistribution} are related. A value of $50$ in \texttt{Asynch\_Percentage\_Redistribution} indicates that half of the bytes will be distributed asynchronously, while the other half,  synchronously.
+\end{itemize}
+
+ %This happens in real applications, since some data is modified in each iteration and therefore not all data can be sent asynchronously as it would become invalid for the children.
+
+After, each processing stage in an iteration is characterized by several parameters that define its behavior:
+\begin{itemize}
+    \item \texttt{Stage\_Type}: type of stage to be simulated. Different possibilities:
+    \begin{itemize}
+        \item Computation:  Monte Carlo method (0) or matrix-vector multiplication (1).
+        \item Communication: Point to point  (2), Collective one-to-all (3),  Collective all-to-all (4), reduction operation (5), all-reduction operation (6). 
+    \end{itemize}
+    \item \texttt{Stage\_Time}:  Time consumed in a stage in seconds.
+    
+\end{itemize}
+
+If \texttt{Stage\_Type} is defined as communication, the following parameters are also need:
+\begin{itemize}
+    \item \texttt{Stage\_Bytes}: It indicates the total bytes communicated among processes. This parameter is optional.
+    %\item \texttt{N\_procs}: Indicates processes number involved in a communication operation. This parameter is only used if the parameter \texttt{Stage\_Bytes} has no value. 
+\end{itemize}
+
+Next, $\texttt{Total\_Resizes}+1$ sets of parameters are defined characterizing each resize. %the new mapping after each reconfiguration (shrink, expand or migrate).
+For each group, the related parameters are the following:
+\begin{itemize}
+    \item \texttt{Iters}: Total iterations to execute before resizing or ending the application.
+    \item \texttt{Procs}: Number of processes in the group.
+    \item \texttt{Dist}: Strategy applied to emulate the node allocation: "spread" or "compact".
+    \item \texttt{Spawn\_Method}: Spawn method to use during resizes: Baseline (0) or Merge (1).
+    \item \texttt{Spawn\_Strategy}: Spawn strategy to use during resize: None (1), Asynchronous (2), Single parent spawn (3), or All strategies (6).
+    \item \texttt{Redistribution\_Method}: Redistribution method for data redistribution, either using MPI primitives as All-to-all Parents (0), Point to point (1), RMA Lock (2) or RMA LockAll(3).
+    \item \texttt{Redistribution\_Strategy}: Method strategy for data redistribution. Can be None (1) or use Threads (2).
+    %%COmentario Revisor
+    %%The FactorS metric is slightly confusing, I would suggest the authors to have a figure at the beginning, setting this very clear upfront as it is reused in the entire evaluation section.
+    \item \texttt{FactorS}: This speedup factor emulates how the performance of computation stages are affected by the number of processes as it happens in real applications. Values higher than 1 increments the stage time, while values below zero lowers the stage time. It can not have negative values.
+    For example, if the application had an ideal speedup, and the resizing went from 2 to 4 processes for a sequential \texttt{Stage\_Time} of 4 seconds, \texttt{FactorS} would be $0.5$ and $0.25$, respectively. Thus this parameter determines the scalability of the emulated application. This value influences the calculation of non-direct parameters.%{\color{blue}Figure \ref{fig:factorS} shows an example of available values depending on the expected speedUp for each number of processes.}
+\end{itemize}
+The parameters \texttt{Spawn\_Method}, \texttt{Spawn\_Strategy}, \texttt{Redistribution\_Method} and \texttt{Redistribution\_Strategy} are ignored when launching the simulation execution since the processes are created  %for first resize as it implies stating of execution and  the processes group  is created 
+by the command  \textit{mpirun} or \textit{mpiexec}.
+
+%COMENTARIO REVISOR
+%% The cost of the dynamic reconfiguration, other than the amount of data to redistribute, depends on the number of nodes used, the network aggregated bandwidth, and end-to-end latency. How do these parameters are caught by your benchmark's parameters? And if they are somehow captured, how did you validate their accuracy?
+
+Listing \ref{code:config-file} shows a configuration file example that simulates a malleable application which has a iteration composed of $3$ processing stages and performs only one resize 
+(2 processes groups). Total bytes to redistribute in each resize are $1GB$ asynchronously. First stage (\texttt{[stage0]}) is a computation  based on Monte Carlo method with a problem size of $100000$ (\texttt{Granularity}). Next stages are communications, \texttt{[stage1]} is a \texttt{MPI\_Allreduce} operation of $8$ bytes while the last one (\texttt{[stage2]}) is an \texttt{MPI\_Allgatherv} with a \texttt{Stage\_Time} of $25$ms.
+The only resize (\texttt{[resize1]}) is an expansion from $2$ to $10$ processes using asynchronous data redistribution based on \textit{threads}. The total iterations performed by first group is $1$ and the other group does $10$ iterations. 
+
+\begin{lstlisting}[float,caption=Configuration file example., label=code:config-file, captionpos=b]
+[general]
+Total_Stages=3                       # Number of stages
+Granularity=100000                   # Computation stages problem size
+Total_Resizes=1                      # Number of resizes
+SDR=1000000000 # Total synchronous redistributed bytes
+ADR=100 # Total asynchronous redistributed bytes
+;end [general]
+[stage0]                             # Computation stage 
+Stage_Type=0                         # Stage type. Perform pi computation
+Stages_Bytes=0                        # Bytes to communicate
+Stage_Time=0.16                         # Stage duration, 160ms
+;end [stage0]
+[stage1]                             # Communication stage 
+Stage_Type=6                         # Perform Allreduce 
+Stage_Bytes=8                        # with 8 bytes         
+Stage_Time=0                         # not used
+;end [stage1]  
+[stage2]                             # Communication stage
+Stage_Type=4                         # Perform Allgatherv 
+Stage_Bytes=0                        # not used
+Stage_Time=0.025                     # during 25ms
+;end [stage2] 
+[resize0]
+Iters=1                              # Total iterations for this group
+Procs=2                              # Number of processes in this group
+FactorS=0.5                          # Scalability factor
+Dist=spread                          # Physical process mapping type
+Spawn_Method=0                       # Spawn method
+Spawn_Strategy=1                     # Spawn strategy
+Redistribution_Method=3              # Redistribution method
+Redistribution_Strategy=1              # Redistribution strategy
+;end [resize0]
+[resize1]
+Iters=10                             # Total iterations for this group
+Procs=10                             # Number of processes in this group
+FactorS=0.1                          # Scalability factor
+Dist=spread                          # Physical process mapping type
+Spawn_Method=0                       # Spawn method
+Spawn_Strategy=1                     # Spawn strategy
+Redistribution_Method=3              # Redistribution method
+Redistribution_Strategy=1              # Redistribution strategy
+;end [resize1]
+\end{lstlisting}
+
+%%- How can I compare the optimal decision on different types of systems (e.g., with a different interconnection network or with a different number of cores per node)?
+%%How what can the benchmark give to the developer the optimal strategy to use depending on the application characteristics?
+
+\subsection{Modeling interconnection network}
+This tool provide two options to configure communication stage.
+The first and more simple one is to indicate the number of bytes to be transferred \texttt{Stage\_Bytes}. In this case, the simulation is performed from the operation selected and this information.
+
+%Nevertheless, is also possible to indicate the communication time (\texttt{Stage\_Time}) and the number of processes (\texttt{N\_procs}) that obtained that time. From these parameters can be computed \texttt{Stage\_Bytes} to simulate communication operation selected.
+
+%For the latter case, the tool has stored in a file the characteristic parameters of the interconnection network of the system in which the simulations are to be carried out, both for intra and inter-node communications. This model has been obtained when starting the simulations.
+
+%These parameters are:
+%\begin{itemize}
+%    \item $Latency_{net}$: Internode latency of the network.
+%    \item $Latency_{shm}$: Intranode latency when using shared memory. Is only used if the group only has one node.
+%    \item $Bw_{net}$: Bandwidth of the used internode network.
+%    \item $Bw_{shm}$: Bandwidth when using shared memory. Is only used if the group only has one node.
+%\end{itemize}
+
+%To simulate collective communications (Communications in parameter \textit{Stage\_Type}), point to point communications are used. Therefore from the previous calculated parameters of Bandwidth, Latency and \textit{Stage\_Time} is computed \textit{Stage\_Bytes}. This final parameter will be the one used by each process to communicate during the stage.
+
+\subsection{Parameters computed for modeling computation stages}
+If \texttt{Stage\_Type} is defined as a computation stage, other parameters have to be calculated to complete the simulation:
+\begin{itemize}
+    \item \texttt{$T_{op}$}: Time to execute a single computation of selected type in \texttt{Stage\_Type} and problem size  equal to \texttt{Granularity}.% This is computed after the configuration file is read.
+    \item \texttt{op}: Number of times that the selected computation in \texttt{Stage\_Type} has to be executed to achieve the scalability defined in \texttt{FactorS} when the sequential cost is \texttt{T\_stage}.\\
+    This is defined as $op=T\_stage*FactorS/T_{op}$. \\
+    This parameter must be recalculated after a resize if $FactorS$ takes a different value.
+\end{itemize}

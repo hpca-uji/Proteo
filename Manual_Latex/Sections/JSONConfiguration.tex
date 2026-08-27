@@ -1,0 +1,301 @@
+\section{JSON configuration reference}
+\label{section:json-config}
+
+Proteo configuration files are JSON objects with three top-level keys: \texttt{general}, \texttt{phases}, and \texttt{groups}.
+
+\begin{lstlisting}[language=json,caption={Top-level schema.},label=code:json-top,captionpos=b]
+{
+  "general": { ... },
+  "phases": [
+    {
+      "Total_Iters": 1,
+      "Total_Stages": 2,
+      "stages": [ { ... }, { ... } ]
+    }
+  ],
+  "groups": [
+    { "Iters": 10, "Procs": 4, ... }
+  ]
+}
+\end{lstlisting}
+
+\textbf{Consistency rules:}
+\begin{itemize}
+  \item \texttt{len(phases)} must equal \texttt{general.Total\_Phases}.
+  \item \texttt{len(groups)} must equal \texttt{general.Total\_Resizes + 1}.
+  \item For each phase, \texttt{len(stages)} must equal \texttt{Total\_Stages} in that phase.
+\end{itemize}
+
+\subsection{General parameters}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llp{7cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{Total\_Resizes} & integer & Number of resize operations during the run. \\
+\texttt{Total\_Phases} & integer & Number of entries in \texttt{phases}. \\
+\texttt{SDR} & number & Count of data \textbf{elements} redistributed synchronously on each resize. \\
+\texttt{ADR} & number & Count of data \textbf{elements} redistributed asynchronously. In combinatorial expansion, values 0--100 may be treated as a percentage of \texttt{SDR}. \\
+\texttt{Datasize} & integer & Size in bytes of each element. Effective sync volume = \texttt{SDR}~$\times$~\texttt{Datasize}; async volume = \texttt{ADR}~$\times$~\texttt{Datasize}. \\
+\texttt{Rigid} & 0 or 1 & \texttt{1}: insert \texttt{MPI\_Barrier} between iterations for precise timing; \texttt{0}: no barriers. \\
+\texttt{Capture\_Method} & 0, 1, 2 & Aggregate stage times in results: \texttt{0}=max, \texttt{1}=mean, \texttt{2}=median. \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{general} object fields.}
+\label{tab:general-fields}
+\end{table}
+
+\subsection{Phase and stage parameters}
+
+Each element of \texttt{phases} describes one emulated application phase.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llp{7cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Scope} & \textbf{Description} \\
+\midrule
+\texttt{Total\_Iters} & phase & Iterations to execute this phase within the current process group. \\
+\texttt{Total\_Stages} & phase & Number of stages in \texttt{stages}. \\
+\texttt{Stage\_Type} & stage & Kind of stage (Table~\ref{tab:stage-types}). \\
+\texttt{Stage\_Time} & stage & Target stage duration in seconds (float). \\
+\texttt{Stage\_Bytes} & stage & Bytes communicated or transferred (comm/I/O). \\
+\texttt{Granularity} & stage & Problem size / operation count driver (see rules below). \\
+\texttt{Stage\_Time\_Capped} & stage opt. & \texttt{0} = complete by operation count; \texttt{1} = time cap. \\
+\texttt{Stage\_Identifier} & stage opt. & Links IPoint (3) and Wait (4) stages. \\
+\texttt{Stage\_Involved\_Procs} & stage opt. & I/O only: participating processes (\texttt{0} = all). \\
+\bottomrule
+\end{tabular}
+\caption{Phase and stage fields.}
+\label{tab:stage-fields}
+\end{table}
+
+\subsubsection{Stage types}
+\label{subsubsection:stage-types}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}cll@{}}
+\toprule
+\textbf{Value} & \textbf{Name} & \textbf{Category} \\
+\midrule
+0 & Monte Carlo ($\pi$) & Compute \\
+1 & Matrix--vector & Compute \\
+2 & Point-to-point & Communication \\
+3 & IPoint-to-point (async P2P) & Communication \\
+4 & MPI\_Wait & Communication \\
+5 & Bcast & Communication \\
+6 & Allgather & Communication \\
+7 & Reduce & Communication \\
+8 & Allreduce & Communication \\
+9 & I/O write & I/O \\
+10 & I/O read & I/O \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{Stage\_Type} values (matches SAM \texttt{compute\_methods} enum).}
+\label{tab:stage-types}
+\end{table}
+
+\subsubsection{Stage validation rules}
+\label{subsubsection:stage-validation}
+
+GenConfig, the expansion pipeline, and SAM emulation expect configurations that satisfy these rules. Using a configuration that violates them is \textbf{undefined behaviour} at runtime.
+
+\begin{itemize}
+  \item \textbf{Compute (0--1):} \texttt{Stage\_Time}~$>$~0 and \texttt{Granularity}~$\geq$~1 required. \texttt{Stage\_Bytes}, \texttt{Stage\_Identifier}, and \texttt{Stage\_Involved\_Procs} are \textbf{unused}.
+  \item \textbf{Communication (2--8):} \texttt{Stage\_Bytes}~$>$~0 \textbf{or} \texttt{Stage\_Time}~$>$~0 required. \texttt{Stage\_Involved\_Procs} is unused.
+  \item \textbf{IPoint (3):} \texttt{Stage\_Identifier}~$>$~0 required. Each IPoint must have at least one Wait stage (type~4) with the same identifier later in the phase.
+  \item \textbf{Wait (4):} \texttt{Stage\_Identifier}~$>$~0 required. A \textbf{single} Wait stage may complete \textbf{multiple} IPoint stages that share the same identifier (all outstanding requests with that id are waited on together). Duplicate Wait stages with the same identifier are invalid.
+  \item \textbf{I/O (9--10):} \texttt{Stage\_Bytes}~$>$~0 or \texttt{Stage\_Time}~$>$~0; \texttt{Stage\_Involved\_Procs} required ($\geq$~0).
+  \item \textbf{Granularity on non-compute stages:} required ($\geq$~1) when bytes are unset, or when both bytes and \texttt{Stage\_Time\_Capped=1} are set; optional when bytes are set without time cap. Time-capped stages also require \texttt{Stage\_Time}~$>$~0.
+  \item If both bytes and time are set on a comm stage, bytes take precedence (warning only in GenConfig).
+\end{itemize}
+
+\subsection{Group parameters}
+\label{subsection:group-params}
+
+Each entry in \texttt{groups} configures one process group. Group~0 starts the job; each subsequent group begins after a resize.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llp{7cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{Iters} & integer $>$ 0 & Iterations for this group before next resize (non-final groups; see termination below). \\
+\texttt{Procs} & integer $>$ 0 & MPI process count in this group. \\
+\texttt{FactorS} & float $\geq$ 0 & Scalability factor for compute stages (Section~\ref{subsection:factors}). \\
+\texttt{Dist} & string & \texttt{"compact"} or \texttt{"spread"} physical mapping. \\
+\texttt{Spawn\_Method} & 0 or 1 & \texttt{0}=Baseline, \texttt{1}=Merge. \\
+\texttt{Spawn\_Strategy} & int[] & Spawn strategy indices (Table~\ref{tab:spawn-strategies}). \\
+\texttt{Redistribution\_Method} & 0--3 & Data redistribution method (Table~\ref{tab:red-methods}). \\
+\texttt{Redistribution\_Strategy} & int[] & Exactly one strategy index (empty $\rightarrow$ clear). \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{groups[]} fields.}
+\label{tab:group-fields}
+\end{table}
+
+Spawn and redistribution settings in group~0 are ignored at job start (processes are created by \texttt{mpirun}); they apply from the first resize onward.
+
+\subsubsection{Group termination semantics}
+\label{subsection:group-termination}
+
+\begin{itemize}
+  \item \textbf{Non-final groups} (\texttt{group} index~$<$~\texttt{Total\_Resizes}): execution stops when \texttt{groups[i].Iters} iterations have been executed across the phase loop, which may occur \textbf{mid-phase} (before all phases finish).
+  \item \textbf{Final group}: \texttt{Iters} does \textbf{not} truncate the phase list. SAM runs through \textbf{all configured phases} until the \textbf{last phase completes}. The emulation ends only when that final phase finishes: not merely when a group counter would otherwise trigger a resize.
+\end{itemize}
+
+\subsubsection{Spawn strategies}
+\label{tab:spawn-strategies}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Index} & \textbf{Name} \\
+\midrule
+0 & Clear (empty / default) \\
+1 & Pthread (async spawn thread) \\
+2 & Single (rank~0 spawns) \\
+3 & Intercomm \\
+4 & Multiple \\
+5 & Parallel \\
+\bottomrule
+\end{tabular}
+\caption{Spawn strategy indices.}
+\end{table}
+
+\subsubsection{Redistribution methods and strategies}
+\label{tab:red-methods}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Method} & \textbf{Name} \\
+\midrule
+0 & Baseline / All-to-all (sources) \\
+1 & Point to point \\
+2 & RMA Lock \\
+3 & RMA LockAll \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{Redistribution\_Method} values.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Index} & \textbf{Name} \\
+\midrule
+0 & Clear \\
+1 & Pthread (async) \\
+2 & Wait sources \\
+3 & Wait targets \\
+\bottomrule
+\end{tabular}
+\caption{Redistribution strategy indices.}
+\end{table}
+
+\subsubsection{Strategy combination rules}
+\label{subsubsection:strategy-rules}
+
+When \texttt{ADR}~$>$~0 (asynchronous redistribution is active):
+
+\begin{itemize}
+  \item \textbf{Spawn:} strategies \textbf{2 (Single)} or \textbf{4 (Multiple)} cannot appear together with \textbf{5 (Parallel)} in the same \texttt{Spawn\_Strategy} array.
+  \item \textbf{Redistribution:} methods \textbf{2 (RMA Lock)} or \textbf{3 (RMA LockAll)} require strategy \textbf{1 (Pthread)} or \textbf{3 (Wait targets)}.
+\end{itemize}
+
+When \texttt{ADR}~$=$~0, only synchronous redistribution runs; the redistribution-strategy constraints above do not apply (spawn strategy choices still affect how targets are created).
+
+\subsubsection{Other group validation rules}
+
+\begin{itemize}
+  \item \texttt{Iters} and \texttt{Procs} must be positive integers.
+  \item \texttt{FactorS} must be a float $\geq 0$.
+  \item \texttt{Redistribution\_Strategy} must contain exactly one value (or \texttt{[0]} for clear).
+  \item Combinatorial expansion skips combinations where consecutive groups share the same \texttt{Procs}.
+  \item When \texttt{Procs} uses parallel variants in a group, \texttt{FactorS} must provide the same number of parallel values (not an independent Cartesian axis).
+\end{itemize}
+
+\subsection{Full example}
+
+Listing~\ref{code:json-full-example} shows a minimal resize from 2 to 10 processes with three stages per iteration. \texttt{SDR} counts elements; with \texttt{Datasize=1} the synchronous payload is $10^9$ bytes.
+
+\begin{lstlisting}[language=json,float,caption={Minimal resize example (2 to 10 processes).},label=code:json-full-example,captionpos=b]
+{
+  "general": {
+    "Total_Resizes": 1,
+    "Total_Phases": 1,
+    "SDR": 1000000000,
+    "ADR": 0,
+    "Datasize": 1,
+    "Rigid": 0,
+    "Capture_Method": 0
+  },
+  "phases": [
+    {
+      "Total_Iters": 1,
+      "Total_Stages": 3,
+      "stages": [
+        {
+          "Stage_Type": 0,
+          "Stage_Bytes": 0,
+          "Stage_Time": 0.16,
+          "Granularity": 100000
+        },
+        {
+          "Stage_Type": 8,
+          "Stage_Bytes": 8,
+          "Stage_Time": 0
+        },
+        {
+          "Stage_Type": 6,
+          "Stage_Bytes": 0,
+          "Stage_Time": 0.025
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "Iters": 1,
+      "Procs": 2,
+      "FactorS": 0.5,
+      "Dist": "spread",
+      "Spawn_Method": 0,
+      "Spawn_Strategy": [0],
+      "Redistribution_Method": 0,
+      "Redistribution_Strategy": [0]
+    },
+    {
+      "Iters": 10,
+      "Procs": 10,
+      "FactorS": 0.1,
+      "Dist": "spread",
+      "Spawn_Method": 0,
+      "Spawn_Strategy": [0],
+      "Redistribution_Method": 0,
+      "Redistribution_Strategy": [0]
+    }
+  ]
+}
+\end{lstlisting}
+
+\subsection{Modeling communication and computation}
+
+\textbf{Communication} stages can specify \texttt{Stage\_Bytes} directly (preferred) or derive volume from \texttt{Stage\_Time} and network characteristics computed at startup.
+
+\textbf{Computation} stages derive the repeat count \texttt{operations} from \texttt{Stage\_Time}, \texttt{Granularity}, \texttt{FactorS}, and the measured \texttt{$T_{op}$} on the current system. These derived values are recomputed when \texttt{FactorS} or \texttt{Procs} changes after a resize.

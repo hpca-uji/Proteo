@@ -2,18 +2,30 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "../MAM_Constants.h"
-#include "../MAM_DataStructures.h"
+#include "MAM_Constants.h"
+#include "MAM_DataStructures.h"
 #include "PortService.h"
 #include "Spawn_state.h"
 #include "Strategy_Single.h"
 
-
-/* 
- * Si la variable "type" es 1, la creación es con la participación de todo el grupo de padres
- * Si el valor es diferente, la creación es solo con la participación del proceso root
+/**
+ * @file Strategy_Single.c
+ * @brief Implementation of the Single-root spawn strategy.
  */
-void single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
+
+/**
+ * @brief Parents side of Single: root receives children's port; all sources connect.
+ *
+ * Root receives the port name over the spawn intercomm, signals
+ * @c MAM_I_SPAWN_SINGLE_COMPLETED (and wakes async waiters), then all sources
+ * @c MPI_Comm_connect on @c spawn_data.comm to obtain a shared parent–children
+ * intercommunicator.
+ *
+ * @param[in]     i_spawn_data Spawn configuration (async flag for state updates).
+ * @param[in,out] io_child     Root: spawn intercomm then new parent–children intercomm.
+ *                             Non-root: receives the connected intercomm.
+ */
+void single_strat_parents(Spawn_data i_spawn_data, MPI_Comm *io_child) {
   char *port_name;
   MPI_Comm newintercomm;
 
@@ -22,35 +34,36 @@ void single_strat_parents(Spawn_data spawn_data, MPI_Comm *child) {
   #endif
 
   if (mall->myId == mall->root) {
-    port_name = (char *) malloc(MPI_MAX_PORT_NAME * sizeof(char));
-    MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MPI_ANY_SOURCE, MAM_MPITAG_STRAT_SINGLE, *child, MPI_STATUS_IGNORE);
+    port_name = (char *)malloc(MPI_MAX_PORT_NAME * sizeof(char));
+    MPI_Recv(port_name, MPI_MAX_PORT_NAME, MPI_CHAR, MPI_ANY_SOURCE, MAM_MPITAG_STRAT_SINGLE, *io_child, MPI_STATUS_IGNORE);
 
-    set_spawn_state(MAM_I_SPAWN_SINGLE_COMPLETED, spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
+    set_spawn_state(MAM_I_SPAWN_SINGLE_COMPLETED, i_spawn_data.spawn_is_async); // Indicate other processes to join root to end spawn procedure
     wakeup_completion();
   } else {
     port_name = malloc(1);
   }
 
-  MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, spawn_data.comm, &newintercomm);
+  MPI_Comm_connect(port_name, MPI_INFO_NULL, mall->root, i_spawn_data.comm, &newintercomm);
 
-  if(mall->myId == mall->root)
-    MPI_Comm_disconnect(child);
+  if (mall->myId == mall->root)
+    MPI_Comm_disconnect(io_child);
   free(port_name);
-  *child = newintercomm;
+  *io_child = newintercomm;
 
   #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Single PA completed", mall->myId, mall->numP); fflush(stdout);
   #endif
 }
 
-/*
- * Conectar grupo de hijos con grupo de padres
- * Devuelve un intercomunicador para hablar con los padres
+/**
+ * @brief Children side of Single: root opens a port, sends it to parents, all accept.
  *
- * Solo se utiliza cuando la creación de los procesos ha sido
- * realizada por un solo proceso padre
+ * Used when children were created by a single parent process (Single strategy).
+ *
+ * @param[in,out] io_parents    Parents intercomm; replaced by the new intercomm after accept.
+ * @param[in,out] io_spawn_port Ports structure used to open the children's port.
  */
-void single_strat_children(MPI_Comm *parents, Spawn_ports *spawn_port) {
+void single_strat_children(MPI_Comm *io_parents, Spawn_ports *io_spawn_port) {
   MPI_Comm newintercomm;
   int is_root = mall->myId == mall->root ? 1 : 0;
 
@@ -58,14 +71,14 @@ void single_strat_children(MPI_Comm *parents, Spawn_ports *spawn_port) {
     DEBUG_FUNC("Additional spawn action - Single CH started", mall->myId, mall->numP); fflush(stdout);
   #endif
 
-  open_port(spawn_port, is_root, MAM_SERVICE_UNNEEDED);
-  if(mall->myId == mall->root) {
-    MPI_Send(spawn_port->port_name, MPI_MAX_PORT_NAME, MPI_CHAR, mall->root_parents, MAM_MPITAG_STRAT_SINGLE, *parents);
+  open_port(io_spawn_port, is_root, MAM_SERVICE_UNNEEDED);
+  if (mall->myId == mall->root) {
+    MPI_Send(io_spawn_port->port_name, MPI_MAX_PORT_NAME, MPI_CHAR, mall->root_parents, MAM_MPITAG_STRAT_SINGLE, *io_parents);
   }
 
-  MPI_Comm_accept(spawn_port->port_name, MPI_INFO_NULL, mall->root, mall->comm, &newintercomm);
-  MPI_Comm_disconnect(parents);
-  *parents = newintercomm;
+  MPI_Comm_accept(io_spawn_port->port_name, MPI_INFO_NULL, mall->root, mall->comm, &newintercomm);
+  MPI_Comm_disconnect(io_parents);
+  *io_parents = newintercomm;
 
   #if MAM_DEBUG >= 4
     DEBUG_FUNC("Additional spawn action - Single CH completed", mall->myId, mall->numP); fflush(stdout);

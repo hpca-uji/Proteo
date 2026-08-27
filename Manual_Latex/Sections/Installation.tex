@@ -1,0 +1,96 @@
+\section{Installation}
+\label{section:installation}
+
+This section describes how to obtain, compile, and verify a Proteo installation.
+
+\subsection{Prerequisites}
+
+\textbf{Required:}
+\begin{itemize}
+  \item GNU C compiler.
+  \item \textbf{MPICH} 3.x or 4.0.x with OFI or Nemesis netmod. Dynamic process creation has been tested with MPICH. The UCX netmod has only been tested with MPICH~5.0.0.
+  \item \textbf{Slurm} workload manager (tested with Slurm-wlm 19.05.5). Slurm is optional for compilation, but the default execution scripts assume it for job submission.
+\end{itemize}
+
+\textbf{Optional:}
+\begin{itemize}
+  \item Python~3.8+ with NumPy and Pandas (post-run analysis only).
+  \item Flask (for GenConfig; see Section~\ref{section:genconfig}).
+\end{itemize}
+
+\subsection{Obtain the source}
+
+Clone the repository:
+
+\begin{lstlisting}[style=bashstyle,caption={Clone Proteo.},captionpos=b]
+git clone http://lorca.act.uji.es/gitlab/martini/malleability_benchmark.git
+cd malleability_benchmark
+\end{lstlisting}
+
+\subsection{Compile}
+
+From the repository root, build with \texttt{make} in \texttt{Codes/}. Three optional flags control MaM behaviour (\texttt{Codes/Makefile}):
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llp{6.5cm}@{}}
+\toprule
+\textbf{Flag} & \textbf{Default} & \textbf{Meaning} \\
+\midrule
+\texttt{MAM\_USE\_SLURM} & 0 & Set to \texttt{1} to enable Slurm/RMS integration in MaM (required for normal Proteo runs with \texttt{singleRun.sh}). \\
+\texttt{MAM\_USE\_BARRIERS} & 0 & Set to \texttt{1} to insert additional barriers inside MaM for stricter timing (may slow execution). Distinct from JSON \texttt{Rigid}. \\
+\texttt{MAM\_DEBUG} & 0 & Debug verbosity at compile time; integer \texttt{0} (off) through \texttt{6} (most verbose). Values greater than~0 also enable compiler flags \texttt{-g} and \texttt{-O1}. \\
+\bottomrule
+\end{tabular}
+\caption{MaM compile-time flags passed through \texttt{Codes/Makefile}.}
+\end{table}
+
+Typical Slurm-enabled build:
+
+\begin{lstlisting}[style=bashstyle,caption={Build MaM and SAM with Slurm support.},captionpos=b]
+cd Codes
+make MAM_USE_SLURM=1
+\end{lstlisting}
+
+Optional debug or barrier build:
+
+\begin{lstlisting}[style=bashstyle]
+make MAM_USE_SLURM=1 MAM_USE_BARRIERS=1 MAM_DEBUG=3
+\end{lstlisting}
+
+This compiles the MaM shared library first, then links SAM (\texttt{Codes/SAM/build/a.out}). A configuration stub is written to \texttt{Codes/build/config.txt} and sourced by execution scripts.
+
+To remove build artifacts:
+
+\begin{lstlisting}[style=bashstyle]
+cd Codes && make clean
+\end{lstlisting}
+
+\subsection{Repository layout}
+
+\begin{itemize}
+  \item \texttt{Codes/}: MaM and SAM source code and binaries.
+  \item \texttt{Exec/}: Slurm launch scripts and Python helpers.
+  \item \texttt{GenConfig/}: JSON configuration web editor.
+  \item \texttt{Results/}: default directory for experiment outputs.
+  \item \texttt{Analysis/}: Python scripts for post-processing.
+\end{itemize}
+
+\subsection{Verify the installation}
+
+A minimal smoke test uses the sample JSON in \texttt{Codes/test.json}. From the directory where you want output files (e.g.\ \texttt{Results/}):
+
+\begin{lstlisting}[style=bashstyle,caption={Smoke test with automatic Slurm allocation.},captionpos=b]
+bash ../Exec/singleRun.sh ../Codes/test.json mypartition 0 1 0
+\end{lstlisting}
+
+Replace \texttt{mypartition} with a valid Slurm partition name on your system. On success, output files appear with names such as \texttt{R0\_Global.out}, \texttt{R0\_G0NP2.out}, and \texttt{slurm-*.out}.
+
+Validate consistency with:
+
+\begin{lstlisting}[style=bashstyle]
+bash ../Exec/CheckRun.sh test 0 1 4 3 100
+\end{lstlisting}
+
+The script prints \texttt{SUCCESS} or \texttt{REPEATING} when runs are consistent; \texttt{FAILURE} indicates a configuration or build problem. Adjust \texttt{total\_stages} and \texttt{total\_groups} to match your configuration (see Section~\ref{section:usage}).

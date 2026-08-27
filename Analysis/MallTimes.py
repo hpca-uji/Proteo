@@ -27,7 +27,7 @@ class G_enum(Enum):
     T_ITER = 19
     T_STAGES = 20
     T_SPAWN = 21
-    T_SPAWN_REAL = 22
+    T_USER = 22
     T_SR = 23
     T_AR = 24
     T_MALLEABILITY = 25
@@ -42,7 +42,7 @@ class G_enum(Enum):
 
 columnsG = ["Total_Resizes", "Total_Groups", "Total_Stages", "Granularity", "SDR", "ADR", "DR", "Redistribution_Method", \
             "Redistribution_Strategy", "Spawn_Method", "Spawn_Strategy", "Groups", "FactorS", "Dist", "Stage_Types", "Stage_Times", \
-            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_spawn_real", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
+            "Stage_Bytes", "Iters", "Asynch_Iters", "T_iter", "T_stages", "T_spawn", "T_US", "T_SR", "T_AR", "T_Malleability", "T_total"] #27
 
 #-----------------------------------------------
 # Obtains the value of a given index in a splited line
@@ -82,7 +82,7 @@ def record_config_line(lineS, dataG_it):
   array_groups = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
           G_enum.ASYNCH_ITERS.value, G_enum.T_ITER.value, G_enum.T_STAGES.value, G_enum.RED_METHOD.value, \
           G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, G_enum.SPAWN_STRATEGY.value,]
-  array_resizes = [ G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value]
+  array_resizes = [ G_enum.T_SPAWN.value, G_enum.T_USER.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value]
   array_stages = [G_enum.STAGE_TYPES.value, \
           G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
   for index in array_groups:
@@ -127,8 +127,8 @@ def record_group_line(lineS, dataG_it, group):
 
 #-----------------------------------------------
 def record_time_line(lineS, dataG_it):
-  T_names = ["T_spawn:", "T_spawn_real:", "T_SR:", "T_AR:", "T_Malleability:", "T_total:"]
-  T_values = [G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value, G_enum.T_TOTAL.value]
+  T_names = ["T_spawn:", "T_US:", "T_SR:", "T_AR:", "T_Malleability:", "T_total:"]
+  T_values = [G_enum.T_SPAWN.value, G_enum.T_USER.value, G_enum.T_SR.value, G_enum.T_AR.value, G_enum.T_MALLEABILITY.value, G_enum.T_TOTAL.value]
   if not (lineS[0] in T_names): # Execute only if line represents a Time
       return
 
@@ -224,7 +224,7 @@ def read_global_file(f, dataG, it):
 def convert_to_tuples(dfG):
   array_list_items = [G_enum.GROUPS.value, G_enum.FACTOR_S.value, G_enum.DIST.value, G_enum.ITERS.value, \
           G_enum.ASYNCH_ITERS.value, G_enum.RED_METHOD.value, G_enum.RED_STRATEGY.value, G_enum.SPAWN_METHOD.value, \
-          G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, G_enum.T_SPAWN_REAL.value, G_enum.T_SR.value, \
+          G_enum.SPAWN_STRATEGY.value, G_enum.T_SPAWN.value, G_enum.T_USER.value, G_enum.T_SR.value, \
           G_enum.T_AR.value, G_enum.STAGE_TYPES.value, G_enum.STAGE_TIMES.value, G_enum.STAGE_BYTES.value]
             #TODO Falta T_malleability?
   array_multiple_list_items = [G_enum.T_ITER.value, G_enum.T_STAGES.value]
@@ -240,6 +240,8 @@ def convert_to_tuples(dfG):
     values = dfG[name].copy()
     for i in range(len(values)):
       for j in range(len(values[i])):
+        if(len(values[i][j]) == 0):
+          values[i][j].append(0) # Add one element in case is empty
         if(type(values[i][j][0]) == list):
           for r in range(len(values[i][j])):
             values[i][j][r] = tuple(values[i][j][r])

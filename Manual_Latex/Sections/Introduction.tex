@@ -1,0 +1,46 @@
+\section{Introduction}
+\label{section:introduction}
+
+\textbf{Proteo} is a configurable synthetic application for studying \textit{malleability} in high-performance computing (HPC). It emulates the behaviour of iterative MPI scientific applications that can be resized on-the-fly (expanded, shrunk, or migrated) while running under a resource manager.
+
+Proteo is composed of two C/MPI modules:
+
+\begin{itemize}
+  \item \textbf{SAM} (Synthetic Application Module): emulates application \textbf{computation}, \textbf{communication}, and \textbf{I/O} through configurable \textit{phases} and \textit{stages}.
+  \item \textbf{MaM} (Malleability Module): performs dynamic process management, spawn/shrink operations, and data redistribution between source and target process groups.
+\end{itemize}
+
+Proteo focuses on \textbf{iterative MPI applications} whose iterations combine compute, MPI communication, and I/O stages. With the appropriate JSON configuration, it can approximate a wide range of MPI application profiles.
+
+\subsection{Terminology}
+
+During a resize operation, the existing process group is referred to as \textit{sources}; the newly created group is the \textit{targets}. Depending on the spawn method and strategy, some source ranks may also join the target group. In all cases, the target group continues the emulated application execution.
+
+A \textbf{phase} is a segment of the emulated application: it runs for a fixed number of iterations (\texttt{Total\_Iters}) and contains an ordered list of \textbf{stages} (computation, MPI communication, or I/O). Phases are executed sequentially within a process group.
+
+A \textbf{group} defines one segment of the overall malleable execution: how many MPI processes run, for how many iterations, and which MaM spawn/redistribution options apply before the next resize (if any). The number of groups is \texttt{Total\_Resizes}~$+~1$.
+
+\subsection{Configuration format}
+
+Proteo is configured through \textbf{JSON files}. Each file describes:
+
+\begin{enumerate}
+  \item Global simulation parameters (\texttt{general}).
+  \item One or more application phases with nested stages (\texttt{phases}).
+  \item One process group per resize boundary (\texttt{groups}).
+\end{enumerate}
+
+The web tool \textbf{GenConfig} (Section~\ref{section:genconfig}) helps create and validate these files. Section~\ref{section:json-config} documents every parameter.
+
+\subsection{Manual organization}
+
+\begin{itemize}
+  \item Section~\ref{section:architecture}: SAM/MaM architecture and execution model.
+  \item Section~\ref{section:installation}: prerequisites and build instructions.
+  \item Section~\ref{section:usage}: execution scripts and output files.
+  \item Section~\ref{section:json-config}: JSON parameter reference.
+  \item Section~\ref{section:genconfig}: GenConfig web editor and combinatorial expansion.
+  \item Section~\ref{section:examples}: worked examples.
+  \item Section~\ref{section:analysis}: post-run analysis.
+  \item Appendix~\ref{appendix:csv}: CSV output format for custom analysis.
+\end{itemize}
