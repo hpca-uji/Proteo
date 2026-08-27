@@ -1,7 +1,7 @@
 # Proteo - Dev branch
 
 ## Overview
-This branch contains the codebase used the Dev branch of Proteo.
+This branch contains the codebase used the Master branch of Proteo.
 
 ## Branch Structure
 This branch is divided into the following 4 directories:
