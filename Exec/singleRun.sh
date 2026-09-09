@@ -6,9 +6,10 @@
 # Parameter 2: Partition name.
 # Parameter 3(Optional): Index to use for the output files. Must be a positive integer.
 # Parameter 4(Optional): Number of repetitions to perform. Must be a positive integer.
-# Parameter 5(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
+# Parameter 5(Optional): Wether expands should consider RMS. Must be 0(False) or 1(True). False by default
 # Parameter 6(Optional): Maximum amount of time in seconds needed by a single execution. Default value is 0, which indicates infinite time. Must be a positive integer.
-# Parameter 7(Optional): Path where the output files should be saved. 
+# Parameter 7(Optional): Use Valgrind(1), Extrae(2) or nothing(0).
+# Parameter 8(Optional): Path where the output files should be saved. 
 #====== Do not modify these values =======
 
 scriptDir="$(dirname "$0")"
@@ -26,14 +27,17 @@ fi
 #$2 == Partition Name
 #$3 == outFileIndex
 #$4 == Qty of repetitions
-#$5 == Use external NO(0) Valgrind(1), Extrae(2)
+#$5 == RMS Expansions
 #$6 == Max time per execution(s)
-#$7 == Output path
+#$7 == Use external NO(0) Valgrind(1), Extrae(2)
+#$8 == Output path
 
 config_file=$1
 partition=$2
 outFileIndex=0
+rms_expand=0
 qty=1
+limit_time=$((0))
 use_external=0
 
 if [ $# -ge 3 ]
@@ -46,22 +50,25 @@ then
 fi
 if [ $# -ge 5 ]
 then
-  use_external=$5
+  rms_expand=$5
 fi
-limit_time=$((0))
 if [ $# -ge 6 ] #Max time per execution in seconds
 then
   limit_time=$(($6 * $qty / 60 + 1))
 fi
 if [ $# -ge 7 ]
 then
-  output=$7
+  use_external=$7
+fi
+if [ $# -ge 8 ]
+then
+  output=$8
 fi
 
 validate_config_ext "$config_file" || exit 1
 
 #Obtain amount of nodes neeeded
-result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition $rms_expand)
 node_qty=$(echo $result | cut -d ',' -f1)
 constraint=$(echo $result | cut -d ',' -f2)
 

@@ -36,6 +36,7 @@ if [ $# -ge 7 ] #Max time per execution in seconds
 then
   limit_time_exec=$7
 fi
+rms_expand=0
 
 limit_time=0
 exec_lines_basic=7 # 1 Config + 6 Times
@@ -219,7 +220,7 @@ do
     fi
 
     #2.2 - Get nodes
-    result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition)
+    result=$(bash $PROTEO_HOME$execDir/BashScripts/getMaxNodesNeeded.sh $config_file $partition $rms_expand)
     node_qty=$(echo $result | cut -d ',' -f1)
     constraint=$(echo $result | cut -d ',' -f2)
 

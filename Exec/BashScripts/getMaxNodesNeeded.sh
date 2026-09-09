@@ -3,6 +3,7 @@
 # Obtains for a given configuration file how many nodes will be needed
 # Parameter 1 - Configuration file name for the emulation (.ini or .json).
 # Parameter 2 - Partition to use
+# Parameter 3 - Consider expansions to be performed by the RMS (1) or not (0). If yes, only first group of processes is considered.
 # FIXME: Not tested for shared systems
 # FIXME: Does not correctly balance out the amount of nodes in all casses
 # NOTE: Actual script tries to always balance out the types of node used
@@ -33,13 +34,19 @@ get_total_resizes_from_json() {
 if [ "$#" -lt "2" ]
 then
   echo "Not enough arguments"
-  echo "Usage -> bash getMaxNodesNeeded.sh Configuration.ini|Configuration.json Partition"
+  echo "Usage -> bash getMaxNodesNeeded.sh Configuration.ini|Configuration.json Partition [RMS-Expand(True(1)-False(0))]"
   exit -1
 fi
 
 config_file=$1
 partition=$2
+rms_expand=0
 ext="${config_file##*.}"
+
+if [ "$#" -gt "2" ]
+then
+  rms_expand=$3
+fi
 
 case "$ext" in
   ini)
@@ -55,15 +62,20 @@ case "$ext" in
 esac
 
 max_numP=-1
-total_groups=$(($total_resizes + 1))
-for ((j=0; j<total_groups; j++));
-do
-  numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $config_file $j)
-  if [ "$numP" -gt "$max_numP" ];
-  then
-    max_numP=$numP
-  fi
-done
+if [ "$rms_expand" -eq "1" ]
+then # Get only nodes for the first group
+  max_numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $config_file 0)
+else # Get nodes at the start considering all groups
+  total_groups=$(($total_resizes + 1))
+  for ((j=0; j<total_groups; j++));
+  do
+    numP=$(bash $PROTEO_HOME$execDir/BashScripts/getNumPNeeded.sh $config_file $j)
+    if [ "$numP" -gt "$max_numP" ];
+    then
+      max_numP=$numP
+    fi
+  done
+fi
 #node_qty=$(( ($max_numP + $cores - 1) / $cores ))
 
 # Get partition data
