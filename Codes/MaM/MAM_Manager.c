@@ -19,7 +19,7 @@
 #include <pthread.h>
 #include <string.h>
 #include "MAM.h"
-#include "MAM_Constants.h"
+#include "MAM_Children.h"
 #include "MAM_DataStructures.h"
 #include "MAM_Types.h"
 #include "MAM_Zombies.h"
@@ -27,6 +27,7 @@
 #include "MAM_RMS.h"
 #include "MAM_Init_Configuration.h"
 #include "GenericSpawn.h"
+#include "GenericConnect.h"
 #include "Distributed_CommDist.h"
 
 void MAM_Commit(int *o_mam_state);
@@ -46,7 +47,7 @@ int MAM_St_job_connect(void);
 int MAM_St_job_resources(void);
 int MAM_St_red_start(void);
 int MAM_St_red_pending(int i_wait_completed);
-int MAM_St_user_start(int *o_mam_state);
+int MAM_St_user_start(int *o_mam_state, void (*i_user_function)(void *));
 int MAM_St_user_pending(int *o_mam_state, int i_wait_completed, void (*i_user_function)(void *), void *i_user_args);
 int MAM_St_user_completed(void);
 int MAM_St_spawn_adapt_pending(int i_wait_completed);
@@ -59,7 +60,7 @@ int MAM_St_completed(int *o_mam_state);
  * Steps performed by the children and by the sources. Merge shrinks are completed
  * by MAM_St_spawn_adapt_pending() instead.
  */
-void Children_init(void (*i_user_function)(void *), void *i_user_args);
+void MAM_I_Targets_work(void (*i_user_function)(void *), void *i_user_args);
 int spawn_step(void);
 int start_redistribution(void);
 int check_redistribution(int i_wait_completed);
@@ -99,9 +100,6 @@ malleability_data_t *rep_a_data;
 /** @brief Distributed + asynchronous registry (constant data, redistributed in background). */
 malleability_data_t *dist_a_data;
 
-/** @brief Snapshot handed to the application through ::MAM_Get_Reconf_Info. */
-mam_user_reconf_t *user_reconf;
-
 /**
  * @brief Initialise MaM, or finish joining as a dynamically spawned child group.
  *
@@ -110,7 +108,7 @@ mam_user_reconf_t *user_reconf;
  * own communication.
  *
  * If the calling group was created dynamically (it has an MPI parent), the group
- * instead connects to its parents through Children_init() and returns ready to run
+ * instead connects to its parents through MAM_I_Targets_work() and returns ready to run
  * the application.
  *
  * @param[in]     i_root          Rank acting as root among the sources.
@@ -122,12 +120,11 @@ mam_user_reconf_t *user_reconf;
  * @return @c MAM_TARGETS when called by a spawned group, @c MAM_SOURCES otherwise.
  */
 int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_function)(void *), void *i_user_args) {
-  char *env_service_rms = NULL;
   MPI_Comm dup_comm, thread_comm, original_comm;
 
   mall_conf = (malleability_config_t *) malloc(sizeof(malleability_config_t));
   mall = (malleability_t *) malloc(sizeof(malleability_t));
-  user_reconf = (mam_user_reconf_t *) malloc(sizeof(mam_user_reconf_t));
+  mall->user_reconf = (mam_user_reconf_t *) malloc(sizeof(mam_user_reconf_t));
 
   MPI_Comm_rank(*io_comm, &(mall->myId));
   MPI_Comm_size(*io_comm, &(mall->numP));
@@ -151,7 +148,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   mall->root = i_root;
   mall->root_parents = i_root;
   mall->zombie = 0;
-  mall->new_job_id = MAM_DENIED; //TODO: Should be reissued after a reconfiguration
+  mall->new_job_id = MAM_DENIED;
   mall->comm = dup_comm;
   mall->thread_comm = thread_comm;
   mall->original_comm = original_comm;
@@ -160,7 +157,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   mall->intercomm = MPI_COMM_NULL;
 
   mall->name_exec = i_name_exec;
-  mall->service_name = NULL;
+  //mall->service_name = NULL;
   mall->port_name = NULL;
   mall->nodelist = NULL;
   mall->max_cpus = NULL;
@@ -168,6 +165,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
   mall->spawned_cpus = NULL;
   mall->nodelist_len = 0;
   mall->num_nodes = 0;
+  mall->num_expands = 0;
 
   rep_s_data->entries = 0;
   rep_a_data->entries = 0;
@@ -183,7 +181,7 @@ int MAM_Init(int i_root, MPI_Comm *io_comm, char *i_name_exec, void (*i_user_fun
 
   // Children obtain their data from the parents that spawned them
   if(MAM_Check_children_type() == MAM_TARGETS) { 
-    Children_init(i_user_function, i_user_args);
+    MAM_I_Targets_work(i_user_function, i_user_args);
     return MAM_TARGETS;
   }
 
@@ -235,9 +233,9 @@ int MAM_Finalize(void) {
   if(mall->thread_comm != MPI_COMM_WORLD && mall->thread_comm != MPI_COMM_NULL) MPI_Comm_disconnect(&(mall->thread_comm));
   if(mall->intercomm != MPI_COMM_WORLD && mall->intercomm != MPI_COMM_NULL) { MPI_Comm_disconnect(&(mall->intercomm)); } //FIXME: Error in OpenMPI + Merge
   if(mall->original_comm != MPI_COMM_WORLD && mall->original_comm != MPI_COMM_NULL) MPI_Comm_free(&(mall->original_comm));
+  if(NULL != mall->user_reconf) { free(mall->user_reconf); }
   free(mall);
   free(mall_conf);
-  free(user_reconf);
 
   state = MAM_I_UNRESERVED;
   return request_abort;
@@ -265,6 +263,10 @@ int MAM_Finalize(void) {
 int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_function)(void *), void *i_user_args) {
   int call_checkpoint = 0;
 
+  #if MAM_DEBUG > 5
+      if(mall->myId == mall->root) { printf("MAM Checkpointing inner state: %d\n", state); fflush(stdout); }
+  #endif
+
   //TODO: This could be changed to an array with the functions to call in each case
   switch(state) {
     case MAM_I_UNRESERVED:
@@ -288,6 +290,7 @@ int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_functio
     case MAM_I_SPAWN_ADAPT_POSTPONE:
     case MAM_I_SPAWN_COMPLETED:
       call_checkpoint = MAM_St_check_job_merge();
+      break;
 
     case MAM_I_JOB_CONNECTING:
       call_checkpoint = MAM_St_job_connect();
@@ -304,13 +307,11 @@ int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_functio
       break;
 
     case MAM_I_USER_START:
-      call_checkpoint = MAM_St_user_start(o_mam_state);
+      call_checkpoint = MAM_St_user_start(o_mam_state, i_user_function);
       break;
-
     case MAM_I_USER_PENDING:
       call_checkpoint = MAM_St_user_pending(o_mam_state, i_wait_completed, i_user_function, i_user_args);
       break;
-
     case MAM_I_USER_COMPLETED:
       call_checkpoint = MAM_St_user_completed();
       break;
@@ -326,7 +327,7 @@ int MAM_Checkpoint(int *o_mam_state, int i_wait_completed, void (*i_user_functio
   }
 
   if(call_checkpoint) { MAM_Checkpoint(o_mam_state, i_wait_completed, i_user_function, i_user_args); }
-  if(state > MAM_I_NOT_STARTED && state < MAM_I_COMPLETED) *o_mam_state = MAM_PENDING;
+  if(state > MAM_I_NOT_STARTED && state < MAM_I_COMPLETED) *o_mam_state = MAM_PENDING; //FIXME: User pending never appears
   return state;
 }
 
@@ -589,7 +590,7 @@ void MAM_Data_get_pointer(void **o_data, size_t i_index, size_t *o_total_qty, MP
 int MAM_Get_Reconf_Info(mam_user_reconf_t *o_reconf_info) {
   if(state != MAM_I_USER_PENDING) return MAM_DENIED;
 
-  *o_reconf_info = *user_reconf;
+  *o_reconf_info = *(mall->user_reconf);
   return MAM_OK;
 }
 
@@ -620,9 +621,10 @@ int MAM_St_rms_start(int *o_mam_state) {
     MPI_Barrier(mall->comm);
   #endif
   mall_conf->times->malleability_start = MPI_Wtime();
-  mall_conf->times->rms_start = mall_conf->times->malleability_start; //TODO: Implement proper time
+  mall_conf->times->rms_start = mall_conf->times->malleability_start;
 
   MAM_Check_configuration();
+  MAM_Init_job_connect_port();
 
   int res = MAM_Request_job();
   if(res == MAM_DENIED) {
@@ -634,11 +636,20 @@ int MAM_St_rms_start(int *o_mam_state) {
   state = res;
   mall->wait_targets_posted = 0;
 
+  #if MAM_USE_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->rms_time = MPI_Wtime() - mall_conf->times->rms_start;
+
   return 1;
 }
 
 //TODO: It may be done after spawn has been completed
 int MAM_St_rms_pending(void) {
+  #if MAM_USE_BARRIERS
+    MPI_Barrier(mall->comm);
+  #endif
+  mall_conf->times->rms_start = MPI_Wtime();
 
   int res = MAM_Check_pending_job();
   if (res == MAM_DENIED) {
@@ -650,7 +661,7 @@ int MAM_St_rms_pending(void) {
   #if MAM_USE_BARRIERS
     MPI_Barrier(mall->comm);
   #endif
-  mall_conf->times->rms_time = MPI_Wtime() - mall_conf->times->rms_start;
+  mall_conf->times->rms_time += MPI_Wtime() - mall_conf->times->rms_start;
 
   return 1;
 }
@@ -733,7 +744,7 @@ int MAM_St_job_resources(void) {
 
   // Update all ranks with new info
   MAM_Comm_main_structures(mall->intercomm, MAM_ROOT);
-  MAM_Repair_job_comms(MAM_SOURCES);
+  MAM_Repair_job_comms(MAM_SOURCES, MAM_SOURCES); // Second argument is ignored if first is MAM_SOURCES
 
   state = MAM_I_DIST_START;
 
@@ -805,10 +816,23 @@ int MAM_St_red_pending(int i_wait_completed) {
  * @todo FIXME: This assumes a user callback exists; when there is none the time
  *       spent preparing the communicator is wasted.
  */
-int MAM_St_user_start(int *o_mam_state) {
+int MAM_St_user_start(int *o_mam_state, void (*i_user_function)(void *)) {
   #if MAM_USE_BARRIERS
     MPI_Barrier(mall->intercomm);
   #endif
+
+  if(NULL == i_user_function) {
+    #if MAM_DEBUG
+      if(mall->myId == mall->root) { DEBUG_FUNC("No USER function. Skipping stage.", mall->myId, mall->numP); fflush(stdout); }
+    #endif
+    MAM_Resume_redistribution(o_mam_state);
+    return 1;
+  }
+
+  #if MAM_DEBUG
+    DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout);
+  #endif
+
   mall_conf->times->user_start = MPI_Wtime(); // Timestamp of when the user redistribution starts
   if(MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_INTERCOMM, NULL)) {
     MPI_Intercomm_merge(mall->intercomm, MAM_SOURCES, &mall->tmp_comm); //The group passing 0 is placed first
@@ -816,6 +840,7 @@ int MAM_St_user_start(int *o_mam_state) {
     MPI_Comm_dup(mall->intercomm, &mall->tmp_comm);
   }
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
+  MAM_create_user_struct(MAM_SOURCES);
   state = MAM_I_USER_PENDING;
   *o_mam_state = MAM_USER_PENDING;
   return 1;
@@ -840,10 +865,9 @@ int MAM_St_user_start(int *o_mam_state) {
  */
 int MAM_St_user_pending(int *o_mam_state, int i_wait_completed, void (*i_user_function)(void *), void *i_user_args) {
   #if MAM_DEBUG
-    if(mall->myId == mall->root) { DEBUG_FUNC("Starting USER redistribution", mall->myId, mall->numP); fflush(stdout); }
+    if(mall->myId == mall->root) { DEBUG_FUNC("Checking USER redistribution", mall->myId, mall->numP); fflush(stdout); }
   #endif
-  if(i_user_function != NULL) {
-    MAM_I_create_user_struct(MAM_SOURCES);
+  if(NULL != i_user_function) {
     do {
       i_user_function(i_user_args);
     } while(i_wait_completed && state == MAM_I_USER_PENDING);
@@ -1291,34 +1315,4 @@ void* thread_async_work() {
   } 
   comm_state = MAM_I_DIST_COMPLETED;
   pthread_exit(NULL);
-}
-
-
-//==============================================================================
-
-/**
- * @brief Build the structure handed to the user to help with its data reconfiguration.
- *
- * Fills the global ::user_reconf snapshot with the temporary communicator, the source
- * and target counts, and the role of this rank. Children always report
- * @c MAM_PROC_NEW_RANK; sources report @c MAM_PROC_ZOMBIE when they will not survive
- * the reconfiguration and @c MAM_PROC_CONTINUE when they will.
- *
- * @param[in] i_is_children_group Non-zero (@c MAM_TARGETS) when called by the newly
- *                                spawned children, zero (@c MAM_SOURCES) when called
- *                                by the sources.
- */
-void MAM_I_create_user_struct(int i_is_children_group) {
-  user_reconf->comm = mall->tmp_comm;
-
-  if(i_is_children_group) {
-    user_reconf->rank_state = MAM_PROC_NEW_RANK;
-    user_reconf->numS = mall->num_parents;
-    user_reconf->numT = mall->numP;
-  } else {
-    user_reconf->numS = mall->numP;
-    user_reconf->numT = mall->numC;
-    if(mall->zombie) user_reconf->rank_state = MAM_PROC_ZOMBIE;
-    else user_reconf->rank_state = MAM_PROC_CONTINUE;
-  }
 }

@@ -116,3 +116,33 @@ void MAM_comms_update(MPI_Comm i_comm) {
   MPI_Comm_set_name(mall->thread_comm, "MAM_THREAD");
   MPI_Comm_set_name(mall->comm, "MAM_MAIN");
 }
+
+
+//==============================================================================
+
+/**
+ * @brief Build the structure handed to the user to help with its data reconfiguration.
+ *
+ * Fills the global ::user_reconf snapshot with the temporary communicator, the source
+ * and target counts, and the role of this rank. Children always report
+ * @c MAM_PROC_NEW_RANK; sources report @c MAM_PROC_ZOMBIE when they will not survive
+ * the reconfiguration and @c MAM_PROC_CONTINUE when they will.
+ *
+ * @param[in] i_is_children_group Non-zero (@c MAM_TARGETS) when called by the newly
+ *                                spawned children, zero (@c MAM_SOURCES) when called
+ *                                by the sources.
+ */
+void MAM_create_user_struct(int i_is_children_group) {
+  mall->user_reconf->comm = mall->tmp_comm;
+
+  if(i_is_children_group) {
+    mall->user_reconf->rank_state = MAM_PROC_NEW_RANK;
+    mall->user_reconf->numS = mall->num_parents;
+    mall->user_reconf->numT = mall->numP;
+  } else {
+    mall->user_reconf->numS = mall->numP;
+    mall->user_reconf->numT = mall->numC;
+    if(mall->zombie) { mall->user_reconf->rank_state = MAM_PROC_ZOMBIE; }
+    else { mall->user_reconf->rank_state = MAM_PROC_CONTINUE; }
+  }
+}

@@ -1,8 +1,9 @@
+#include <string.h>
 #include "MAM_Children.h"
-#include "MAM_Constants.h"
-#include "MAM_DataStructures.h"
-#include "MAM_Types.h"
+#include "MAM_Configuration.h"
+#include "MAM_RMS.h"
 #include "GenericSpawn.h"
+#include "GenericConnect.h"
 #include "Distributed_CommDist.h"
 
 void MAM_I_children_connect(void);
@@ -23,12 +24,12 @@ int MAM_Check_children_type(void) {
     return MAM_TARGETS;
   }
 
-  tmp = getenv(MAM_ENV);
+  tmp = getenv(MAM_CONNECT_PORT);
   if(tmp != NULL) { // If it is a new job, assign the service name
-    if (mall->service_name != NULL) { free(mall->service_name); }
-    mall->service_name = malloc((strlen(tmp) + 1) * sizeof *mall->service_name);
-    strcpy(mall->service_name, tmp);
-    unsetenv(MAM_ENV);
+    if (mall->port_name != NULL) { free(mall->port_name); }
+    mall->port_name = malloc((strlen(tmp) + 1) * sizeof *mall->port_name);
+    strcpy(mall->port_name, tmp);
+    unsetenv(MAM_CONNECT_PORT);
     return MAM_TARGETS;
   }
 
@@ -52,10 +53,9 @@ int MAM_Check_children_type(void) {
 void MAM_Children_init(void (*i_user_function)(void *), void *i_user_args, malleability_data_t *rep_s_data, malleability_data_t *dist_s_data, 
                     malleability_data_t *rep_a_data, malleability_data_t *dist_a_data) {
   int children_type;
-  size_t i;
 
   //------------------------------ SPAWN
-  if(mall->service_name != NULL) {
+  if(mall->port_name != NULL) {
     children_type = 1;
     MAM_I_children_connect();
   } else {
@@ -260,7 +260,7 @@ void MAM_I_children_user_comm(void (*i_user_function)(void *), void *i_user_args
   MPI_Comm_set_name(mall->tmp_comm, "MAM_USER_TMP");
   if(i_user_function != NULL) {
     state = MAM_I_USER_PENDING;
-    MAM_I_create_user_struct(MAM_TARGETS);
+    MAM_create_user_struct(MAM_TARGETS);
     i_user_function(i_user_args);
   }
   #if MAM_USE_BARRIERS

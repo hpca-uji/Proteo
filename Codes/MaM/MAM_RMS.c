@@ -54,7 +54,7 @@ int MAM_I_slurm_getjob_hosts_info(int jobId, int update);
  */
 void MAM_I_slurm_get_assigned_cpus(void);
 
-static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *service_name);
+static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *port_name);
 
 int MAM_I_slurm_request_job(job_desc_msg_t *job_desc_msg, int *new_job_id);
 
@@ -94,7 +94,7 @@ int GetCPUCount(void);
  */
 unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_key);
 
-void MAM_I_generate_service_name(char **service_name);
+void MAM_I_generate_job_name(char **port_name);
 void MAM_I_realloc_RMS_arrays(void);
 
 /**
@@ -113,20 +113,20 @@ void MAM_check_hosts(void) {
   #if MAM_USE_SLURM
     char *tmp = NULL;
     tmp = getenv("SLURM_JOB_ID");
-    if(tmp == NULL) return 1;
-    int jobId = atoi(tmp);
+    if(tmp != NULL) {
+      int jobId = atoi(tmp);
+      not_filled = MAM_I_slurm_getjob_hosts_info(jobId, update);
+      if(not_filled) {
+        #if MAM_DEBUG >= 2
+          DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
+        #endif
+        if(mall->nodelist != NULL) {
+          free(mall->nodelist);
+	        mall->nodelist = NULL;
+        }
 
-    not_filled = MAM_I_slurm_getjob_hosts_info(jobId, update);
-    if(not_filled) {
-      #if MAM_DEBUG >= 2
-        DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
-      #endif
-      if(mall->nodelist != NULL) {
-        free(mall->nodelist);
-	      mall->nodelist = NULL;
+        not_filled = MAM_I_slurm_getenv_hosts_info();
       }
-
-      not_filled = MAM_I_slurm_getenv_hosts_info(jobId);
     }
   #endif
   if(not_filled) {
@@ -168,24 +168,27 @@ void MAM_check_hosts(void) {
 int MAM_Request_job(void) {
   int i, sum, new_nodes, res;
 
+  sum = 0;
   // Check if more cpus are required
   for(i = 0; i < mall->num_nodes; i++) { sum += mall->max_cpus[i]; }
-  new_nodes = ceil((mall->numC - sum) / mall->max_cpus[i]);
+  new_nodes = ceil((mall->numC - sum) / mall->max_cpus[0]);
   if(new_nodes <= 0) { return MAM_I_RMS_COMPLETED; }
 
-  //TODO: ADD Bcast to ensure all ranks know res
 #if MAM_USE_SLURM
-  job_desc_msg_t *job_desc_msg = malloc(sizeof *job_desc_msg); 
-  res = MAM_I_slurm_prepare_job(new_nodes, job_desc_msg);
-  if (res == MAM_OK) {
-    res = (MAM_I_slurm_request_job(job_desc_msg, &(mall->new_job_id)) == MAM_OK ? MAM_I_RMS_PENDING : MAM_DENIED);
+  //MAM_I_generate_service_name(&(mall->service_name));
+  if(MAM_ROOT == mall->myId) {
+    job_desc_msg_t *job_desc_msg = malloc(sizeof *job_desc_msg); 
+    res = MAM_I_slurm_prepare_job(new_nodes, job_desc_msg);
+    if (res == MAM_OK) {
+      res = (MAM_I_slurm_request_job(job_desc_msg, &(mall->new_job_id)) == MAM_OK ? MAM_I_RMS_PENDING : MAM_DENIED);
+    }
+    free(job_desc_msg);
   }
-
-  free(job_desc_msg);
+  MPI_Bcast(&mall->new_job_id, 1, MPI_INT, MAM_ROOT, mall->comm);
+  MPI_Bcast(&res, 1, MPI_INT, MAM_ROOT, mall->comm);
 #else
   res = MAM_I_RMS_COMPLETED; // Without an RMS cannot ask for more resources
 #endif
-
   return res;
 }
 
@@ -193,9 +196,11 @@ int MAM_Request_job(void) {
 int MAM_Check_pending_job(void) {
   int res = MAM_DENIED; // Without an RMS cannot ask for more resources
 
-  //TODO: ADD Bcast to ensure all ranks know res
 #if MAM_USE_SLURM
-  res = MAM_I_slurm_check_job_status(mall->new_job_id); //TODO: Save on mall
+  if(MAM_ROOT == mall->myId) {
+    res = MAM_I_slurm_check_job_status(mall->new_job_id);
+  }
+  MPI_Bcast(&res, 1, MPI_INT, MAM_ROOT, mall->comm);
 #endif
   if (res == MAM_I_RMS_COMPLETED) { mall->num_expands += 1; }
   return res;
@@ -207,15 +212,14 @@ void MAM_check_new_hosts(void) {
 
   if(mall->new_job_id == MAM_DENIED ) { return; }
   
-  #if MAM_USE_SLURM
-
+#if MAM_USE_SLURM
     not_filled = MAM_I_slurm_getjob_hosts_info(mall->new_job_id, update);
     if(not_filled) {
       #if MAM_DEBUG >= 2
         DEBUG_FUNC("WARNING - RMS info retriever failed with slurm functions. Trying with ENV variables", mall->myId, mall->numP); 
       #endif
     }
-  #endif
+#endif
 
   if(not_filled) {
     if(mall->myId == mall->root) printf("MAM FATAL ERROR: It has not been possible to update the nodelist\n");
@@ -462,7 +466,7 @@ unsigned long long hash64(const void *i_buf, size_t i_len, unsigned long long i_
     return h;
 }
 
-void MAM_I_generate_service_name(char **service_name) {
+void MAM_I_generate_job_name(char **port_name) {
   int jid_count = 1;
   int exp_count = 1;
   int total;
@@ -471,20 +475,20 @@ void MAM_I_generate_service_name(char **service_name) {
 
   char *constant_name = "MAM_Expansion_J";
   int constant_count = strlen(constant_name) + 2; //Addition of '_' and '\0'
-  exp_count = snprintf(NULL, 0, "%s", mall->num_expands);
+  exp_count = snprintf(NULL, 0, "%d", mall->num_expands);
 
 #if MAM_USE_SLURM
   char *tmp = getenv("SLURM_JOB_ID");
   if(tmp == NULL) return;
-  jobId = atoi(tmp);
-  jid_count = snprintf(NULL, 0, "%s", jid);
+  jid = atoi(tmp);
+  jid_count = snprintf(NULL, 0, "%d", jid);
 #endif
 
   total = jid_count + exp_count + constant_count;
   name = malloc(total * sizeof *name);
-  snprintf(name, 0, "MAM_Expansion_J%d_%d", jid, mall->num_expands);
+  snprintf(name, total, "MAM_Expansion_J%d_%d", jid, mall->num_expands);
 
-  if(name != NULL) { *service_name = name; }
+  if(name != NULL) { *port_name = name; }
 }
 
 void MAM_I_realloc_RMS_arrays(void) {
@@ -586,9 +590,7 @@ int MAM_I_slurm_getenv_hosts_info(void) {
  * @return 0 on success; non-zero SLURM error code otherwise.
  */
 int MAM_I_slurm_getjob_hosts_info(int jobId, int update) {
-  int jobId, err;
-  char *nodelist_aux = NULL;
-  int *max_cpus_aux = NULL;
+  int err;
   size_t prev_nodes, prev_nodelist_len;
   size_t i, j, t;
   job_info_msg_t *j_info;
@@ -616,8 +618,8 @@ int MAM_I_slurm_getjob_hosts_info(int jobId, int update) {
   } else {
     MAM_I_realloc_RMS_arrays();
 
-    mall->nodelist[prev_nodelist_len] = ',';
-    mall->nodelist[prev_nodelist_len+1] = '\0';
+    mall->nodelist[prev_nodelist_len-1] = ',';
+    mall->nodelist[prev_nodelist_len] = '\0';
     strcat(mall->nodelist, alloc_msg->node_list);
   }
 
@@ -630,7 +632,7 @@ int MAM_I_slurm_getjob_hosts_info(int jobId, int update) {
   }
 
   if(update) {  //FIXME: It is assumed when creating a new job, all cores spawn at least 1 rank
-    for(t = prev_nodes; t < mall->num_nodes ; t++) {
+    for(t = prev_nodes; t < (size_t) mall->num_nodes ; t++) {
       mall->spawned_cpus[t] = mall->max_cpus[t];
     }
   }
@@ -697,48 +699,57 @@ void MAM_I_slurm_get_assigned_cpus(void) {
 int MAM_I_slurm_prepare_job(int new_nodes, job_desc_msg_t *job_desc_msg) {
   int err, jobId, count;
   char *tmp = NULL;
+  char *proteo_home = NULL;
   job_info_msg_t *prev_j_info;
   slurm_job_info_t *prev_j_chars;
   resource_allocation_response_msg_t *prev_alloc;
 
   // Get data from this job
+  proteo_home = getenv("PROTEO_HOME");
+  if(proteo_home == NULL) return MAM_DENIED;
   tmp = getenv("SLURM_JOB_ID");
-  if(tmp == NULL) return 1;
+  if(tmp == NULL) return MAM_DENIED;
   jobId = atoi(tmp);
   err = slurm_load_job(&prev_j_info, jobId, 1); // FIXME: Valgrind Not freed
   if(err) { return err; }
-  prev_j_chars = prev_j_info->job_array[prev_j_info->record_count - 1];
+  prev_j_chars = prev_j_info->job_array+(prev_j_info->record_count - 1);
   err = slurm_allocation_lookup(jobId, &prev_alloc);
   if(err) { return err; }
   
   // Populate new job characteristics
   slurm_init_job_desc_msg(job_desc_msg);
 
-  job_desc_msg->name = strdup("MAM_Expansion_JX_Y"); //TODO: Set a name
-  job_desc_msg->user_id = prev_alloc->uid;
-  job_desc_msg->group_id = prev_alloc->gid;
-  job_desc_msg->work_dir = prev_j_chars->work_dir;
-  job_desc_msg->partition = prev_alloc->partition;
-  job_desc_msg->shared = prev_alloc->shared;
+  //strdup is required to copy strings as the current allocation info is freed at the end of this function
+  //job_desc_msg->name = strdup(mall->service_name);
+  MAM_I_generate_job_name(&(job_desc_msg->name));
+  job_desc_msg->user_id = getuid();
+  job_desc_msg->group_id = getgid();
+  job_desc_msg->work_dir = strdup(prev_j_chars->work_dir);
+  job_desc_msg->partition = strdup(prev_alloc->partition);
+  job_desc_msg->shared = prev_j_chars->shared;
   job_desc_msg->min_nodes = new_nodes;
   job_desc_msg->max_nodes = new_nodes;
   job_desc_msg->end_time = prev_j_chars->end_time;
   job_desc_msg->time_limit = prev_j_chars->time_limit;
 
-  // Set the script to execute the new job
-  count = strlen(BINBASH) + strlen(MAM_EXEC_SCRIPT) + 5;
-  job_desc_msg->script = malloc(count * sizeof(char));
-  snprintf(job_desc_msg->script, count, "%s\n./%s\n", BINBASH, MAM_EXEC_SCRIPT);
+  // Set the script to execute the new job (Does not matter, is just to show as info)
+  count = strlen(BINBASH) + strlen(proteo_home) + strlen(MAM_EXEC_SCRIPT_DIR) + strlen(MAM_EXEC_SCRIPT) + 5; //+5 considers '\0', two '\n' and two '/'
+  job_desc_msg->script = malloc(count * sizeof(char)); //FIXME: ARGV[1-infinity] must be supllied here too
+  snprintf(job_desc_msg->script, count, "%s\n%s/%s/%s\n", BINBASH, proteo_home, MAM_EXEC_SCRIPT_DIR, MAM_EXEC_SCRIPT);
 
-  job_desc_msg->argc = 1;
+  job_desc_msg->argc = 2;
   job_desc_msg->argv = malloc(job_desc_msg->argc * sizeof *job_desc_msg->argv);
-  count = strlen(job_desc_msg->work_dir) + strlen(MAM_EXEC_SCRIPT) + 2;
+  count = strlen(proteo_home) + strlen(MAM_EXEC_SCRIPT_DIR) + strlen(MAM_EXEC_SCRIPT) + 3; //+3 considers '\0' and two '/'
   job_desc_msg->argv[0] = malloc(count * sizeof(char));
-  snprintf(job_desc_msg->argv[0], count, "%s/%s", job_desc_msg->work_dir, MAM_EXEC_SCRIPT);
+  snprintf(job_desc_msg->argv[0], count, "%s/%s/%s", proteo_home, MAM_EXEC_SCRIPT_DIR, MAM_EXEC_SCRIPT);
 
-  //Job environments may not be in the previous one. Copy manually
-  MAM_I_generate_service_name(&(mall->service_name));
-  if (MAM_I_slurm_copy_environ(job_desc_msg, mall->service_name) != MAM_OK) {
+  //Set the number of ranks for new job
+  count = snprintf(NULL, 0, "%d", new_nodes*mall->max_cpus[0]) + strlen(MAM_SCRIPT_ARGV1) + 1;
+  job_desc_msg->argv[1] = malloc(count * sizeof(char));
+  snprintf(job_desc_msg->argv[1], count, "%s%d", MAM_SCRIPT_ARGV1, new_nodes*mall->max_cpus[0]);
+
+  //Job environments may not be in the previous one. Copy manually. Add the service name also.
+  if (MAM_I_slurm_copy_environ(job_desc_msg, mall->port_name) != MAM_OK) {
     fprintf(stderr, "MAM Expand Error: Environment has not been found.\n");
     free(job_desc_msg);
     MPI_Abort(mall->comm, 1);
@@ -749,8 +760,19 @@ int MAM_I_slurm_prepare_job(int new_nodes, job_desc_msg_t *job_desc_msg) {
   printf("Script length = %zu\n", strlen(job_desc_msg->script));
   printf("----------\n%s\n----------\n", job_desc_msg->script);
 
-  printf("errno = %d\n", errno);
   printf("env_size = %u\n", job_desc_msg->env_size);
+  printf("job_desc_msg->name=%s\n",job_desc_msg->name);
+  //printf("job_desc_msg->work_dir=%s\n",job_desc_msg->work_dir);
+  //printf("job_desc_msg->partition=%s\n",job_desc_msg->partition);
+  //printf("COMP partition with P1=%d\n", strcmp(job_desc_msg->partition, "P1"));
+  //printf("job_desc_msg->shared=%d\n", job_desc_msg->shared);
+  //printf("job_desc_msg->min_nodes=%d \n",job_desc_msg->min_nodes);
+  //printf("job_desc_msg->max_nodes=%d \n",job_desc_msg->max_nodes );
+  //printf("job_desc_msg->end_time=%ld \n",job_desc_msg->end_time );
+  //printf("job_desc_msg->time_limit=%d \n",job_desc_msg->time_limit);
+  //printf("job_desc_msg->argc=%d\n",job_desc_msg->argc);
+  //printf("job_desc_msg->argv[0]=%s\n",job_desc_msg->argv[0]);
+  //printf("job_desc_msg->argv[1]=%s\n",job_desc_msg->argv[1]);
 #endif
 
   slurm_free_job_info_msg(prev_j_info);
@@ -760,7 +782,7 @@ int MAM_I_slurm_prepare_job(int new_nodes, job_desc_msg_t *job_desc_msg) {
 }
 
 //Fills a Slurm job request with current environment plus the service name to connect
-static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *service_name) {
+static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *port_name) {
   int count = 0, count_env, count_service;
   int i, j;
 
@@ -786,10 +808,10 @@ static int MAM_I_slurm_copy_environ(job_desc_msg_t *job_desc_msg, const char *se
     }
   }
 
-  if (service_name != NULL) {
-    count_service = strlen(MAM_ENV) + strlen(service_name) + 2;
+  if (port_name != NULL) {
+    count_service = strlen(MAM_CONNECT_PORT) + strlen(port_name) + 2;
     job_desc_msg->environment[i] = malloc(count_service * sizeof(char));
-    snprintf(job_desc_msg->environment[i], count_service, "%s=%s", MAM_ENV, service_name);
+    snprintf(job_desc_msg->environment[i], count_service, "%s=%s", MAM_CONNECT_PORT, port_name);
   }
 
   return MAM_OK;
@@ -801,11 +823,12 @@ int MAM_I_slurm_request_job(job_desc_msg_t *job_desc_msg, int *new_job_id) {
   will_run_response_msg_t *resp = NULL;
   submit_response_msg_t *res_alloc = NULL;
 
-  int rc = slurm_job_will_run2(&job_desc_msg, &resp);
-  if(rc != SLURM_SUCESS) {
+  int rc = slurm_job_will_run2(job_desc_msg, &resp);
+  if(rc != SLURM_SUCCESS) {
     // Job cannot run
 #if MAM_DEBUG
     DEBUG_FUNC("MaM Expand. Job characteristics denied by SLURM", mall->myId, mall->numP);
+    printf("Errno=%d\n", rc);
     fflush (stdout);
 #endif
     res = MAM_DENIED;
@@ -821,8 +844,8 @@ int MAM_I_slurm_request_job(job_desc_msg_t *job_desc_msg, int *new_job_id) {
 
   //Launch job
   if(res != MAM_DENIED) {
-    int rc = slurm_submit_batch_job(job_desc_msg, &res_alloc);
-    if(rc != SLURM_SUCESS) {
+    rc = slurm_submit_batch_job(job_desc_msg, &res_alloc);
+    if(rc != SLURM_SUCCESS) {
 #if MAM_DEBUG
       DEBUG_FUNC("MaM Expand. Job characteristics denied by SLURM", mall->myId, mall->numP);
       fflush (stdout);
@@ -845,7 +868,7 @@ int MAM_I_slurm_check_job_status(int new_job_id) {
   if(err) { 
     return MAM_DENIED; 
   }
-  job_data = job_info->job_array[job_info->record_count - 1];
+  job_data = job_info->job_array+(job_info->record_count - 1);
 
   if (job_data->job_state == JOB_RUNNING) { res = MAM_I_RMS_COMPLETED; }
 

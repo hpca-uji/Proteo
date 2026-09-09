@@ -56,10 +56,13 @@ enum mam_inner_states {
 
 #define MAM_VALGRIND_SCRIPT "./worker_valgrind.sh"
 #define MAM_EXTRAE_SCRIPT "./worker_extrae.sh"
+#define MAM_EXEC_SCRIPT_DIR "Exec/BashScripts"
 #define MAM_EXEC_SCRIPT "mam_expand.sh"
 
+#define MAM_SCRIPT_ARGV1 "--numP="
+
 // If this env is set, rank was created with a new dynamic job. Used by mam to connect jobs
-#define MAM_ENV "MAM_SERVICE_NAME"
+#define MAM_CONNECT_PORT "MAM_SERVICE_NAME"
 
 /** @brief Flag passed to send_data()/recv_data() to request blocking transfers. */
 #define MAM_USE_SYNCHRONOUS 0
@@ -131,8 +134,8 @@ typedef struct {
 
   int new_job_id;     /**< Job Identifier of expanded job. Value is MAM_DENIED if not new job */
   int num_expands;    /**< Amount of times a job expansion was issued */
-  char *service_name; /**< Service name to connect with new job */
-  char *port_name;    /**< Port name related to a service name */
+  char *port_name;    /**< Port name used to connect new jobs */
+  //char *service_name; /**< Service name used to connect new jobs */
   
   char *name_exec;    /**< Executable name for spawn. */
   char *nodelist;     /**< Packed host/node list string. */
@@ -142,6 +145,8 @@ typedef struct {
   int *assigned_cpus; /**< Per-node ranks already assigned (sources). */
   int *spawned_cpus;  /**< Per-node ranks to spawn / occupancy after mapping. */
   int internode_group; /**< Non-zero if the job spans multiple nodes. */
+
+  mam_user_reconf_t *user_reconf; /**< Snapshot handed to the application through ::MAM_Get_Reconf_Info. */
 } malleability_t;
 
 extern malleability_config_t *mall_conf; /**< Global configuration singleton. */
@@ -176,5 +181,14 @@ void MAM_print_comms_state(void);
  * @param[in] i_comm New intracomm among the continuing targets.
  */
 void MAM_comms_update(MPI_Comm i_comm);
+
+/**
+ * @brief Build the structure handed to the user to help with its data reconfiguration.
+ *
+ * @param[in] i_is_children_group Non-zero (@c MAM_TARGETS) when called by the newly
+ *                                spawned children, zero (@c MAM_SOURCES) when called
+ *                                by the sources.
+ */
+void MAM_create_user_struct(int i_is_children_group);
 
 #endif

@@ -45,6 +45,7 @@ typedef struct {
 typedef struct {
   results_phase *phases_times; /**< One ::results_phase per application phase. */
 
+  double *rms_time;            /**< RMS time per resize. */
   double *spawn_time;          /**< Process-creation time per resize. */
   double *sync_time;           /**< Synchronous redistribution time per resize. */
   double *async_time;          /**< Asynchronous redistribution time per resize. */

@@ -530,7 +530,7 @@ double init_io_write_pt(group_data i_group, stage_t *io_stage, phase_t *i_phase,
                         int i_compute) {
   int min_operations;
   size_t stid;
-  double result = 0, start_time;
+  double result = 0, start_time = 0;
   char *filename = NULL;
   if (io_stage->array != NULL) { free(io_stage->array); }
   if (io_stage->fd > -1) { close(io_stage->fd); }
@@ -586,7 +586,7 @@ double init_io_write_pt(group_data i_group, stage_t *io_stage, phase_t *i_phase,
  */
 double init_io_read_pt(group_data i_group, stage_t *io_stage, MPI_Comm i_comm, int i_compute) {
   int min_operations;
-  double result = 0, start_time;
+  double result = 0, start_time = 0;
   if (io_stage->array != NULL) { free(io_stage->array); }
   if (io_stage->fd > -1) { close(io_stage->fd); }
 

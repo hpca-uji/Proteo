@@ -1,6 +1,8 @@
 #ifndef MAM_CONSTANTS_H
 #define MAM_CONSTANTS_H
 
+#include <mpi.h>
+
 /**
  * @file MAM_Constants.h
  * @brief Public constants, return codes, and configuration enums for MaM.
@@ -21,6 +23,16 @@ enum mam_states {
   MAM_USER_PENDING, /**< Waiting for the user callback / user phase. */
   MAM_COMPLETED     /**< Reconfiguration finished. */
 };
+
+/**
+ * @brief Snapshot of process counts and this rank's role after a reconfiguration.
+ */
+typedef struct {
+  int numS;       /**< Number of sources (pre-reconfiguration group size). */
+  int numT;       /**< Number of targets (post-reconfiguration group size). */
+  int rank_state; /**< ::mam_proc_states value for this rank. */
+  MPI_Comm comm;  /**< Communicator among continuing targets (application view). */
+} mam_user_reconf_t;
 
 /**
  * @brief Per-rank role after a reconfiguration (see ::mam_user_reconf_t).

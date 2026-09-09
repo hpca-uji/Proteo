@@ -201,7 +201,7 @@ void* thread_work(void *io_args);
 int init_spawn(MPI_Comm i_comm, MPI_Comm *io_child) {
   int local_state;
   set_spawn_configuration(i_comm);
-  if(spawn_data->target_qty == 0) { return MAM_I_SPAWN_COMPLETED; }
+  if(spawn_data->spawn_qty == 0) { return MAM_I_SPAWN_COMPLETED; }
 
   if(!spawn_data->spawn_is_async) {
     generic_spawn(io_child, MAM_I_NOT_STARTED);
@@ -313,12 +313,16 @@ void unset_spawn_postpone_flag(int i_outside_state) {
  *                             of targets on exit.
  */
 void malleability_connect_children(MPI_Comm *io_parents) {
+  int sum = 0;
   size_t i;
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
 
   spawn_data->initial_qty = mall->num_parents;
-  spawn_data->target_qty = 0;
-  for(i=0; i<mall->num_nodes; i++) { spawn_data->target_qty += mall->max_cpus[i] - mall->assigned_cpus[i]; }
+  spawn_data->target_qty = mall->numC;
+  if (spawn_data->target_qty >= spawn_data->initial_qty) { 
+    for(i=0; i < (size_t) mall->num_nodes; i++) { sum += mall->max_cpus[i]; } 
+    if (sum < spawn_data->target_qty) { spawn_data->target_qty = sum; }
+  }
 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single));
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));
@@ -368,13 +372,17 @@ void malleability_connect_children(MPI_Comm *io_parents) {
  * @param[in] i_comm Communicator among the sources requesting the spawn.
  */
 void set_spawn_configuration(MPI_Comm i_comm) {
+  int sum = 0;
   size_t i;
   spawn_data = (Spawn_data *) malloc(sizeof(Spawn_data));
 
   spawn_data->total_spawns = 0;
   spawn_data->initial_qty = mall->numP;
-  spawn_data->target_qty = 0;
-  for(i=0; i<mall->num_nodes; i++) { spawn_data->target_qty += mall->max_cpus[i] - mall->assigned_cpus[i]; }
+  spawn_data->target_qty = mall->numC;
+  if (spawn_data->target_qty >= spawn_data->initial_qty) { 
+    for(i=0; i < (size_t) mall->num_nodes; i++) { sum += mall->max_cpus[i]; } 
+    if (sum < spawn_data->target_qty) { spawn_data->target_qty = sum; }
+  }
 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_SINGLE, &(spawn_data->spawn_is_single)); 
   MAM_Contains_strat(MAM_SPAWN_STRATEGIES, MAM_STRAT_SPAWN_PTHREAD, &(spawn_data->spawn_is_async));

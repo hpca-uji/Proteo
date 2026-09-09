@@ -12,16 +12,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <mpi.h>
-
-/**
- * @brief Snapshot of process counts and this rank's role after a reconfiguration.
- */
-typedef struct {
-  int numS;       /**< Number of sources (pre-reconfiguration group size). */
-  int numT;       /**< Number of targets (post-reconfiguration group size). */
-  int rank_state; /**< ::mam_proc_states value for this rank. */
-  MPI_Comm comm;  /**< Communicator among continuing targets (application view). */
-} mam_user_reconf_t;
+#include "MAM_Constants.h"
 
 /**
  * @brief Initialise MaM on sources, or complete children join if spawned dynamically.

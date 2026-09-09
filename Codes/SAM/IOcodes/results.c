@@ -92,25 +92,26 @@ void results_comm(results_data *io_results, int i_root, size_t i_resizes, MPI_Co
  * @param[out] o_results_type  Committed MPI datatype (caller must free).
  */
 void def_results_type(results_data *i_results, int i_resizes, MPI_Datatype *o_results_type) {
-  int i, counts = 7;
-  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1, 1};
+  int i, counts = 8;
+  int blocklengths[] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
   MPI_Aint displs[counts], dir;
   MPI_Datatype types[counts];
 
   // Fill types vector
-  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = MPI_DOUBLE;
-  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = blocklengths[6] = i_resizes;
+  types[0] = types[1] = types[2] = types[3] = types[4] = types[5] = types[6] = types[7] = MPI_DOUBLE;
+  blocklengths[2] = blocklengths[3] = blocklengths[4] = blocklengths[5] = blocklengths[6] = blocklengths[7] = i_resizes;
 
   // Fill displs vector
   MPI_Get_address(i_results, &dir);
 
   MPI_Get_address(&(i_results->exec_start), &displs[0]);
   MPI_Get_address(&(i_results->wasted_time), &displs[1]);
-  MPI_Get_address(i_results->sync_time, &displs[2]);
-  MPI_Get_address(i_results->async_time, &displs[3]);
-  MPI_Get_address(i_results->user_time, &displs[4]);
-  MPI_Get_address(i_results->spawn_time, &displs[5]);
-  MPI_Get_address(i_results->malleability_time, &displs[6]);
+  MPI_Get_address(i_results->rms_time, &displs[2]);
+  MPI_Get_address(i_results->sync_time, &displs[3]);
+  MPI_Get_address(i_results->async_time, &displs[4]);
+  MPI_Get_address(i_results->user_time, &displs[5]);
+  MPI_Get_address(i_results->spawn_time, &displs[6]);
+  MPI_Get_address(i_results->malleability_time, &displs[7]);
 
   for (i = 0; i < counts; i++) displs[i] -= dir;
 
@@ -350,7 +351,12 @@ void print_stage_results(results_data i_results, size_t i_phase_ind) {
 void print_global_results(results_data i_results, size_t i_resizes) {
   size_t i;
 
-  printf("T_spawn: ");
+  printf("T_RMS: ");
+  for (i = 0; i < i_resizes; i++) {
+    printf("%lf ", i_results.rms_time[i]);
+  }
+
+  printf("\nT_spawn: ");
   for (i = 0; i < i_resizes; i++) {
     printf("%lf ", i_results.spawn_time[i]);
   }
@@ -388,6 +394,7 @@ void init_results_data(results_data *io_results, size_t i_resizes, size_t i_phas
                        size_t *i_stages, size_t *i_iters_size) {
   size_t i;
 
+  io_results->rms_time = calloc(i_resizes, sizeof(double));
   io_results->spawn_time = calloc(i_resizes, sizeof(double));
   io_results->sync_time = calloc(i_resizes, sizeof(double));
   io_results->async_time = calloc(i_resizes, sizeof(double));
@@ -453,6 +460,10 @@ void free_results_data(results_data *io_results, size_t i_phases) {
   results_phase *phase;
 
   if (io_results != NULL) {
+    if (io_results->rms_time != NULL) {
+      free(io_results->rms_time);
+      io_results->rms_time = NULL;
+    }
     if (io_results->spawn_time != NULL) {
       free(io_results->spawn_time);
       io_results->spawn_time = NULL;
